@@ -44,6 +44,9 @@ export interface StoryBeat {
   dialogueSubtitle: string;
   cameraMovement: string;
   promptGuidance: string;
+  /** —— v2：幕级情绪能量（拆镜阶段产出，可人工修正） —— */
+  energyStart?: number | null;
+  energyEnd?: number | null;
 }
 
 export interface DramaProjectData {
@@ -70,6 +73,24 @@ export interface DramaProjectData {
     totalClips: number;
     hasSynthesizedOutput: boolean;
   };
+  /** —— v2 可选扩展段（旧消费者忽略未知字段即可无损消费） —— */
+  assets?: AssetExportItem[];
+  tracks?: {
+    subtitle: TrackItemDTO[];
+    sfx: TrackItemDTO[];
+    bgm: TrackItemDTO[];
+  };
+  energyCurve?: EnergyCurvePoint[];
+}
+
+/** 导出用资产条目（与原版 v1.2.0 schema 向后兼容的可选段） */
+export interface AssetExportItem {
+  kind: AssetKind;
+  name: string;
+  lockedAppearance: string;
+  visualAnchor: string;
+  portraitUrl?: string;
+  refCount?: number;
 }
 
 /** 运镜库（枚举值 → 中文机位说明 + 英文生成 Prompt），比原版单一 push 更丰富 */
@@ -189,6 +210,27 @@ export function buildMarkdown(project: DramaProjectData): string {
     lines.push("");
   }
 
+  // —— v2：资产定妆表（一致性锚定的交付物） ——
+  if (project.assets && project.assets.length > 0) {
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+    lines.push(`## 🎭 资产定妆表 (${project.assets.length} 项 · 跨镜头一致性锚定)`);
+    lines.push("");
+    lines.push("| 类型 | 名称 | 锁定外观（中文） | 视觉锚点（英文） | 引用镜头数 | 定妆照 |");
+    lines.push("| :--- | :--- | :--- | :--- | :--- | :--- |");
+    const kindLabel: Record<string, string> = {
+      character: "角色",
+      scene: "场景",
+      prop: "道具",
+    };
+    for (const a of project.assets) {
+      lines.push(
+        `| ${kindLabel[a.kind] ?? a.kind} | **${a.name}** | ${a.lockedAppearance} | \`${a.visualAnchor}\` | ${a.refCount ?? 0} | ${a.portraitUrl ? "✅ 已定妆" : "⏳ 未定妆"} |`
+      );
+    }
+  }
+
   lines.push("");
   lines.push("---");
   lines.push("");
@@ -199,16 +241,16 @@ export function buildMarkdown(project: DramaProjectData): string {
   );
   if (hasBreakdown) {
     lines.push(
-      "| 镜头序号 | 镜头名称 | 关联节拍 | 景别 | 运镜机位 | 画面内容 | 台词字幕 | 计划时长 | 媒体格式 | 状态 |"
+      "| 镜头序号 | 镜头名称 | 关联节拍 | 景别 | 运镜机位 | 画面内容 | 台词字幕 | 计划时长 | 能量 | 音效 | 媒体格式 | 状态 |"
     );
-    lines.push("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |");
+    lines.push("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |");
     for (const clip of project.timelineClips) {
       const c = clip as Record<string, string & number>;
       const mv = c.cameraMovement
         ? `${cameraLabel(String(c.cameraMovement))}`
         : "—";
       lines.push(
-        `| ${c.no ?? ""} | ${c.name ?? ""} | ${c.beatRef ?? ""} | ${c.shotSize ?? "—"} | ${mv} | ${c.visualDesc ?? "—"} | ${c.subtitle ?? ""} | ${c.plannedMs ? `${Math.round(c.plannedMs / 100) / 10}s` : "—"} | ${c.format ?? ""} | ${c.status ?? ""} |`
+        `| ${c.no ?? ""} | ${c.name ?? ""} | ${c.beatRef ?? ""} | ${c.shotSize ?? "—"} | ${mv} | ${c.visualDesc ?? "—"} | ${c.subtitle ?? ""} | ${c.plannedMs ? `${Math.round(c.plannedMs / 100) / 10}s` : "—"} | ${c.energy != null ? `${c.energy}` : "—"} | ${c.sfxHint ?? "—"} | ${c.format ?? ""} | ${c.status ?? ""} |`
       );
     }
   } else {
@@ -225,8 +267,70 @@ export function buildMarkdown(project: DramaProjectData): string {
   }
   lines.push("");
   lines.push("");
+
+  // —— v2：三轨排布表（后期成包交付物） ——
+  if (project.tracks) {
+    const t = project.tracks;
+    const fmtMs = (ms: number) => `${Math.round(ms / 100) / 10}s`;
+    if (t.subtitle.length > 0 || t.sfx.length > 0 || t.bgm.length > 0) {
+      lines.push("---");
+      lines.push("");
+      lines.push("## 🎼 后期三轨排布");
+      lines.push("");
+      lines.push("### 字幕轨（金句大字 / 关键词变色）");
+      lines.push("| 入点 | 出点 | 字幕文本 | 样式 |");
+      lines.push("| :--- | :--- | :--- | :--- |");
+      for (const s of t.subtitle) {
+        lines.push(
+          `| ${fmtMs(s.startMs)} | ${fmtMs(s.endMs)} | ${s.text} | ${s.style ? JSON.stringify(s.style) : "—"} |`
+        );
+      }
+      lines.push("");
+      lines.push("### 音效轨（卡点音效）");
+      lines.push("| 入点 | 出点 | 音效标签 |");
+      lines.push("| :--- | :--- | :--- |");
+      for (const s of t.sfx) {
+        lines.push(`| ${fmtMs(s.startMs)} | ${fmtMs(s.endMs)} | ${s.text} |`);
+      }
+      lines.push("");
+      lines.push("### 配乐轨（情绪分段）");
+      lines.push("| 入点 | 出点 | 情绪标签 | 强度 |");
+      lines.push("| :--- | :--- | :--- | :--- |");
+      for (const s of t.bgm) {
+        const intensity =
+          s.style && typeof s.style === "object" && "intensity" in s.style
+            ? String((s.style as { intensity: number }).intensity)
+            : "—";
+        lines.push(`| ${fmtMs(s.startMs)} | ${fmtMs(s.endMs)} | ${s.text} | ${intensity} |`);
+      }
+    }
+  }
+
+  // —— v2：镜头级最终提示词清单（可直接投喂 AI 视频基模） ——
+  const prompts = project.timelineClips.filter(
+    (c) => (c as Record<string, unknown>).finalPrompt
+  );
+  if (prompts.length > 0) {
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+    lines.push(`## 🤖 镜头级最终提示词 (${prompts.length} 条 · 锚定组装产物)`);
+    lines.push("");
+    for (const clip of prompts) {
+      const c = clip as Record<string, string>;
+      lines.push(
+        `**#${c.no} ${c.name}**（${c.shotSize ?? ""} · ${cameraLabel(c.cameraMovement ?? "")}）`
+      );
+      lines.push("```text");
+      lines.push(c.finalPrompt);
+      lines.push("```");
+      lines.push("");
+    }
+  }
+
+  lines.push("");
   lines.push("---");
-  lines.push("*制作团队：剧集智能创编工坊 (DRAMA STUDIO)*");
+  lines.push("*制作团队：剧集智能创编工坊 (DRAMA STUDIO) · AI 剧组流水线*");
 
   return lines.join("\n");
 }
@@ -242,6 +346,277 @@ export function downloadFile(filename: string, content: string, mime: string) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// v2 ·「AI 剧组流水线」领域模型
+// 产品定位：不是视频生成器，而是一条 AI 剧组流水线——
+// 制片 → 编剧 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包，
+// 让普通用户不慬运镜/景别/轴线，也能产出专业级制作包。
+// ============================================================
+
+/** 剧组角色（产品语言，贯穿流水线日志与前端进度面板） */
+export type CrewRoleKey =
+  | "producer"
+  | "screenwriter"
+  | "casting"
+  | "director"
+  | "supervisor"
+  | "post";
+
+export const CREW_ROLES: Record<
+  CrewRoleKey,
+  { name: string; duty: string; color: string }
+> = {
+  producer: {
+    name: "制片主任",
+    duty: "立项统筹 · 下发题材战术手册",
+    color: "text-amber-400",
+  },
+  screenwriter: {
+    name: "编剧",
+    duty: "黄金 3 秒钩子 · 三幕剧本",
+    color: "text-rose-400",
+  },
+  casting: {
+    name: "选角定妆",
+    duty: "角色/场景/道具资产锁定",
+    color: "text-fuchsia-400",
+  },
+  director: {
+    name: "导演",
+    duty: "一幕拆多镜 · 正反打节奏",
+    color: "text-sky-400",
+  },
+  supervisor: {
+    name: "场记",
+    duty: "锚定组装 · 一致性校验",
+    color: "text-teal-400",
+  },
+  post: {
+    name: "后期",
+    duty: "三轨落轨 · 情绪能量曲线",
+    color: "text-emerald-400",
+  },
+};
+
+/** 流水线阶段定义（编排顺序即数组顺序，weight 用于进度加权） */
+export interface RunStageDef {
+  key: string;
+  name: string;
+  role: CrewRoleKey;
+  weight: number;
+}
+
+export const RUN_STAGES: RunStageDef[] = [
+  { key: "screenwriting", name: "剧本创作", role: "screenwriter", weight: 20 },
+  { key: "casting", name: "选角定妆", role: "casting", weight: 15 },
+  { key: "directing", name: "导演拆镜", role: "director", weight: 40 },
+  { key: "anchoring", name: "锚定组装", role: "supervisor", weight: 10 },
+  { key: "postproduction", name: "后期成包", role: "post", weight: 15 },
+];
+
+export type RunStatus = "running" | "succeeded" | "failed";
+export type StageStatus = "pending" | "running" | "succeeded" | "failed";
+
+export const RUN_STATUS: Record<
+  RunStatus,
+  { label: string; cls: string }
+> = {
+  running: {
+    label: "拍摄中",
+    cls: "border-amber-500/40 bg-amber-500/10 text-amber-400",
+  },
+  succeeded: {
+    label: "已杀青",
+    cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+  },
+  failed: {
+    label: "中断",
+    cls: "border-rose-500/40 bg-rose-500/10 text-rose-400",
+  },
+};
+
+export interface RunStageInfo {
+  key: string;
+  name: string;
+  role: CrewRoleKey;
+  status: StageStatus;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string | null;
+}
+
+/** 剧组日志条目（流水线的生产观测窗口） */
+export interface RunLogEntry {
+  at: string;
+  role: CrewRoleKey;
+  message: string;
+}
+
+export interface RunDTO {
+  id: string;
+  projectId: string;
+  status: RunStatus;
+  progress: number;
+  stage: string;
+  stages: RunStageInfo[];
+  journal: RunLogEntry[];
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** —— 资产库 —— */
+export type AssetKind = "character" | "scene" | "prop";
+
+export const ASSET_KIND_META: Record<
+  AssetKind,
+  { label: string; icon: string; cls: string }
+> = {
+  character: {
+    label: "角色",
+    icon: " 👤",
+    cls: "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-300",
+  },
+  scene: {
+    label: "场景",
+    icon: "🏙️",
+    cls: "border-sky-500/40 bg-sky-500/10 text-sky-300",
+  },
+  prop: {
+    label: "道具",
+    icon: "🎁",
+    cls: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+  },
+};
+
+export interface VoiceProfile {
+  voiceId: string;
+  speed: number;
+  style: string;
+}
+
+export interface AssetDTO {
+  id: string;
+  kind: AssetKind;
+  name: string;
+  lockedAppearance: string;
+  visualAnchor: string;
+  voiceProfile: VoiceProfile | null;
+  portraitUrl: string | null;
+  source: "crew" | "manual";
+  /** 被多少个镜头引用（服务端聚合，用于解冻风险提示） */
+  refCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 镜头 ↔ 资产引用（扁平列表，前端按 clipId 分组） */
+export interface ShotRefDTO {
+  id: string;
+  clipId: string;
+  assetId: string;
+  kind: AssetKind;
+  assetName: string;
+  stateNote: string | null;
+}
+
+/** —— 渲染任务（外部生成通道） —— */
+export type TaskKind = "portrait" | "video" | "voiceover";
+export type TaskStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+
+export const TASK_STATUS: Record<
+  TaskStatus,
+  { label: string; cls: string }
+> = {
+  queued: {
+    label: "排队中",
+    cls: "border-zinc-500/40 bg-zinc-500/10 text-zinc-400",
+  },
+  running: {
+    label: "生成中",
+    cls: "border-amber-500/40 bg-amber-500/10 text-amber-400",
+  },
+  succeeded: {
+    label: "已完成",
+    cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+  },
+  failed: {
+    label: "失败",
+    cls: "border-rose-500/40 bg-rose-500/10 text-rose-400",
+  },
+  cancelled: {
+    label: "已取消",
+    cls: "border-zinc-500/40 bg-zinc-500/10 text-zinc-500",
+  },
+};
+
+export const TASK_KIND_META: Record<
+  TaskKind,
+  { label: string; cls: string }
+> = {
+  portrait: { label: "定妆照", cls: "border-fuchsia-500/40 text-fuchsia-300" },
+  video: { label: "镜头渲染", cls: "border-sky-500/40 text-sky-300" },
+  voiceover: { label: "台词配音", cls: "border-teal-500/40 text-teal-300" },
+};
+
+export interface TaskDTO {
+  id: string;
+  projectId: string;
+  kind: TaskKind;
+  status: TaskStatus;
+  payload: Record<string, unknown>;
+  resultUrl: string | null;
+  attempts: number;
+  maxAttempts: number;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** —— 轨道层 —— */
+export type TrackKind = "subtitle" | "sfx" | "bgm";
+
+export const TRACK_KIND_META: Record<
+  TrackKind,
+  { label: string; cls: string }
+> = {
+  subtitle: {
+    label: "字幕轨",
+    cls: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+  },
+  sfx: {
+    label: "音效轨",
+    cls: "border-rose-500/40 bg-rose-500/10 text-rose-300",
+  },
+  bgm: {
+    label: "配乐轨",
+    cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+  },
+};
+
+export interface TrackItemDTO {
+  id: string;
+  kind: TrackKind;
+  clipId: string | null;
+  startMs: number;
+  endMs: number;
+  text: string;
+  style: Record<string, unknown> | null;
+}
+
+/** —— 情绪能量曲线 —— */
+export interface EnergyCurvePoint {
+  clipId: string;
+  order: number;
+  beatIndex: number;
+  energy: number;
 }
 
 // ============================================================
@@ -287,9 +662,18 @@ export interface ClipData {
   visualDesc: string | null;
   /** 计划时长（毫秒） */
   plannedMs: number | null;
+  /** —— v2：锚定与节奏 —— */
+  /** 组装管线产出的最终英文视频提示词 */
+  finalPrompt: string | null;
+  /** 锚点指纹（"manual" = 人工微调；null = 未组装） */
+  promptVersion: string | null;
+  /** 情绪能量 0~100 */
+  energy: number | null;
+  /** 建议音效标签 */
+  sfxHint: string | null;
 }
 
-/** 分镜拆解产物：一幕 → 多个镜头 */
+/** 分镜拆解产物：一幕 → 多个镜头（v2 协议：能量 / 音效 / 资产引用） */
 export interface ShotBreakdownItem {
   name: string;
   shotSize: ShotSize | string;
@@ -297,6 +681,16 @@ export interface ShotBreakdownItem {
   visualDesc: string;
   subtitle: string;
   plannedMs: number;
+  energy: number;
+  sfxHint: string;
+  /** 英文动作提示词（锚定组装的动作段来源） */
+  visualPrompt: string | null;
+  /** 出场角色名（与资产座行对齐） */
+  characters: string[];
+  /** 场景名 */
+  scene: string;
+  /** 关键道具名 */
+  props: string[];
 }
 
 /** 项目库列表项（摘要） */
@@ -312,7 +706,22 @@ export interface ProjectSummary {
   updatedAt: string;
 }
 
-/** 项目详情（项目 + 分镜 + 镜头轨） */
+/** 立项草稿请求体（「全组开机」第一步：先建项目，再启动流水线） */
+export interface CreateProjectDraftPayload {
+  title?: string;
+  genre: {
+    id: string;
+    name: string;
+    badge: string;
+    hookTactic: string;
+    musicMood: string;
+    tonePrompt: string;
+  };
+  synopsis: string;
+  modelConfig: ModelConfig;
+}
+
+/** 项目详情（项目 + 分镜 + 镜头轨 + v2 制作包全量） */
 export interface ProjectDetail extends ProjectSummary {
   synopsis: string;
   aspectRatio: string;
@@ -329,6 +738,14 @@ export interface ProjectDetail extends ProjectSummary {
   timelineClips: ClipData[];
   createdAt: string;
   schemaVersion: string;
+  /** —— v2 制作包 —— */
+  assets: AssetDTO[];
+  shotRefs: ShotRefDTO[];
+  tracks: TrackItemDTO[];
+  /** 锚点已过期（资产改动后需重组装）的镜头 id 列表 */
+  anchorStaleClipIds: string[];
+  /** 进行中/最近一次流水线运行 */
+  activeRun: RunDTO | null;
 }
 
 /** 保存项目的请求体（genre 只要求持久化快照字段，与 zod 校验器对齐） */
@@ -382,11 +799,46 @@ export function toExportData(detail: ProjectDetail): DramaProjectData {
         : {}),
       ...(c.visualDesc ? { visualDesc: c.visualDesc } : {}),
       ...(c.plannedMs != null ? { plannedMs: c.plannedMs } : {}),
+      ...(c.finalPrompt ? { finalPrompt: c.finalPrompt } : {}),
+      ...(c.energy != null ? { energy: c.energy } : {}),
+      ...(c.sfxHint ? { sfxHint: c.sfxHint } : {}),
     })),
     statistics: {
       totalBeats: detail.storyBeats.length,
       totalClips: clips.length,
       hasSynthesizedOutput: clips.length > 0 && clips.every((c) => c.status === "ready"),
     },
+    // —— v2 可选扩展段（旧消费者忽略未知字段即可） ——
+    ...(detail.assets.length > 0
+      ? {
+          assets: detail.assets.map((a) => ({
+            kind: a.kind,
+            name: a.name,
+            lockedAppearance: a.lockedAppearance,
+            visualAnchor: a.visualAnchor,
+            ...(a.portraitUrl ? { portraitUrl: a.portraitUrl } : {}),
+            refCount: a.refCount,
+          })),
+        }
+      : {}),
+    ...(detail.tracks.length > 0
+      ? {
+          tracks: {
+            subtitle: detail.tracks.filter((t) => t.kind === "subtitle"),
+            sfx: detail.tracks.filter((t) => t.kind === "sfx"),
+            bgm: detail.tracks.filter((t) => t.kind === "bgm"),
+          },
+        }
+      : {}),
+    ...(clips.some((c) => c.energy != null)
+      ? {
+          energyCurve: clips.map((c, i) => ({
+            clipId: c.id,
+            order: i,
+            beatIndex: c.beatIndex,
+            energy: c.energy ?? 50,
+          })),
+        }
+      : {}),
   };
 }

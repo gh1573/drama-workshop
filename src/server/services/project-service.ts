@@ -5,29 +5,34 @@ import {
   toExportData,
   type ClipData,
   type ClipStatus,
+  type CreateProjectDraftPayload,
   type DramaProjectData,
   type ModelConfig,
   type ProjectDetail,
   type ProjectStatus,
   type ProjectSummary,
-  type SaveProjectPayload,
   type ShotBreakdownItem,
   type StoryBeat,
 } from "@/lib/drama";
 import type { Prisma, TimelineClip, StoryBeat as DbBeat } from "@prisma/client";
+import { computeStaleClipIds, listAssets, listRefs } from "./asset-service";
+import { listTracks } from "./track-service";
+import { getLatestRun } from "./run-service";
 
 /**
  * 项目服务层 —— 工作台全部业务逻辑的唯一入口。
  * API 路由只做入参校验与调用；前端只消费返回的 DTO。
- * 后续扩容（视频生成队列、多人协作、版本快照）都在此层演进。
+ * 「AI 剧组流水线」的数据聚合（资产/引用/轨道/过期锚点/运行状态）都在此汇出。
  */
 
-const PROJECT_INCLUDE = {
+type ProjectWithRelations = Prisma.ProjectGetPayload<{
+  include: { beats: true; clips: true };
+}>;
+
+const BASE_INCLUDE = {
   beats: { orderBy: { index: "asc" as const } },
   clips: { orderBy: { order: "asc" as const } },
-};
-
-type ProjectWithRelations = Prisma.ProjectGetPayload<{ include: typeof PROJECT_INCLUDE }>;
+} satisfies Prisma.ProjectInclude;
 
 function mapBeat(b: DbBeat): StoryBeat {
   return {
@@ -39,6 +44,8 @@ function mapBeat(b: DbBeat): StoryBeat {
     dialogueSubtitle: b.dialogueSubtitle,
     cameraMovement: b.cameraMovement,
     promptGuidance: b.promptGuidance,
+    energyStart: b.energyStart,
+    energyEnd: b.energyEnd,
   };
 }
 
@@ -57,10 +64,96 @@ function mapClip(c: TimelineClip): ClipData {
     cameraMovement: c.cameraMovement,
     visualDesc: c.visualDesc,
     plannedMs: c.plannedMs,
+    finalPrompt: c.finalPrompt,
+    promptVersion: c.promptVersion,
+    energy: c.energy,
+    sfxHint: c.sfxHint,
   };
 }
 
-function mapProject(p: ProjectWithRelations): ProjectDetail {
+async function requireProjectRow(
+  id: string
+): Promise<ProjectWithRelations> {
+  const p = await db.project.findUnique({ where: { id }, include: BASE_INCLUDE });
+  if (!p) throw new RouteError("项目不存在或已被删除", 404);
+  return p;
+}
+
+function defaultTitle(genreName: string, synopsis: string): string {
+  const head = synopsis.trim().replace(/\s+/g, "").slice(0, 10);
+  return `${genreName} · ${head}${synopsis.trim().length > 10 ? "…" : ""}`;
+}
+
+/** —— 项目 CRUD —— */
+
+export async function listProjects(): Promise<ProjectSummary[]> {
+  const rows = await db.project.findMany({
+    orderBy: { updatedAt: "desc" },
+    include: { _count: { select: { beats: true, clips: true } } },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    status: r.status as ProjectStatus,
+    genreId: r.genreId,
+    genreName: r.genreName,
+    genreBadge: r.genreBadge,
+    beatCount: r._count.beats,
+    clipCount: r._count.clips,
+    updatedAt: r.updatedAt.toISOString(),
+  }));
+}
+
+/**
+ * 立项草稿 —— 「全组开机」的第一步。
+ * 只落题材快照与工程参数（剧本/分镜/资产全部由流水线阶段产出），
+ * 保证创作过程全程有库可依、断点可续。
+ */
+export async function createProjectDraft(
+  payload: CreateProjectDraftPayload
+): Promise<ProjectDetail> {
+  if (payload.synopsis.trim().length < 10) {
+    throw new RouteError("剧情梗概太短，请输入至少 10 个字的梗概", 422);
+  }
+  const p = await db.project.create({
+    data: {
+      title:
+        payload.title?.trim() ||
+        defaultTitle(payload.genre.name, payload.synopsis),
+      status: "draft",
+      genreId: payload.genre.id,
+      genreName: payload.genre.name,
+      genreBadge: payload.genre.badge,
+      hookTactic: payload.genre.hookTactic,
+      musicMood: payload.genre.musicMood,
+      tonePrompt: payload.genre.tonePrompt,
+      aspectRatio: "9:16",
+      synopsis: payload.synopsis.trim(),
+      videoModel: payload.modelConfig.videoModel,
+      durationSeconds: payload.modelConfig.durationSeconds,
+      resolution: payload.modelConfig.resolution,
+      thinkingLevel: payload.modelConfig.scriptThinkingLevel,
+      promptEnhance: payload.modelConfig.enablePromptEnhance,
+    },
+    include: BASE_INCLUDE,
+  });
+  return assembleDetail(p);
+}
+
+export async function getProject(id: string): Promise<ProjectDetail> {
+  const p = await requireProjectRow(id);
+  return assembleDetail(p);
+}
+
+/** 聚合制作包全量：分镜 + 镜头轨 + 资产 + 引用 + 轨道 + 过期锚点 + 运行状态 */
+async function assembleDetail(p: ProjectWithRelations): Promise<ProjectDetail> {
+  const [assets, shotRefs, tracks, staleClipIds, activeRun] = await Promise.all([
+    listAssets(p.id),
+    listRefs(p.id),
+    listTracks(p.id),
+    computeStaleClipIds(p.id),
+    getLatestRun(p.id),
+  ]);
   return {
     id: p.id,
     title: p.title,
@@ -92,78 +185,12 @@ function mapProject(p: ProjectWithRelations): ProjectDetail {
     clipCount: p.clips.length,
     genreBadge: p.genreBadge,
     genreName: p.genreName,
+    assets,
+    shotRefs,
+    tracks,
+    anchorStaleClipIds: staleClipIds,
+    activeRun,
   };
-}
-
-async function requireProject(id: string): Promise<ProjectWithRelations> {
-  const p = await db.project.findUnique({ where: { id }, include: PROJECT_INCLUDE });
-  if (!p) throw new RouteError("项目不存在或已被删除", 404);
-  return p;
-}
-
-function defaultTitle(genreName: string, synopsis: string): string {
-  const head = synopsis.trim().replace(/\s+/g, "").slice(0, 10);
-  return `${genreName} · ${head}${synopsis.trim().length > 10 ? "…" : ""}`;
-}
-
-/** —— 项目 CRUD —— */
-
-export async function listProjects(): Promise<ProjectSummary[]> {
-  const rows = await db.project.findMany({
-    orderBy: { updatedAt: "desc" },
-    include: { _count: { select: { beats: true, clips: true } } },
-  });
-  return rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    status: r.status as ProjectStatus,
-    genreId: r.genreId,
-    genreName: r.genreName,
-    genreBadge: r.genreBadge,
-    beatCount: r._count.beats,
-    clipCount: r._count.clips,
-    updatedAt: r.updatedAt.toISOString(),
-  }));
-}
-
-export async function createProject(payload: SaveProjectPayload): Promise<ProjectDetail> {
-  const p = await db.project.create({
-    data: {
-      title: payload.title?.trim() || defaultTitle(payload.genre.name, payload.synopsis),
-      status: payload.status ?? "beatsReady",
-      genreId: payload.genre.id,
-      genreName: payload.genre.name,
-      genreBadge: payload.genre.badge,
-      hookTactic: payload.genre.hookTactic,
-      musicMood: payload.genre.musicMood,
-      tonePrompt: payload.genre.tonePrompt,
-      aspectRatio: "9:16",
-      synopsis: payload.synopsis.trim(),
-      videoModel: payload.modelConfig.videoModel,
-      durationSeconds: payload.modelConfig.durationSeconds,
-      resolution: payload.modelConfig.resolution,
-      thinkingLevel: payload.modelConfig.scriptThinkingLevel,
-      promptEnhance: payload.modelConfig.enablePromptEnhance,
-      beats: {
-        create: payload.storyBeats.map((b) => ({
-          index: b.index,
-          actTitle: b.actTitle,
-          narrativeFunction: b.narrativeFunction,
-          pacingNote: b.pacingNote,
-          description: b.description,
-          dialogueSubtitle: b.dialogueSubtitle,
-          cameraMovement: b.cameraMovement,
-          promptGuidance: b.promptGuidance,
-        })),
-      },
-    },
-    include: PROJECT_INCLUDE,
-  });
-  return mapProject(p);
-}
-
-export async function getProject(id: string): Promise<ProjectDetail> {
-  return mapProject(await requireProject(id));
 }
 
 export async function updateProject(
@@ -176,7 +203,7 @@ export async function updateProject(
     storyBeats?: StoryBeat[];
   }
 ): Promise<ProjectDetail> {
-  await requireProject(id);
+  await requireProjectRow(id);
   const data: Prisma.ProjectUpdateInput = {};
   if (patch.title !== undefined) data.title = patch.title.trim();
   if (patch.synopsis !== undefined) data.synopsis = patch.synopsis.trim();
@@ -190,7 +217,7 @@ export async function updateProject(
   }
 
   // 分镜整体替换（事务保证原子性）；既有镜头轨的 beatIndex 引用可能失效，
-  // 一并钳制到 1~3 有效范围内，避免悬挂引用
+  // 一并钳制到有效范围内，避免悬挂引用
   if (patch.storyBeats) {
     await db.$transaction(async (tx) => {
       await tx.project.update({
@@ -208,6 +235,8 @@ export async function updateProject(
           dialogueSubtitle: b.dialogueSubtitle,
           cameraMovement: b.cameraMovement,
           promptGuidance: b.promptGuidance,
+          energyStart: b.energyStart ?? null,
+          energyEnd: b.energyEnd ?? null,
         })),
       });
       const validIndexes = patch.storyBeats!.map((b) => b.index);
@@ -216,31 +245,50 @@ export async function updateProject(
         data: { beatIndex: validIndexes[0] },
       });
     });
-    return mapProject(await requireProject(id));
+    return getProject(id);
   }
 
-  const p = await db.project.update({ where: { id }, data, include: PROJECT_INCLUDE });
-  return mapProject(p);
+  await db.project.update({ where: { id }, data });
+  return getProject(id);
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  await requireProject(id);
+  await requireProjectRow(id);
   await db.project.delete({ where: { id } });
+}
+
+/** 幕级能量回写（导演阶段：幕首/幕尾能量取自本幕首末镜头） */
+export async function updateBeatEnergy(
+  projectId: string,
+  beatIndex: number,
+  energy: { energyStart: number | null; energyEnd: number | null }
+): Promise<void> {
+  const beat = await db.storyBeat.findFirst({
+    where: { projectId, index: beatIndex },
+  });
+  if (!beat) return;
+  await db.storyBeat.update({
+    where: { id: beat.id },
+    data: {
+      energyStart: energy.energyStart,
+      energyEnd: energy.energyEnd,
+    },
+  });
 }
 
 /** —— 镜头轨管理 —— */
 
 /**
  * 分镜拆解回写：用 AI 拆解出的镜头组替换指定幕的全部片段。
- * 事务内：删旧 → 按幕分组重排插入新镜头 → 重写全局 order，
- * 保证镜头轨按幕分段、段内按拆解顺序。
+ * 事务内：删旧 → 按幕分组重排插入新镜头 → 重写全局 order。
+ * v2 协议：同步写入 energy / sfxHint / visualPrompt（锚定与落轨的数据来源）。
  */
 export async function replaceActClips(
   projectId: string,
   beatIndex: number,
   shots: Array<ShotBreakdownItem>
 ): Promise<ClipData[]> {
-  const project = await requireProject(projectId);
+  const project = await requireProjectRow(projectId);
   const beat = project.beats.find((b) => b.index === beatIndex);
   if (!beat) throw new RouteError(`第 ${beatIndex} 幕不存在，无法拆解`, 400);
   const locked = project.clips.filter(
@@ -291,7 +339,10 @@ export async function replaceActClips(
             shotSize: item.shot.shotSize,
             cameraMovement: item.shot.cameraMovement,
             visualDesc: item.shot.visualDesc,
+            visualPrompt: item.shot.visualPrompt,
             plannedMs: item.shot.plannedMs,
+            energy: item.shot.energy,
+            sfxHint: item.shot.sfxHint || null,
           },
         });
       } else if (item.clip && item.clip.order !== i) {
@@ -307,18 +358,15 @@ export async function replaceActClips(
     });
   });
 
-  const fresh = await requireProject(projectId);
-  return fresh.clips
-    .slice()
-    .sort((a, b) => a.order - b.order)
-    .map(mapClip);
+  const fresh = await requireProjectRow(projectId);
+  return fresh.clips.map(mapClip);
 }
 
 export async function createClip(
   projectId: string,
   input: { beatIndex: number; name: string; subtitle: string; format: string }
 ): Promise<ClipData> {
-  const project = await requireProject(projectId);
+  const project = await requireProjectRow(projectId);
   const beatExists = project.beats.some((b) => b.index === input.beatIndex);
   if (!beatExists) throw new RouteError(`关联的第 ${input.beatIndex} 幕不存在`, 400);
 
@@ -352,6 +400,12 @@ export async function updateClip(
     durationMs?: number | null;
     cameraMovement?: string | null;
     plannedMs?: number | null;
+    shotSize?: string | null;
+    visualDesc?: string | null;
+    energy?: number | null;
+    sfxHint?: string | null;
+    /** 人工微调最终提示词：落库后标记 manual，锚定阶段跳过不覆盖 */
+    finalPrompt?: string | null;
   }
 ): Promise<ClipData> {
   const existing = await db.timelineClip.findUnique({ where: { id: clipId } });
@@ -359,7 +413,12 @@ export async function updateClip(
   if (patch.status && !(patch.status in CLIP_STATUS)) {
     throw new RouteError("非法的镜头状态", 400);
   }
-  const clip = await db.timelineClip.update({ where: { id: clipId }, data: patch });
+  const data: Prisma.TimelineClipUpdateInput = { ...patch };
+  // 人工微调提示词 → 指纹标记 manual（不会被流水线覆盖，也不再判过期）
+  if (patch.finalPrompt !== undefined) {
+    data.promptVersion = patch.finalPrompt ? "manual" : null;
+  }
+  const clip = await db.timelineClip.update({ where: { id: clipId }, data });
   return mapClip(clip);
 }
 
@@ -382,7 +441,7 @@ export async function deleteClip(clipId: string): Promise<void> {
 }
 
 export async function reorderClips(projectId: string, clipIds: string[]): Promise<void> {
-  const project = await requireProject(projectId);
+  const project = await requireProjectRow(projectId);
   const owned = new Set(project.clips.map((c) => c.id));
   if (clipIds.length !== project.clips.length || !clipIds.every((id) => owned.has(id))) {
     throw new RouteError("排序数据与镜头轨不一致，请刷新后重试", 400);
@@ -394,7 +453,7 @@ export async function reorderClips(projectId: string, clipIds: string[]): Promis
   );
 }
 
-/** —— 导出（与原版 schema 对齐） —— */
+/** —— 导出（与原版 v1.2.0 schema 对齐 + v2 可选扩展段） —— */
 
 export async function exportProject(id: string): Promise<DramaProjectData> {
   return toExportData(await getProject(id));

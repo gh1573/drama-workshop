@@ -8,52 +8,61 @@ datasource db {
 }
 
 // ============================================================
-// 剧集智能创编工坊 (DRAMA STUDIO) 数据模型
-// 设计原则：
+// 剧集智能创编工坊 (DRAMA STUDIO) 数据模型 v2 —— 「AI 剧组流水线」
+// 设计原则（与 docs/architecture-v2.md 对齐）：
 // 1. 题材/模型配置随项目快照存储（schema 演进不受题材库改动影响）
-// 2. StoryBeat / TimelineClip 级联删除，归属唯一项目
+// 2. StoryBeat / TimelineClip / Asset / ShotRef / RenderTask /
+//    ProductionRun / TrackItem 级联删除，归属唯一项目
 // 3. 状态字段使用字符串枚举，集中定义在 src/lib/drama.ts，
-//    新增状态只改一处；为视频生成任务 (VideoJob) 预留 status/mediaUrl
-// 4. schemaVersion 记录工程结构版本，便于后续迁移
+//    新增状态只改一处
+// 4. SQLite 不支持 Prisma Json 标量 —— 所有结构化负载
+//    （payload / stages / journal / style / voiceProfile）
+//    以 TEXT 存储 JSON 序列化串；迁移 Postgres 时改回 Json 即可
+// 5. 一致性锚定：Asset.lockedAppearance / visualAnchor 定稿冻结，
+//    TimelineClip.promptVersion 记录组装指纹，锚点变更可计算过期
 // ============================================================
 
 model Project {
-  id              String   @id @default(cuid())
-  title           String
-  status          String   @default("draft") // draft | beatsReady | inProduction | archived
-  schemaVersion   String   @default("1.2.0")
+  id            String   @id @default(cuid())
+  title         String
+  status        String   @default("draft") // draft | beatsReady | inProduction | archived
+  schemaVersion String   @default("1.2.0")
 
   // —— 题材快照 ——
-  genreId         String
-  genreName       String
-  genreBadge      String
-  hookTactic      String
-  musicMood       String
-  tonePrompt      String
+  genreId    String
+  genreName  String
+  genreBadge String
+  hookTactic String
+  musicMood  String
+  tonePrompt String
 
   // —— 工程参数 ——
-  aspectRatio     String   @default("9:16")
+  aspectRatio     String  @default("9:16")
   synopsis        String
-  videoModel      String   @default("Omni 1.2 Flash")
-  durationSeconds Int      @default(5)
-  resolution      String   @default("720p")
-  thinkingLevel   String   @default("low") // low | medium | high
-  promptEnhance   Boolean  @default(true)
+  videoModel      String  @default("Omni 1.2 Flash")
+  durationSeconds Int     @default(5)
+  resolution      String  @default("720p")
+  thinkingLevel   String  @default("low") // low | medium | high
+  promptEnhance   Boolean @default(true)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  beats           StoryBeat[]
-  clips           TimelineClip[]
+  beats   StoryBeat[]
+  clips   TimelineClip[]
+  assets  Asset[]
+  runs    ProductionRun[]
+  tasks   RenderTask[]
+  tracks  TrackItem[]
 
   @@index([updatedAt])
   @@map("projects")
 }
 
 model StoryBeat {
-  id                String  @id @default(cuid())
-  projectId         String
-  project           Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   index             Int
   actTitle          String
@@ -64,33 +73,170 @@ model StoryBeat {
   cameraMovement    String
   promptGuidance    String
 
+  // —— v2：幕级情绪能量（拆镜阶段由 LLM 产出，可人工修正） ——
+  energyStart Int? // 幕首能量 0~100
+  energyEnd   Int? // 幕尾能量 0~100
+
   @@unique([projectId, index])
   @@map("story_beats")
 }
 
 model TimelineClip {
-  id         String   @id @default(cuid())
-  projectId  String
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  beatIndex  Int // 关联第几幕 (storyBeats.index)
-  order      Int // 时间轨顺序（0 起始，重排序时整体重写）
-  name       String
-  subtitle   String
-  format     String   @default("mp4")
-  status     String   @default("pending") // pending | generating | ready | failed
-  mediaUrl   String? // 视频模型接入后存放产物地址；当前允许手动粘贴外部成片链接
+  beatIndex Int // 关联第几幕 (storyBeats.index)
+  order     Int // 时间轨顺序（0 起始，重排序时整体重写）
+  name      String
+  subtitle  String
+  format    String  @default("mp4")
+  status    String  @default("pending") // pending | generating | ready | failed
+  mediaUrl  String? // 视频通道产物地址；当前允许手动粘贴外部成片链接
   durationMs Int?
 
   // —— 分镜拆解扩展（AI 将一幕拆为多镜头时写入；手动片段为空） ——
   shotSize       String? // 景别：远景/全景/中景/近景/特写/大特写
   cameraMovement String? // 运镜（CAMERA_MOVEMENTS 键名）
-  visualDesc     String? // 镜头画面内容描述
+  visualDesc     String? // 镜头画面内容描述（中文）
+  visualPrompt   String? // 镜头动作提示词（英文，组装管线动作段来源）
   plannedMs      Int? // 计划时长（毫秒）
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  // —— v2：锚定与节奏 ——
+  finalPrompt   String? // 组装管线产出的最终英文视频提示词（锚定段拼装）
+  promptVersion String? // 锚点指纹（sha256 前 12 位）；"manual" = 人工微调；null = 未组装
+  energy        Int? // 情绪能量值 0~100（后期节奏分析）
+  sfxHint       String? // 建议音效标签（音效轨卡点依据）
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  refs ShotRef[]
 
   @@index([projectId, order])
   @@map("timeline_clips")
+}
+
+// ============ 资产库（一致性锚定的数据基础，v2.0） ============
+
+model Asset {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  kind String // character | scene | prop
+  name String
+  /// 锁定外观描述（中文，定稿后冻结）—— 一致性锚定的语义核心
+  lockedAppearance String
+  /// 英文视觉锚点串，组装进每个引用镜头的提示词资产段
+  visualAnchor     String
+  /// 音色档案（JSON 串，仅 character）：{ voiceId, speed, style }
+  voiceProfile String?
+
+  /// 定妆图地址（图像通道任务回写；角色 3:4 竖幅，场景 16:9）
+  portraitUrl String?
+
+  /// 资产来源：crew = 剧组流水线选角自动建立；manual = 用户手工建立
+  source String @default("crew")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  refs ShotRef[]
+
+  @@unique([projectId, kind, name])
+  @@index([projectId, kind])
+  @@map("assets")
+}
+
+// ============ 镜头 ↔ 资产 引用关系（v2.0） ============
+
+model ShotRef {
+  id      String       @id @default(cuid())
+  shotId  String
+  shot    TimelineClip @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  assetId String
+  asset   Asset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  /// 引用资产在本镜头中的状态补充（可空）：如「负伤」「换官服」
+  stateNote String?
+
+  @@unique([shotId, assetId])
+  @@map("shot_refs")
+}
+
+// ============ 剧组流水线运行（v2.1 编排载体） ============
+// 一次「全组开机」= 一条 ProductionRun：
+// 编剧 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包
+// 阶段快照与剧组日志以 JSON 串存储，断点续跑按阶段幂等重试。
+
+model ProductionRun {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  status   String @default("running") // running | succeeded | failed
+  progress Int    @default(0) // 0~100
+  stage    String @default("screenwriting") // 当前阶段 key
+  /// 阶段快照 JSON：[{ key, name, role, status, startedAt, finishedAt, error }]
+  stages String @default("[]")
+  /// 剧组日志 JSON：[{ at, role, message }]
+  journal String @default("[]")
+  error   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, createdAt])
+  @@map("production_runs")
+}
+
+// ============ 渲染任务（外部生成通道的统一载体，v2.1） ============
+// 只承载需要外部通道（图像/视频/音频）的耗时操作；
+// 剧组流水线内部的 LLM 阶段由 ProductionRun 自身编排。
+
+model RenderTask {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  kind   String // portrait | video | voiceover
+  status String @default("queued") // queued | running | succeeded | failed | cancelled
+  /// 业务负载 JSON：portrait { assetId } / video { clipId } / voiceover { clipId, assetId }
+  payload String
+  /// 外部异步任务句柄（轮询用，可空）
+  remoteTaskId String?
+  /// 产物地址（定妆图 / 成片 / 音频）
+  resultUrl String?
+  attempts   Int    @default(0)
+  maxAttempts Int   @default(2)
+  error      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
+  @@index([status, createdAt])
+  @@map("render_tasks")
+}
+
+// ============ 轨道层（字幕 / 音效 / 配乐，v2.2 数据结构就绪） ============
+
+model TrackItem {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  kind   String // subtitle | sfx | bgm
+  clipId String? // 关联镜头（可空 = 全集级，如 BGM 段）
+  startMs Int
+  endMs   Int
+  text    String
+  /// 样式负载 JSON（可空）：subtitle { highlightWords, scale } / bgm { intensity, mood }
+  style String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, kind, startMs])
+  @@map("track_items")
 }
