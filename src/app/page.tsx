@@ -19,6 +19,7 @@ import { SynopsisPanel } from "@/components/workbench/synopsis-panel";
 import { ModelConfigPanel } from "@/components/workbench/model-config-panel";
 import { ActCard } from "@/components/workbench/act-card";
 import { TimelinePanel } from "@/components/workbench/timeline-panel";
+import { RhythmPanel } from "@/components/workbench/rhythm-panel";
 import { ProjectInfoCard } from "@/components/workbench/project-info-card";
 import { ProjectLibraryDrawer } from "@/components/workbench/project-library-drawer";
 import { useToast } from "@/hooks/use-toast";
@@ -218,10 +219,11 @@ export default function Home() {
                 className="space-y-6"
               >
                 <ProjectInfoCard />
-                <TimelinePanel />
                 {session.beats.map((beat, idx) => (
                   <ActCard key={beat.index} beat={beat} delay={idx * 0.1} />
                 ))}
+                <TimelinePanel />
+                <RhythmPanel />
 
                 <p className="flex items-center justify-center gap-1.5 pb-2 text-center text-xs text-muted-foreground">
                   <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" />

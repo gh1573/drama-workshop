@@ -72,19 +72,58 @@ export interface DramaProjectData {
   };
 }
 
-/** 运镜库（枚举值 → 中文机位说明），比原版单一 push 更丰富 */
-export const CAMERA_MOVEMENTS: Record<string, string> = {
-  push: "快速推近特写",
-  pull: "缓缓拉远",
-  handheld: "手持跟拍",
-  whip_pan: "快速甩镜",
-  dolly_zoom: "希区柯克变焦",
-  crane_up: "升降上摇",
-  orbit: "环绕运镜",
-  low_angle_tracking: "低角度跟拍",
-  top_down: "俯拍全景",
-  static_close: "固定特写",
+/** 运镜库（枚举值 → 中文机位说明 + 英文生成 Prompt），比原版单一 push 更丰富 */
+export const CAMERA_MOVEMENTS: Record<
+  string,
+  { label: string; prompt: string }
+> = {
+  push: { label: "快速推近特写", prompt: "rapid push-in to close-up, aggressive framing" },
+  pull: { label: "极速拉远全景", prompt: "fast pull-back revealing full scene scale" },
+  handheld: { label: "手持跟拍", prompt: "handheld tracking shot, urgent and immersive" },
+  whip_pan: { label: "闪电甩镜", prompt: "whip pan, lightning-fast camera swing" },
+  dolly_zoom: { label: "希区柯克变焦", prompt: "dolly zoom, vertigo effect, background warps while subject locked" },
+  crane_up: { label: "升降上摇", prompt: "crane up, rising overhead reveal" },
+  orbit: { label: "360°环绕运镜", prompt: "360 degree dynamic circular orbit around subject" },
+  low_angle_tracking: { label: "低角度仰拍跟拍", prompt: "low-angle ground shot tracking forward, dominant and imposing" },
+  top_down: { label: "俯瞰全景", prompt: "top-down bird's eye view, god-like overview" },
+  dutch_tilt: { label: "荷兰倾斜", prompt: "dutch tilt angle, destabilized off-kilter framing" },
+  static_close: { label: "固定特写", prompt: "locked-off static close-up, tense stillness" },
+  pan_horizontal: { label: "凌厉横摇", prompt: "crisp horizontal pan scanning across the crowd" },
 };
+
+/** 运镜中文说明（兼容旧引用） */
+export function cameraLabel(movement: string): string {
+  return CAMERA_MOVEMENTS[movement]?.label ?? movement;
+}
+
+/**
+ * 三幕情绪梯级运镜池 —— 按叙事功能结构性分配机位调度，
+ * 防止生成器落入同质化（如三幕全是 push）：
+ * - hook：锁定/冲击类，3 秒内抓住眼球
+ * - climax：排场/压迫类，展现反转的震撞力
+ * - cliffhanger：炫技/悬念类，制造意犹未尽的离场感
+ */
+export const ACT_MOVEMENT_POOLS: Record<NarrativeFunction, string[]> = {
+  hook: ["push", "whip_pan", "dutch_tilt", "static_close", "handheld"],
+  climax: ["low_angle_tracking", "pull", "top_down", "pan_horizontal", "orbit"],
+  cliffhanger: ["dolly_zoom", "crane_up", "orbit", "top_down"],
+};
+
+/** 运镜是否属于指定幕的推荐池 */
+export function isInActPool(fn: NarrativeFunction, movement: string): boolean {
+  return ACT_MOVEMENT_POOLS[fn]?.includes(movement) ?? false;
+}
+
+/** 景别库（分镜拆解用） */
+export const SHOT_SIZES = [
+  "远景",
+  "全景",
+  "中景",
+  "近景",
+  "特写",
+  "大特写",
+] as const;
+export type ShotSize = (typeof SHOT_SIZES)[number];
 
 export const NARRATIVE_META: Record<
   NarrativeFunction,
@@ -140,7 +179,7 @@ export function buildMarkdown(project: DramaProjectData): string {
     lines.push(`### 【第 ${pad2(beat.index)} 幕】${beat.actTitle}`);
     lines.push(`- **节奏要求**：${beat.pacingNote}`);
     lines.push(
-      `- **运镜机位**：${CAMERA_MOVEMENTS[beat.cameraMovement] ?? beat.cameraMovement}`
+      `- **运镜机位**：${cameraLabel(beat.cameraMovement)}（\`${beat.cameraMovement}\` → ${CAMERA_MOVEMENTS[beat.cameraMovement]?.prompt ?? ""}）`
     );
     lines.push(`- **情节画面**：${beat.description}`);
     lines.push(`- **核心台词金句 (字幕)**：> 💬 **${beat.dialogueSubtitle}**`);
@@ -155,15 +194,34 @@ export function buildMarkdown(project: DramaProjectData): string {
   lines.push("");
   lines.push(`## 🎞️ 镜头轨素材排布 (${project.timelineClips.length} 个片段)`);
   lines.push("");
-  lines.push(
-    "| 镜头序号 | 镜头名称 | 关联节拍 / 角色 | 台词字幕 | 媒体格式 |"
+  const hasBreakdown = project.timelineClips.some(
+    (c) => (c as ClipData).shotSize || (c as ClipData).cameraMovement
   );
-  lines.push("| :--- | :--- | :--- | :--- | :--- |");
-  for (const clip of project.timelineClips) {
-    const c = clip as Record<string, string>;
+  if (hasBreakdown) {
     lines.push(
-      `| ${c.no ?? ""} | ${c.name ?? ""} | ${c.beatRef ?? ""} | ${c.subtitle ?? ""} | ${c.format ?? ""} |`
+      "| 镜头序号 | 镜头名称 | 关联节拍 | 景别 | 运镜机位 | 画面内容 | 台词字幕 | 计划时长 | 媒体格式 | 状态 |"
     );
+    lines.push("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |");
+    for (const clip of project.timelineClips) {
+      const c = clip as Record<string, string & number>;
+      const mv = c.cameraMovement
+        ? `${cameraLabel(String(c.cameraMovement))}`
+        : "—";
+      lines.push(
+        `| ${c.no ?? ""} | ${c.name ?? ""} | ${c.beatRef ?? ""} | ${c.shotSize ?? "—"} | ${mv} | ${c.visualDesc ?? "—"} | ${c.subtitle ?? ""} | ${c.plannedMs ? `${Math.round(c.plannedMs / 100) / 10}s` : "—"} | ${c.format ?? ""} | ${c.status ?? ""} |`
+      );
+    }
+  } else {
+    lines.push(
+      "| 镜头序号 | 镜头名称 | 关联节拍 / 角色 | 台词字幕 | 媒体格式 |"
+    );
+    lines.push("| :--- | :--- | :--- | :--- | :--- |");
+    for (const clip of project.timelineClips) {
+      const c = clip as Record<string, string>;
+      lines.push(
+        `| ${c.no ?? ""} | ${c.name ?? ""} | ${c.beatRef ?? ""} | ${c.subtitle ?? ""} | ${c.format ?? ""} |`
+      );
+    }
   }
   lines.push("");
   lines.push("");
@@ -220,6 +278,25 @@ export interface ClipData {
   status: ClipStatus;
   mediaUrl: string | null;
   durationMs: number | null;
+  /** —— 分镜拆解扩展（可空：手动创建的片段无拆解信息） —— */
+  /** 景别：远景/全景/中景/近景/特写/大特写 */
+  shotSize: string | null;
+  /** 运镜（CAMERA_MOVEMENTS 键名） */
+  cameraMovement: string | null;
+  /** 画面内容（拆解出的镜头描述） */
+  visualDesc: string | null;
+  /** 计划时长（毫秒） */
+  plannedMs: number | null;
+}
+
+/** 分镜拆解产物：一幕 → 多个镜头 */
+export interface ShotBreakdownItem {
+  name: string;
+  shotSize: ShotSize | string;
+  cameraMovement: string;
+  visualDesc: string;
+  subtitle: string;
+  plannedMs: number;
 }
 
 /** 项目库列表项（摘要） */
@@ -254,10 +331,17 @@ export interface ProjectDetail extends ProjectSummary {
   schemaVersion: string;
 }
 
-/** 保存项目的请求体 */
+/** 保存项目的请求体（genre 只要求持久化快照字段，与 zod 校验器对齐） */
 export interface SaveProjectPayload {
   title?: string;
-  genre: GenrePreset;
+  genre: {
+    id: string;
+    name: string;
+    badge: string;
+    hookTactic: string;
+    musicMood: string;
+    tonePrompt: string;
+  };
   synopsis: string;
   modelConfig: ModelConfig;
   storyBeats: StoryBeat[];
@@ -289,6 +373,15 @@ export function toExportData(detail: ProjectDetail): DramaProjectData {
       format: c.format,
       status: CLIP_STATUS[c.status].label,
       mediaUrl: c.mediaUrl ?? "",
+      ...(c.shotSize ? { shotSize: c.shotSize } : {}),
+      ...(c.cameraMovement
+        ? {
+            cameraMovement: c.cameraMovement,
+            cameraPrompt: CAMERA_MOVEMENTS[c.cameraMovement]?.prompt ?? "",
+          }
+        : {}),
+      ...(c.visualDesc ? { visualDesc: c.visualDesc } : {}),
+      ...(c.plannedMs != null ? { plannedMs: c.plannedMs } : {}),
     })),
     statistics: {
       totalBeats: detail.storyBeats.length,

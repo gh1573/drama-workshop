@@ -37,6 +37,7 @@ export function ProjectInfoCard() {
   }
 
   async function handleSave() {
+    if (!session) return;
     const ok = await saveProject();
     toast({
       title: ok
@@ -44,7 +45,7 @@ export function ProjectInfoCard() {
           ? "项目已更新"
           : "已保存到项目库"
         : "保存失败",
-      description: ok ? detail.title : "请检查网络后重试",
+      description: ok ? session.title : "请检查网络后重试",
       variant: ok ? "default" : "destructive",
     });
   }

@@ -82,6 +82,12 @@ model TimelineClip {
   mediaUrl   String? // 视频模型接入后存放产物地址；当前允许手动粘贴外部成片链接
   durationMs Int?
 
+  // —— 分镜拆解扩展（AI 将一幕拆为多镜头时写入；手动片段为空） ——
+  shotSize       String? // 景别：远景/全景/中景/近景/特写/大特写
+  cameraMovement String? // 运镜（CAMERA_MOVEMENTS 键名）
+  visualDesc     String? // 镜头画面内容描述
+  plannedMs      Int? // 计划时长（毫秒）
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

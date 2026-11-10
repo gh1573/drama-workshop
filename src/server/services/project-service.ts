@@ -11,6 +11,7 @@ import {
   type ProjectStatus,
   type ProjectSummary,
   type SaveProjectPayload,
+  type ShotBreakdownItem,
   type StoryBeat,
 } from "@/lib/drama";
 import type { Prisma, TimelineClip, StoryBeat as DbBeat } from "@prisma/client";
@@ -52,6 +53,10 @@ function mapClip(c: TimelineClip): ClipData {
     status: c.status as ClipStatus,
     mediaUrl: c.mediaUrl,
     durationMs: c.durationMs,
+    shotSize: c.shotSize,
+    cameraMovement: c.cameraMovement,
+    visualDesc: c.visualDesc,
+    plannedMs: c.plannedMs,
   };
 }
 
@@ -225,6 +230,90 @@ export async function deleteProject(id: string): Promise<void> {
 
 /** —— 镜头轨管理 —— */
 
+/**
+ * 分镜拆解回写：用 AI 拆解出的镜头组替换指定幕的全部片段。
+ * 事务内：删旧 → 按幕分组重排插入新镜头 → 重写全局 order，
+ * 保证镜头轨按幕分段、段内按拆解顺序。
+ */
+export async function replaceActClips(
+  projectId: string,
+  beatIndex: number,
+  shots: Array<ShotBreakdownItem>
+): Promise<ClipData[]> {
+  const project = await requireProject(projectId);
+  const beat = project.beats.find((b) => b.index === beatIndex);
+  if (!beat) throw new RouteError(`第 ${beatIndex} 幕不存在，无法拆解`, 400);
+  const locked = project.clips.filter(
+    (c) => c.beatIndex === beatIndex && c.status === "ready"
+  );
+  if (locked.length > 0) {
+    throw new RouteError(
+      `该幕已有 ${locked.length} 个已生成的镜头，请先重置为待生成后再重新拆解`,
+      409
+    );
+  }
+
+  await db.$transaction(async (tx) => {
+    await tx.timelineClip.deleteMany({
+      where: { projectId, beatIndex },
+    });
+    // 按幕分组重排：保留其他幕片段的相对顺序，新镜头替换该幕段
+    const rest = project.clips
+      .filter((c) => c.beatIndex !== beatIndex)
+      .sort((a, b) => a.order - b.order);
+    const ordered: Array<{
+      clip: (typeof rest)[number] | null;
+      shot: ShotBreakdownItem | null;
+    }> = rest.map((c) => ({ clip: c, shot: null }));
+    const insertAt = (() => {
+      const idx = ordered.findIndex(
+        (o) => o.clip && o.clip.beatIndex > beatIndex
+      );
+      return idx === -1 ? ordered.length : idx;
+    })();
+    ordered.splice(
+      insertAt,
+      0,
+      ...shots.map((s) => ({ clip: null, shot: s }))
+    );
+    for (let i = 0; i < ordered.length; i++) {
+      const item = ordered[i];
+      if (item.shot) {
+        await tx.timelineClip.create({
+          data: {
+            projectId,
+            beatIndex,
+            order: i,
+            name: item.shot.name,
+            subtitle: item.shot.subtitle ?? "",
+            format: "mp4",
+            status: "pending",
+            shotSize: item.shot.shotSize,
+            cameraMovement: item.shot.cameraMovement,
+            visualDesc: item.shot.visualDesc,
+            plannedMs: item.shot.plannedMs,
+          },
+        });
+      } else if (item.clip && item.clip.order !== i) {
+        await tx.timelineClip.update({
+          where: { id: item.clip.id },
+          data: { order: i },
+        });
+      }
+    }
+    await tx.project.update({
+      where: { id: projectId },
+      data: { status: "inProduction" },
+    });
+  });
+
+  const fresh = await requireProject(projectId);
+  return fresh.clips
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map(mapClip);
+}
+
 export async function createClip(
   projectId: string,
   input: { beatIndex: number; name: string; subtitle: string; format: string }
@@ -261,6 +350,8 @@ export async function updateClip(
     status?: ClipStatus;
     mediaUrl?: string | null;
     durationMs?: number | null;
+    cameraMovement?: string | null;
+    plannedMs?: number | null;
   }
 ): Promise<ClipData> {
   const existing = await db.timelineClip.findUnique({ where: { id: clipId } });

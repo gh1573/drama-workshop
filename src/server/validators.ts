@@ -62,6 +62,12 @@ export const updateClipSchema = z.object({
   status: z.enum(["pending", "generating", "ready", "failed"]).optional(),
   mediaUrl: z.string().url().max(500).nullable().optional(),
   durationMs: z.number().int().min(0).max(600000).nullable().optional(),
+  cameraMovement: z
+    .string()
+    .max(40)
+    .nullable()
+    .optional(),
+  plannedMs: z.number().int().min(0).max(600000).nullable().optional(),
 });
 
 export const reorderClipsSchema = z.object({

@@ -1,16 +1,18 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Clock, Copy, Plus, Quote, Timer, Video } from "lucide-react";
+import { Clock, Copy, Loader2, Plus, Quote, Scissors, Timer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   CAMERA_MOVEMENTS,
   NARRATIVE_META,
+  cameraLabel,
   type NarrativeFunction,
   type StoryBeat,
 } from "@/lib/drama";
 import { useWorkbench } from "@/store/workbench";
+import { MovementMatrix } from "@/components/workbench/movement-matrix";
 
 export const FN_STYLE: Record<
   NarrativeFunction,
@@ -33,13 +35,20 @@ export const FN_STYLE: Record<
   },
 };
 
-/** 单幕分镜卡：内容展示 + 台词复制 + 加入镜头轨 */
+/** 单幕分镜卡：内容展示 + 台词复制 + 运镜调度矩阵 + AI 拆解分镜 + 加入镜头轨 */
 export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
   const { toast } = useToast();
   const fn = NARRATIVE_META[beat.narrativeFunction];
   const style = FN_STYLE[beat.narrativeFunction];
   const dbId = useWorkbench((s) => s.session?.dbId ?? null);
   const addClip = useWorkbench((s) => s.addClip);
+  const setBeatMovement = useWorkbench((s) => s.setBeatMovement);
+  const breakdownAct = useWorkbench((s) => s.breakdownAct);
+  const breakingDown = useWorkbench((s) => s.breakingDown);
+  const actClipCount = useWorkbench(
+    (s) => s.session?.clips.filter((c) => c.beatIndex === beat.index).length ?? 0
+  );
+  const busy = breakingDown === beat.index;
 
   async function handleAdd() {
     const success = await addClip(beat.index);
@@ -50,6 +59,18 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
         : "请先「保存到项目库」后再添加镜头片段",
       variant: success ? "default" : "destructive",
     });
+  }
+
+  async function handleBreakdown() {
+    const err = await breakdownAct(beat.index);
+    if (err) {
+      toast({ title: "拆解未执行", description: err, variant: "destructive" });
+    } else {
+      toast({
+        title: "分镜拆解完成",
+        description: `第 ${String(beat.index).padStart(2, "0")} 幕已拆为多个镜头并写入镜头轨，可在下方分镜表微调`,
+      });
+    }
   }
 
   return (
@@ -103,21 +124,58 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="border-border/70 text-xs">
-            <Video className="mr-1 h-3 w-3" />
-            {CAMERA_MOVEMENTS[beat.cameraMovement] ?? beat.cameraMovement}
-          </Badge>
+          <MovementMatrix
+            current={beat.cameraMovement}
+            fn={beat.narrativeFunction}
+            onSelect={(mv) => {
+              setBeatMovement(beat.index, mv);
+              toast({
+                title: "运镜已切换",
+                description: `${cameraLabel(mv)} · ${CAMERA_MOVEMENTS[mv]?.prompt ?? ""}`,
+              });
+            }}
+          />
           <Badge variant="outline" className="border-border/70 text-xs">
             <Timer className="mr-1 h-3 w-3" />
             镜头产出状态：⏳ 待生成
           </Badge>
+          {actClipCount > 0 && (
+            <Badge
+              variant="outline"
+              className="border-emerald-500/40 bg-emerald-500/10 text-emerald-400 text-xs"
+            >
+              已拆解 {actClipCount} 镜头
+            </Badge>
+          )}
+          <button
+            type="button"
+            onClick={handleBreakdown}
+            disabled={breakingDown !== null}
+            className={`ml-auto inline-flex cursor-pointer items-center gap-1 rounded-md border border-dashed px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-wait disabled:opacity-60 ${
+              dbId
+                ? "border-sky-500/50 text-sky-400 hover:bg-sky-500/10"
+                : "border-border/70 text-muted-foreground hover:border-sky-500/50 hover:text-sky-400"
+            }`}
+          >
+            {busy ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                AI 拆解中…
+              </>
+            ) : (
+              <>
+                <Scissors className="h-3 w-3" />
+                AI 拆解分镜
+              </>
+            )}
+          </button>
           <Badge
             variant="outline"
             role="button"
             tabIndex={0}
             onClick={handleAdd}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            className={`ml-auto cursor-pointer border-dashed text-xs transition-colors ${
+            className={`cursor-pointer border-dashed text-xs transition-colors ${
               dbId
                 ? "border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
                 : "border-border/70 text-muted-foreground hover:border-rose-500/50 hover:text-rose-400"

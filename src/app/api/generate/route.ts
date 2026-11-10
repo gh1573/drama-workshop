@@ -3,6 +3,7 @@ import ZAI from "z-ai-web-dev-sdk";
 import { GENRES } from "@/lib/genres";
 import { fail, ok, handleRouteError } from "@/lib/api-utils";
 import {
+  ACT_MOVEMENT_POOLS,
   CAMERA_MOVEMENTS,
   NARRATIVE_META,
   StoryBeat,
@@ -11,9 +12,17 @@ import {
 
 export const maxDuration = 300;
 
-const CAMERA_LIST = Object.entries(CAMERA_MOVEMENTS)
-  .map(([k, v]) => `${k}=${v}`)
-  .join(", ");
+const POOL_DESC: Record<NarrativeFunction, string> = {
+  hook: ACT_MOVEMENT_POOLS.hook
+    .map((k) => `${k}=${CAMERA_MOVEMENTS[k].label}`)
+    .join("、"),
+  climax: ACT_MOVEMENT_POOLS.climax
+    .map((k) => `${k}=${CAMERA_MOVEMENTS[k].label}`)
+    .join("、"),
+  cliffhanger: ACT_MOVEMENT_POOLS.cliffhanger
+    .map((k) => `${k}=${CAMERA_MOVEMENTS[k].label}`)
+    .join("、"),
+};
 
 const PACING_FALLBACK: Record<NarrativeFunction, string> = {
   hook: "0~3s 强冲突切入！拒绝无效铺垫，拉满情绪张力",
@@ -44,8 +53,12 @@ function buildSystemPrompt(thinkingLevel: string, enhance: boolean): string {
 
 【节奏策略（本次采用）】${levelDesc}
 
-【运镜库（每幕从中选择最合适的一种，三幕必须互不重复）】
-${CAMERA_LIST}
+【三幕梯级运镜调度（视听导演硬约束）】
+三幕必须呈现递进的视角层次，禁止同质化：
+- 第 1 幕 hook（锁定/冲击类）：${POOL_DESC.hook}
+- 第 2 幕 climax（排场/压迫类）：${POOL_DESC.climax}
+- 第 3 幕 cliffhanger（炫技/悬念类）：${POOL_DESC.cliffhanger}
+每幕只能从本幕推荐池中选择 cameraMovement，且三幕之间不得重复；整体效果应形成「特写锁定 → 仰角/大景深排场 → 环绕/变焦炫技」的视角递进。
 
 【写作要求】
 1. 情节画面 description：40~80 字，完全可视化——人物在做什么、穿着、环境、冲突焦点，禁止抽象抒情
@@ -135,7 +148,7 @@ function parseBeats(raw: string): StoryBeat[] | null {
       typeof item?.cameraMovement === "string" &&
       item.cameraMovement in CAMERA_MOVEMENTS
         ? item.cameraMovement
-        : "push";
+        : "";
     beats.push({
       index: i + 1,
       actTitle: `${meta.actNo}：${meta.label} (${meta.tag})`,
@@ -146,6 +159,19 @@ function parseBeats(raw: string): StoryBeat[] | null {
       cameraMovement: cam,
       promptGuidance: str(item?.promptGuidance, "提示生成异常，请重试"),
     });
+  }
+  // 运镜合规修复：池外运镜 → 回退到本幕推荐池；三幕互斥 → 依次换池内备选
+  const used = new Set<string>();
+  for (const beat of beats) {
+    const pool = ACT_MOVEMENT_POOLS[beat.narrativeFunction];
+    let mv = beat.cameraMovement;
+    if (!pool.includes(mv)) mv = pool[0];
+    if (used.has(mv)) {
+      const alt = pool.find((k) => !used.has(k));
+      if (alt) mv = alt;
+    }
+    used.add(mv);
+    beat.cameraMovement = mv;
   }
   return beats;
 }

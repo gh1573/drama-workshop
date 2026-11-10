@@ -70,6 +70,13 @@ interface WorkbenchState {
   patchClip: (clipId: string, patch: Partial<ClipData>) => Promise<boolean>;
   removeClip: (clipId: string) => Promise<boolean>;
   moveClip: (clipId: string, dir: -1 | 1) => Promise<boolean>;
+
+  /** 切换某幕的运镜（本地即时生效；已入库项目异步同步） */
+  setBeatMovement: (beatIndex: number, movement: string) => void;
+  /** AI 分镜拆解：把一幕拆成 3~5 镜头写入镜头轨 */
+  breakdownAct: (beatIndex: number) => Promise<string | null>;
+  /** 拆解进行中的幕序号（null = 无） */
+  breakingDown: number | null;
 }
 
 /** 统一请求器：解析 { ok, data | error } 封套 */
@@ -411,6 +418,46 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       return true;
     } catch {
       return false;
+    }
+  },
+
+  breakingDown: null,
+
+  setBeatMovement: (beatIndex, movement) => {
+    const { session } = get();
+    if (!session) return;
+    const beats = session.beats.map((b) =>
+      b.index === beatIndex ? { ...b, cameraMovement: movement } : b
+    );
+    set({ session: { ...session, beats } });
+    // 已入库项目：静默同步（失败不回滚本地，下次保存会覆盖）
+    if (session.dbId) {
+      void api(`/api/projects/${session.dbId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ storyBeats: beats }),
+      }).catch(() => undefined);
+    }
+  },
+
+  breakdownAct: async (beatIndex) => {
+    const { session } = get();
+    if (!session?.dbId) return "请先「保存到项目库」，AI 拆解需要项目已入库";
+    set({ breakingDown: beatIndex });
+    try {
+      const res = await api<{ shots: unknown[]; clips: ClipData[] }>(
+        `/api/projects/${session.dbId}/beats/${beatIndex}/breakdown`,
+        { method: "POST" }
+      );
+      set((s) => ({
+        session: s.session
+          ? { ...s.session, status: "inProduction", clips: res.clips }
+          : s.session,
+      }));
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "拆解失败，请重试";
+    } finally {
+      set({ breakingDown: null });
     }
   },
 }));
