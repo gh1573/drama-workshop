@@ -3,6 +3,15 @@ import { promises as fs } from "node:fs";
 import { db } from "@/lib/db";
 import type { TaskKind } from "@/lib/drama";
 import { getImageProvider, getVideoProvider } from "@/server/providers";
+import {
+  DISPATCH_CONCURRENCY,
+  DISPATCH_TICK_INTERVAL_MS,
+  ORPHAN_RECOVERY_WINDOW_MS,
+} from "@/config/runtime";
+import {
+  PORTRAIT_SPECS,
+  PORTRAIT_PROMPT_TAIL,
+} from "@/config/templates";
 
 /**
  * 进程内任务调度器 —— 外部生成通道（图像/视频）的统一执行载体。
@@ -12,15 +21,11 @@ import { getImageProvider, getVideoProvider } from "@/server/providers";
  * - 每类通道独立并发上限（防打爆通道）；失败自动重试至 maxAttempts；
  * - 进程重启恢复：残留 running 的任务回置 queued 重新调度。
  *
+ * 运行参数全部来自集中配置（§7.8）：并发上限、轮询间隔、回收窗口可经环境变量覆盖。
+ *
  * 演进路径：多实例部署时把本文件替换为持久化队列（Redis/BullMQ），
  * handler 与 REST 契约不变。
  */
-
-const CONCURRENCY: Record<TaskKind, number> = {
-  portrait: 2,
-  video: 2,
-  voiceover: 4,
-};
 
 interface QueuedTask {
   id: string;
@@ -58,7 +63,7 @@ async function recoverOrphanTasks(s: DispatcherState) {
     const orphans = await db.renderTask.findMany({
       where: {
         status: "running",
-        updatedAt: { lt: new Date(Date.now() - 3 * 60_000) },
+        updatedAt: { lt: new Date(Date.now() - ORPHAN_RECOVERY_WINDOW_MS) },
       },
       select: { id: true, kind: true },
     });
@@ -80,7 +85,7 @@ function scheduleTick(s: DispatcherState) {
   s.timer = setTimeout(() => {
     s.timer = null;
     void tick(s);
-  }, 600);
+  }, DISPATCH_TICK_INTERVAL_MS);
 }
 
 async function tick(s: DispatcherState): Promise<void> {
@@ -90,7 +95,7 @@ async function tick(s: DispatcherState): Promise<void> {
     const runningOfKind = [...s.running.values()].filter(
       (k) => k === next.kind
     ).length;
-    if (runningOfKind >= (CONCURRENCY[next.kind] ?? 2)) break;
+    if (runningOfKind >= DISPATCH_CONCURRENCY[next.kind]) break;
     s.queue.shift();
     s.running.set(next.id, next.kind);
     void execute(next.id, next.kind, s);
@@ -159,25 +164,16 @@ const handlers: Partial<Record<TaskKind, Handler>> = {
     });
     if (!project) throw new Error("项目不存在");
 
-    const size =
-      asset.kind === "character"
-        ? ("864x1152" as const) // 3:4 竖幅定妆
-        : asset.kind === "scene"
-          ? ("1344x768" as const) // 16:9 场景
-          : ("1024x1024" as const); // 道具
+    const spec = PORTRAIT_SPECS[asset.kind];
 
     const prompt = [
-      asset.kind === "character"
-        ? "cinematic character portrait for a vertical short drama"
-        : asset.kind === "scene"
-          ? "cinematic establishing shot of a location for a short drama"
-          : "product-style prop still for a short drama",
+      spec.promptPrefix,
       asset.visualAnchor,
       project.tonePrompt,
-      "dramatic lighting, highly detailed, consistent visual identity",
+      PORTRAIT_PROMPT_TAIL,
     ].join(", ");
 
-    const image = await getImageProvider().generate({ prompt, size });
+    const image = await getImageProvider().generate({ prompt, size: spec.size });
 
     const dir = path.join(process.cwd(), "public", "assets");
     await fs.mkdir(dir, { recursive: true });

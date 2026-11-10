@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 import { CAMERA_MOVEMENTS } from "@/lib/drama";
+import {
+  PROMPT_SEGMENT_LABELS,
+  PROMPT_TECHNICAL_TAIL,
+} from "@/config/templates";
 
 /**
  * 提示词组装管线（prompt-engine）—— 一致性锚定的执行核心。
@@ -92,20 +96,21 @@ export function composeVideoPrompt(input: PromptInput): PromptOutput {
       input.plannedMs ? `${Math.round(input.plannedMs / 100) / 10}s duration` : null,
       input.resolution,
       shot.shotSize ? `${shot.shotSize} framing` : null,
-      "cinematic quality",
+      PROMPT_TECHNICAL_TAIL,
     ]
       .filter(Boolean)
       .join(", "),
   };
 
+  const L = PROMPT_SEGMENT_LABELS;
   const finalPrompt = [
-    segments.characters && `[Characters] ${segments.characters}`,
-    segments.scene && `[Scene] ${segments.scene}`,
-    segments.props && `[Props] ${segments.props}`,
-    `[Action] ${segments.action}`,
-    segments.camera && `[Camera] ${segments.camera}`,
-    segments.tone && `[Style] ${segments.tone}`,
-    `[Technical] ${segments.technical}`,
+    segments.characters && `[${L.characters}] ${segments.characters}`,
+    segments.scene && `[${L.scene}] ${segments.scene}`,
+    segments.props && `[${L.props}] ${segments.props}`,
+    `[${L.action}] ${segments.action}`,
+    segments.camera && `[${L.camera}] ${segments.camera}`,
+    segments.tone && `[${L.style}] ${segments.tone}`,
+    `[${L.technical}] ${segments.technical}`,
   ]
     .filter(Boolean)
     .join(" ");

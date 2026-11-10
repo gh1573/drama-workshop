@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { RouteError } from "@/lib/api-utils";
 import type { TaskDTO, TaskKind, TaskStatus } from "@/lib/drama";
 import { enqueueTask } from "@/server/tasks/dispatcher";
+import { TASK_LIST_LIMIT } from "@/config/runtime";
 
 /**
  * 任务服务 —— 渲染任务的提交 / 查询 / 重试 / 取消。
@@ -105,7 +106,7 @@ export async function listTasks(
   const rows = await db.renderTask.findMany({
     where: { projectId, ...(status ? { status } : {}) },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: TASK_LIST_LIMIT,
   });
   return rows.map(mapTask);
 }

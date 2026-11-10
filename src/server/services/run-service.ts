@@ -16,6 +16,7 @@ import {
 } from "@/lib/drama";
 import { getTextProvider, parseJsonLoose } from "@/server/providers";
 import { composeVideoPrompt } from "@/server/engines/prompt-engine";
+import { ORPHAN_RECOVERY_WINDOW_MS } from "@/config/runtime";
 import { breakdownAct } from "./breakdown-service";
 import {
   replaceActClips,
@@ -929,7 +930,8 @@ export async function listRuns(projectId: string): Promise<RunDTO[]> {
 
 // ============================================================
 // 进程重启恢复：残留 running 的运行回置 failed（可断点重试）
-// 注意：只回置「过期」的运行（updatedAt 落后 3 分钟以上）。
+// 注意：只回置「过期」的运行（updatedAt 落后回收窗口以上，见
+// ORPHAN_RECOVERY_WINDOW_MS）。
 // Next dev 按路由懒编译 + worker 隔离，本模块会被多次求值；
 // 无差别回置会把正在执行的流水线误杀（生产多实例同理需要心跳判据）。
 // ============================================================
@@ -940,7 +942,7 @@ if (!g.__dramaRunRecovered) {
     .updateMany({
       where: {
         status: "running",
-        updatedAt: { lt: new Date(Date.now() - 3 * 60_000) },
+        updatedAt: { lt: new Date(Date.now() - ORPHAN_RECOVERY_WINDOW_MS) },
       },
       data: {
         status: "failed",
