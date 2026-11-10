@@ -45,3 +45,15 @@ export const ORPHAN_RECOVERY_WINDOW_MS = envInt(
 
 /** 任务中心列表单次返回上限（API 分页）。覆盖变量：TASK_LIST_LIMIT */
 export const TASK_LIST_LIMIT = envInt("TASK_LIST_LIMIT", 50);
+
+/**
+ * 上游限流（429）指数退避基数（毫秒）：20s → 40s → 80s。
+ * 覆盖变量：RATE_LIMIT_BACKOFF_MS
+ */
+export const RATE_LIMIT_BACKOFF_MS = envInt("RATE_LIMIT_BACKOFF_MS", 20_000);
+
+/** 限流退避最大次数（超过后按常规失败处理）。覆盖变量：RATE_LIMIT_MAX_BACKOFF_ATTEMPTS */
+export const RATE_LIMIT_MAX_BACKOFF_ATTEMPTS = envInt(
+  "RATE_LIMIT_MAX_BACKOFF_ATTEMPTS",
+  3
+);

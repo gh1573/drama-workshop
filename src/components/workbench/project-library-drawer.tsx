@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { FolderOpen, Loader2, Pencil, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { FolderOpen, Layers, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,10 +19,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { PROJECT_STATUS, type ProjectDetail } from "@/lib/drama";
+import { PROJECT_STATUS, type ProjectDetail, type ProjectSummary } from "@/lib/drama";
 import { api, useWorkbench } from "@/store/workbench";
 
-/** 项目库抽屉：多项目列表 / 载入 / 重命名 / 删除 */
+/** 项目库抽屉：系列分组的多项目列表 / 载入 / 重命名 / 删除 */
 export function ProjectLibraryDrawer() {
   const { toast } = useToast();
   const open = useWorkbench((s) => s.libraryOpen);
@@ -37,6 +37,29 @@ export function ProjectLibraryDrawer() {
 
   const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  /** v2.3：按系列分组（系列内按集号排序，无系列项目独立展示） */
+  const groups = useMemo(() => {
+    const bySeries = new Map<
+      string,
+      { title: string; episodes: ProjectSummary[] }
+    >();
+    const standalone: ProjectSummary[] = [];
+    for (const p of library) {
+      if (p.seriesId && p.seriesTitle) {
+        const g =
+          bySeries.get(p.seriesId) ?? { title: p.seriesTitle, episodes: [] };
+        g.episodes.push(p);
+        bySeries.set(p.seriesId, g);
+      } else {
+        standalone.push(p);
+      }
+    }
+    for (const g of bySeries.values()) {
+      g.episodes.sort((a, b) => (a.episodeNo ?? 0) - (b.episodeNo ?? 0));
+    }
+    return { series: [...bySeries.values()], standalone };
+  }, [library]);
 
   useEffect(() => {
     if (open) void fetchLibrary();
@@ -78,6 +101,91 @@ export function ProjectLibraryDrawer() {
     if (ok) setRenaming(null);
   }
 
+  function renderCard(p: ProjectSummary) {
+    const active = p.id === currentDbId;
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => handleLoad(p.id)}
+        onKeyDown={(e) => e.key === "Enter" && handleLoad(p.id)}
+        className={`cursor-pointer rounded-xl border p-3 transition-colors ${
+          active
+            ? "border-emerald-500/50 bg-emerald-500/5"
+            : "border-border/70 bg-secondary/30 hover:border-muted-foreground/40"
+        } ${busyId === p.id ? "opacity-60" : ""}`}
+      >
+        <div className="flex flex-wrap items-center gap-1.5">
+          {p.episodeNo != null && (
+            <Badge
+              variant="outline"
+              className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-300"
+            >
+              第 {p.episodeNo} 集
+            </Badge>
+          )}
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+            {p.title}
+          </span>
+          {active && (
+            <Badge
+              variant="outline"
+              className="border-emerald-500/50 text-[10px] text-emerald-400"
+            >
+              当前
+            </Badge>
+          )}
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Badge variant="outline" className="text-[10px]">
+            {p.genreName}
+          </Badge>
+          <Badge variant="outline" className="text-[10px]">
+            {PROJECT_STATUS[p.status]}
+          </Badge>
+          <span>
+            {p.beatCount} 幕 · {p.clipCount} 片段
+          </span>
+          <span className="ml-auto">
+            {new Date(p.updatedAt).toLocaleString("zh-CN", {
+              hour12: false,
+              month: "numeric",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 border-border/70 px-2 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              setRenaming({ id: p.id, title: p.title });
+            }}
+          >
+            <Pencil className="h-3 w-3" />
+            重命名
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 border-rose-500/40 px-2 text-xs text-rose-400 hover:bg-rose-500/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleRemove(p.id, p.title);
+            }}
+          >
+            <Trash2 className="h-3 w-3" />
+            删除
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent className="flex w-full flex-col gap-4 overflow-y-auto border-border/60 bg-card sm:max-w-md">
@@ -102,85 +210,29 @@ export function ProjectLibraryDrawer() {
             生成完分镜后点击「保存到项目库」即可归档
           </div>
         ) : (
-          <ul className="space-y-2.5 pb-4">
-            {library.map((p) => {
-              const active = p.id === currentDbId;
-              return (
-                <li key={p.id}>
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleLoad(p.id)}
-                    onKeyDown={(e) => e.key === "Enter" && handleLoad(p.id)}
-                    className={`cursor-pointer rounded-xl border p-3 transition-colors ${
-                      active
-                        ? "border-emerald-500/50 bg-emerald-500/5"
-                        : "border-border/70 bg-secondary/30 hover:border-muted-foreground/40"
-                    } ${busyId === p.id ? "opacity-60" : ""}`}
+          <ul className="space-y-4 pb-4">
+            {groups.series.map((g) => (
+              <li key={g.title + g.episodes[0]?.seriesId} className="space-y-2">
+                <div className="flex items-center gap-1.5 px-1">
+                  <Layers className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="text-xs font-semibold text-amber-200/90">
+                    {g.title}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500/40 text-[10px] text-amber-300"
                   >
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">
-                        {p.title}
-                      </span>
-                      {active && (
-                        <Badge
-                          variant="outline"
-                          className="border-emerald-500/50 text-[10px] text-emerald-400"
-                        >
-                          当前
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <Badge variant="outline" className="text-[10px]">
-                        {p.genreName}
-                      </Badge>
-                      <Badge variant="outline" className="text-[10px]">
-                        {PROJECT_STATUS[p.status]}
-                      </Badge>
-                      <span>
-                        {p.beatCount} 幕 · {p.clipCount} 片段
-                      </span>
-                      <span className="ml-auto">
-                        {new Date(p.updatedAt).toLocaleString("zh-CN", {
-                          hour12: false,
-                          month: "numeric",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex items-center gap-1.5">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 border-border/70 px-2 text-xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRenaming({ id: p.id, title: p.title });
-                        }}
-                      >
-                        <Pencil className="h-3 w-3" />
-                        重命名
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 border-rose-500/40 px-2 text-xs text-rose-400 hover:bg-rose-500/10"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleRemove(p.id, p.title);
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        删除
-                      </Button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
+                    连载 {g.episodes.length} 集
+                  </Badge>
+                </div>
+                <ul className="space-y-2.5 border-l border-amber-500/20 pl-3">
+                  {g.episodes.map((p) => renderCard(p))}
+                </ul>
+              </li>
+            ))}
+            {groups.standalone.map((p) => (
+              <li key={p.id}>{renderCard(p)}</li>
+            ))}
           </ul>
         )}
 

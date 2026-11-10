@@ -26,12 +26,13 @@ import { getLatestRun } from "./run-service";
  */
 
 type ProjectWithRelations = Prisma.ProjectGetPayload<{
-  include: { beats: true; clips: true };
+  include: { beats: true; clips: true; series: { select: { title: true } } };
 }>;
 
 const BASE_INCLUDE = {
   beats: { orderBy: { index: "asc" as const } },
   clips: { orderBy: { order: "asc" as const } },
+  series: { select: { title: true } },
 } satisfies Prisma.ProjectInclude;
 
 function mapBeat(b: DbBeat): StoryBeat {
@@ -89,7 +90,10 @@ function defaultTitle(genreName: string, synopsis: string): string {
 export async function listProjects(): Promise<ProjectSummary[]> {
   const rows = await db.project.findMany({
     orderBy: { updatedAt: "desc" },
-    include: { _count: { select: { beats: true, clips: true } } },
+    include: {
+      _count: { select: { beats: true, clips: true } },
+      series: { select: { title: true } },
+    },
   });
   return rows.map((r) => ({
     id: r.id,
@@ -101,6 +105,9 @@ export async function listProjects(): Promise<ProjectSummary[]> {
     beatCount: r._count.beats,
     clipCount: r._count.clips,
     updatedAt: r.updatedAt.toISOString(),
+    seriesId: r.seriesId,
+    seriesTitle: r.series?.title ?? null,
+    episodeNo: r.episodeNo,
   }));
 }
 
@@ -185,6 +192,9 @@ async function assembleDetail(p: ProjectWithRelations): Promise<ProjectDetail> {
     clipCount: p.clips.length,
     genreBadge: p.genreBadge,
     genreName: p.genreName,
+    seriesId: p.seriesId,
+    seriesTitle: p.series?.title ?? null,
+    episodeNo: p.episodeNo,
     assets,
     shotRefs,
     tracks,

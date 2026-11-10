@@ -22,6 +22,32 @@ datasource db {
 //    TimelineClip.promptVersion 记录组装指纹，锚点变更可计算过期
 // ============================================================
 
+// ============ 系列（多剧集连载容器，v2.3） ============
+// 系列承载统一题材基调与资产复用入口：
+// - 题材快照在系列层留档，新建剧集默认继承（可按集覆盖）；
+// - 跨集资产复用通过「资产克隆」实现（深拷贝到新剧集，
+//   含定妆图地址引用，保证跨集视觉一致），v3 再评估共享引用。
+
+model Series {
+  id     String @id @default(cuid())
+  title  String
+  synopsis String @default("")
+  /// 题材快照（建系列时可选留档，新剧集默认继承）
+  genreId    String @default("")
+  genreName  String @default("")
+  genreBadge String @default("")
+  hookTactic String @default("")
+  musicMood  String @default("")
+  tonePrompt String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  episodes Project[]
+
+  @@map("series")
+}
+
 model Project {
   id            String   @id @default(cuid())
   title         String
@@ -45,6 +71,11 @@ model Project {
   thinkingLevel   String  @default("low") // low | medium | high
   promptEnhance   Boolean @default(true)
 
+  // —— v2.3：剧集归属（可空 = 独立单集项目） ——
+  seriesId  String?
+  series    Series?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  episodeNo Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -56,6 +87,7 @@ model Project {
   tracks  TrackItem[]
 
   @@index([updatedAt])
+  @@index([seriesId, episodeNo])
   @@map("projects")
 }
 

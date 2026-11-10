@@ -704,6 +704,59 @@ export interface ProjectSummary {
   clipCount: number;
   beatCount: number;
   updatedAt: string;
+  /** v2.3：剧集归属（可空 = 独立单集项目） */
+  seriesId: string | null;
+  seriesTitle: string | null;
+  episodeNo: number | null;
+}
+
+/** —— 系列（v2.3 多剧集连载容器） —— */
+
+export interface SeriesSummary {
+  id: string;
+  title: string;
+  synopsis: string;
+  genreName: string;
+  episodeCount: number;
+  updatedAt: string;
+}
+
+/** 系列详情内的单集摘要 */
+export interface SeriesEpisodeSummary {
+  id: string;
+  episodeNo: number;
+  title: string;
+  status: ProjectStatus;
+  clipCount: number;
+  beatCount: number;
+  /** 本集镜头计划总时长（毫秒，拆镜后汇总） */
+  plannedMs: number;
+  updatedAt: string;
+}
+
+export interface SeriesDetail {
+  id: string;
+  title: string;
+  synopsis: string;
+  genreId: string;
+  genreName: string;
+  genreBadge: string;
+  hookTactic: string;
+  musicMood: string;
+  tonePrompt: string;
+  episodes: SeriesEpisodeSummary[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 新建剧集请求体（题材与模型参数缺省时继承系列/上一集） */
+export interface CreateEpisodePayload {
+  title?: string;
+  synopsis: string;
+  /** 从上一集克隆资产库（含定妆图引用，跨集视觉一致） */
+  cloneAssets?: boolean;
+  genre?: CreateProjectDraftPayload["genre"];
+  modelConfig?: ModelConfig;
 }
 
 /** 立项草稿请求体（「全组开机」第一步：先建项目，再启动流水线） */

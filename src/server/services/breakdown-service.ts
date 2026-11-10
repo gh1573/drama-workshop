@@ -5,9 +5,13 @@ import {
   SHOT_SIZES,
 } from "@/lib/drama";
 import { getTextProvider, parseJsonLoose } from "@/server/providers";
+import { BREAKDOWN_SPEC } from "@/config/templates";
 
 /**
- * 分镜拆解服务（导演阶段的执行单元）—— 把一幕剧情拆成 3~5 个镜头组。
+ * 分镜拆解服务（导演阶段的执行单元）—— 把每幕剧情拆成镜头组。
+ *
+ * 拆镜档位（每幕镜头数 / 单镜时长 / 整集目标时长）由配置驱动
+ * （src/config/templates.ts · BREAKDOWN_SPEC），当前为 60 秒集档位。
  *
  * v2 协议升级（对齐 docs/architecture-v2.md §7.6 / §4 C2 C3 C9）：
  * - 每镜头新增：energy（情绪能量 0~100）/ sfxHint（音效卡点）/
@@ -67,7 +71,7 @@ function buildBreakdownPrompt(ctx: BreakdownContext): string {
 道具：${roster.props.join("、") || "（无）"}`
     : "【资产库】尚未建库，characters/scene/props 输出空数组或空字符串即可。";
 
-  return `你是一位竖屏微短剧的资深分镜师（Shot List Writer），服务于真实短剧承制团队。你的任务是把单幕剧情拆解为一组连续镜头，形成可执行拍摄的分镜脚本。
+  return `你是一位竖屏微短剧的资深分镜师（Shot List Writer），服务于真实短剧承制团队。你的任务是把单幕剧情拆解为一组连续镜头，形成可执行拍摄的分镜脚本。本集为约 ${BREAKDOWN_SPEC.targetEpisodeSeconds} 秒的竖屏微短剧，三幕合计镜头节奏需支撑整集时长。
 
 【全剧梗概】
 ${ctx.synopsis}
@@ -87,7 +91,7 @@ ${target.actTitle}
 ${rosterSection}
 
 【拆解规则（严格遵守）】
-1. 输出 3~5 个镜头，每个镜头 1~3 秒（plannedMs 1000~3000），合计不超过该幕时长
+1. 输出 ${BREAKDOWN_SPEC.shotsPerActMin}~${BREAKDOWN_SPEC.shotsPerActMax} 个镜头，每个镜头 ${Math.round(BREAKDOWN_SPEC.shotMsMin / 100) / 10}~${Math.round(BREAKDOWN_SPEC.shotMsMax / 100) / 10} 秒（plannedMs ${BREAKDOWN_SPEC.shotMsMin}~${BREAKDOWN_SPEC.shotMsMax}），支撑整集约 ${BREAKDOWN_SPEC.targetEpisodeSeconds} 秒的节奏
 2. 景别 shotSize 只能从：${SHOT_SIZES.join("/")} 中选择，相邻镜头景别必须不同（正反打优先：A 特写 → B 大特写 → 全景反应 → 主角近景）
 3. 运镜 cameraMovement 只能从本幕推荐池中选择：${poolDesc}；同一幕内尽量不重复
 4. visualDesc：25~60 字中文，完全可视化（人物、动作、表情、环境、光效），禁止抽象抒情
@@ -100,7 +104,7 @@ ${rosterSection}
 11. 情绪必须递进：从该幕的开场状态推向幕尾状态
 
 【输出格式】只输出 JSON，禁止解释文字、禁止 markdown 围栏：
-{"shots":[{"name":"…","shotSize":"特写","cameraMovement":"push","visualDesc":"…","visualPrompt":"…","subtitle":"…","plannedMs":2000,"energy":62,"sfxHint":"…","characters":["…"],"scene":"…","props":["…"]}]}`;
+{"shots":[{"name":"…","shotSize":"特写","cameraMovement":"push","visualDesc":"…","visualPrompt":"…","subtitle":"…","plannedMs":${Math.round((BREAKDOWN_SPEC.shotMsMin + BREAKDOWN_SPEC.shotMsMax) / 2)},"energy":62,"sfxHint":"…","characters":["…"],"scene":"…","props":["…"]}]}`;
 }
 
 function parseShots(raw: string): ShotBreakdownItem[] | null {
@@ -109,7 +113,7 @@ function parseShots(raw: string): ShotBreakdownItem[] | null {
   if (!Array.isArray(arr) || arr.length < 2) return null;
 
   const shots: ShotBreakdownItem[] = [];
-  for (const item of arr.slice(0, 5)) {
+  for (const item of arr.slice(0, BREAKDOWN_SPEC.shotsPerActMax)) {
     const o = item as Record<string, unknown>;
     const str = (v: unknown, fb = "") =>
       typeof v === "string" && v.trim() ? v.trim() : fb;

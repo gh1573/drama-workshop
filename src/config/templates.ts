@@ -51,3 +51,20 @@ export const PROMPT_SEGMENT_LABELS = {
 
 /** 技术段固定尾缀（画质锚点） */
 export const PROMPT_TECHNICAL_TAIL = "cinematic quality";
+
+/**
+ * 拆镜规格（导演阶段提示词参数，决定单集总时长档位）。
+ * 每幕镜头数 × 单镜时长 × 3 幕 ≈ 单集时长：
+ * 当前档位 5~6 镜/幕 × 3.5~4.5s ≈ 52~68s（典型一集 60 秒左右）。
+ * 调整档位只改这里，提示词与解析上限自动跟随。
+ */
+export const BREAKDOWN_SPEC = {
+  /** 每幕镜头数下限/上限 */
+  shotsPerActMin: 5,
+  shotsPerActMax: 6,
+  /** 单镜时长（毫秒）下限/上限 */
+  shotMsMin: 3500,
+  shotMsMax: 4500,
+  /** 单集目标总时长提示（写入拆镜提示词的目标语境，秒） */
+  targetEpisodeSeconds: 60,
+} as const;

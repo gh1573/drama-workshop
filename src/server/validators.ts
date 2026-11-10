@@ -149,3 +149,26 @@ export function firstZodError(err: z.ZodError): string {
   const path = issue.path.join(".");
   return `参数 ${path || "(root)"} 校验失败：${issue.message}`;
 }
+
+/** —— 系列契约（v2.3） —— */
+
+export const createSeriesSchema = z.object({
+  title: z.string().min(1).max(80),
+  synopsis: z.string().max(500).default(""),
+  /** 题材快照（可选，建剧集时默认继承） */
+  genre: genreSnapshotSchema.optional(),
+});
+
+export const createEpisodeSchema = z.object({
+  title: z.string().max(80).optional(),
+  synopsis: z.string().min(10).max(500),
+  /** 从上一集克隆资产库（含定妆图引用） */
+  cloneAssets: z.boolean().default(false),
+  genre: genreSnapshotSchema.optional(),
+  modelConfig: modelConfigSchema.optional(),
+});
+
+/** 系列级批量提交：video = 逐集渲染待拍镜头；portrait = 补全缺失定妆图 */
+export const batchRenderSchema = z.object({
+  kind: z.enum(["video", "portrait"]).default("video"),
+});

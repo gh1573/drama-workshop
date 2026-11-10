@@ -1,0 +1,839 @@
+{
+  "project": {
+    "title": "龙王归来 · 第 2 集",
+    "version": "1.2.0",
+    "exportedAt": "2026-11-10T15:36:48.905Z",
+    "genre": {
+      "id": "shuangwen",
+      "name": "战神逆袭",
+      "badge": "高燃打脸 · 爽感爆棚",
+      "hookTactic": "0~3s 冲突爆发：撕毁婚书当众羞辱，主角眼神冰冷，身份信物若隐若现",
+      "musicMood": "重低音震荡战鼓、霸气交响乐渐强、金属拔剑音效",
+      "tonePrompt": "high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions"
+    },
+    "aspectRatio": "9:16",
+    "synopsis": "叶凡连夜飞赴北境，发现袭击军资车队的主谋竟是当年把他推下悬崖的师兄赵擎。雪原对峙，赵擎亮出禁卫军符狂笑：这次没人救得了你。叶凡平静抬手，雪山之巅忽然浮现黑影军团轮廓。",
+    "modelConfig": {
+      "videoModel": "Omni 1.2 Flash",
+      "durationSeconds": 5,
+      "resolution": "720p",
+      "scriptThinkingLevel": "low",
+      "enablePromptEnhance": true
+    }
+  },
+  "storyBeats": [
+    {
+      "index": 1,
+      "actTitle": "第一幕：极致冲突 (黄金开头 Hook)",
+      "narrativeFunction": "hook",
+      "pacingNote": "0~3s 直给爆点模式，0秒直接进入最强冲突",
+      "description": "叶凡在暴风雪中撕毁婚书，碎片纷飞，赵擎手持长剑冷笑，叶凡脖颈处的战神项链若隐若现，眼神冰冷如刀",
+      "dialogueSubtitle": "这次没人救得了你",
+      "cameraMovement": "whip_pan",
+      "promptGuidance": "荷兰倾斜构图，暴风雪中人物剪影特写，婚书碎片飞溅慢镜头，叶凡瞳孔收缩微表情，冷蓝色调与金饰对比，high-contrast dramatic cinema, intense confrontation, low angle hero shot",
+      "energyStart": 62,
+      "energyEnd": 100
+    },
+    {
+      "index": 2,
+      "actTitle": "第二幕：身份揭晓 (绝地反转 Clash)",
+      "narrativeFunction": "climax",
+      "pacingNote": "4~8s 绝地反转，揭示真实身份",
+      "description": "赵擎亮出禁卫军符狂笑，叶凡平静抬手，雪山之巅黑影军团轮廓显现，禁卫军符在叶凡掌心化为灰烬",
+      "dialogueSubtitle": "你早该认出我",
+      "cameraMovement": "low_angle_tracking",
+      "promptGuidance": "低角度仰拍赵擎被黑影军团笼罩，叶凡手掌特写，禁卫军符燃烧特效，黑影军团从天而降的压迫感，cinematic lighting, gold and obsidian tones, high tension facial micro-expressions",
+      "energyStart": 65,
+      "energyEnd": 95
+    },
+    {
+      "index": 3,
+      "actTitle": "第三幕：致命悬念 (卡点留钩 Cliffhanger)",
+      "narrativeFunction": "cliffhanger",
+      "pacingNote": "9~12s 卡点留钩，制造悬念",
+      "description": "叶凡战甲浮现，黑影军团单膝跪地，赵擎震惊后退，叶凡身后战旗猎猎，风雪中传来神秘低语",
+      "dialogueSubtitle": "战神归来",
+      "cameraMovement": "dolly_zoom",
+      "promptGuidance": "希区柯克变焦效果，叶凡从特写到全景的视觉冲击，战甲浮现的光效，黑影军团跪地的震撼场面，风雪中低语声效，slow motion, anamorphic flare, shallow depth of field",
+      "energyStart": 70,
+      "energyEnd": 100
+    }
+  ],
+  "timelineClips": [
+    {
+      "no": 1,
+      "name": "雪原 · 婚书撕裂",
+      "beatRef": "第 01 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "特写",
+      "cameraMovement": "dutch_tilt",
+      "cameraPrompt": "dutch tilt angle, destabilized off-kilter framing",
+      "visualDesc": "暴风雪中，叶凡双手猛力撕碎婚书，纸片如雪花般飞舞，金饰在冷蓝光线下闪烁",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Props] red silk marriage certificate, golden border, Zhao family seal, torn into pieces [Action] Man tearing wedding certificate in blizzard, golden jewelry contrasting against blue snow [Camera] dutch tilt angle, destabilized off-kilter framing [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 特写 framing, cinematic quality",
+      "energy": 62,
+      "sfxHint": "纸张撕裂"
+    },
+    {
+      "no": 2,
+      "name": "剑锋 · 冷笑威胁",
+      "beatRef": "第 01 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "大特写",
+      "cameraMovement": "push",
+      "cameraPrompt": "rapid push-in to close-up, aggressive framing",
+      "visualDesc": "赵擎手持长剑逼近，嘴角上扬露出冷笑，剑尖在风中微微颤动",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 30-year-old Chinese male imperial guard commander, arrogant smirk, high ponytail, golden armor, longsword [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Action] Villain's smirking face with sword approaching, intense confrontation [Camera] rapid push-in to close-up, aggressive framing [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 大特写 framing, cinematic quality",
+      "energy": 70,
+      "sfxHint": "剑风呼啸"
+    },
+    {
+      "no": 3,
+      "name": "项链 · 战神印记",
+      "beatRef": "第 01 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "近景",
+      "cameraMovement": "static_close",
+      "cameraPrompt": "locked-off static close-up, tense stillness",
+      "visualDesc": "叶凡脖颈处的战神项链若隐若现，暴风雪拍打着他坚毅的脸庞",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Action] Hero's war god necklace visible under blizzard, determined expression [Camera] locked-off static close-up, tense stillness [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 近景 framing, cinematic quality",
+      "energy": 78,
+      "sfxHint": "风声呼啸"
+    },
+    {
+      "no": 4,
+      "name": "对峙 · 冰冷眼神",
+      "beatRef": "第 01 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "全景",
+      "cameraMovement": "handheld",
+      "cameraPrompt": "handheld tracking shot, urgent and immersive",
+      "visualDesc": "暴风雪中两人对峙，叶凡眼神如刀，赵擎剑指前方，雪地狼藉一片",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace; 30-year-old Chinese male imperial guard commander, arrogant smirk, high ponytail, golden armor, longsword [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Action] Confrontation in blizzard, hero's icy gaze vs villain's pointed sword [Camera] handheld tracking shot, urgent and immersive [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 全景 framing, cinematic quality",
+      "energy": 85,
+      "sfxHint": "风雪声"
+    },
+    {
+      "no": 5,
+      "name": "瞳孔 · 微表情特写",
+      "beatRef": "第 01 幕",
+      "subtitle": "这次没人救得了你",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "特写",
+      "cameraMovement": "whip_pan",
+      "cameraPrompt": "whip pan, lightning-fast camera swing",
+      "visualDesc": "叶凡瞳孔微微收缩，眼中闪过一丝寒光，嘴角微扬",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Action] Hero's subtle facial reaction, eyes narrowing with cold determination [Camera] whip pan, lightning-fast camera swing [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 特写 framing, cinematic quality",
+      "energy": 95,
+      "sfxHint": "心跳声"
+    },
+    {
+      "no": 6,
+      "name": "符咒 · 禁卫军标志",
+      "beatRef": "第 01 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "中景",
+      "cameraMovement": "push",
+      "cameraPrompt": "rapid push-in to close-up, aggressive framing",
+      "visualDesc": "赵擎狂笑亮出禁卫军符，金色纹章在暴风雪中闪耀，叶凡手掌缓缓抬起",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace; 30-year-old Chinese male imperial guard commander, arrogant smirk, high ponytail, golden armor, longsword [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Props] golden imperial guard token, engraved insignia, combustible into ash [Action] Villain revealing forbidden military emblem, hero's hand rising slowly [Camera] rapid push-in to close-up, aggressive framing [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 中景 framing, cinematic quality",
+      "energy": 100,
+      "sfxHint": "符咒发光"
+    },
+    {
+      "no": 7,
+      "name": "禁卫军符 · 狂笑",
+      "beatRef": "第 02 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "近景",
+      "cameraMovement": "low_angle_tracking",
+      "cameraPrompt": "low-angle ground shot tracking forward, dominant and imposing",
+      "visualDesc": "赵擎仰天狂笑，手中禁卫军符在雪夜中闪烁金光，叶凡面无表情站立，雪花飘落其肩",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace; 30-year-old Chinese male imperial guard commander, arrogant smirk, high ponytail, golden armor, longsword [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Props] golden imperial guard token, engraved insignia, combustible into ash [Action] Zhao Qing laughing maniacally, military emblem glowing gold, Ye Feng expressionless, snow falling [Camera] low-angle ground shot tracking forward, dominant and imposing [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 近景 framing, cinematic quality",
+      "energy": 65,
+      "sfxHint": "狂笑回音"
+    },
+    {
+      "no": 8,
+      "name": "战神项链 · 特写",
+      "beatRef": "第 02 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "大特写",
+      "cameraMovement": "orbit",
+      "cameraPrompt": "360 degree dynamic circular orbit around subject",
+      "visualDesc": "叶凡脖颈处战神项链突然亮起暗金光芒，赵擎笑声戛然而止，眼神转为惊愕",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace; 30-year-old Chinese male imperial guard commander, arrogant smirk, high ponytail, golden armor, longsword [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Action] God of War necklace glowing dark gold, Zhao Qing's shock expression, eyes wide [Camera] 360 degree dynamic circular orbit around subject [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 大特写 framing, cinematic quality",
+      "energy": 70,
+      "sfxHint": "项链嗡鸣"
+    },
+    {
+      "no": 9,
+      "name": "手掌 · 抬起",
+      "beatRef": "第 02 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "全景",
+      "cameraMovement": "pull",
+      "cameraPrompt": "fast pull-back revealing full scene scale",
+      "visualDesc": "叶凡缓缓抬起手掌，黑影在身后雪山之巅若隐若现，赵擎被阴影笼罩，后退一步",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace; 30-year-old Chinese male imperial guard commander, arrogant smirk, high ponytail, golden armor, longsword; faceless black-armored warriors, obsidian gear, imposing silence, identical dark helmets [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Action] Ye Feng slowly raising hand, shadows on mountain peak, Zhao Qing backpedaling [Camera] fast pull-back revealing full scene scale [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 全景 framing, cinematic quality",
+      "energy": 75,
+      "sfxHint": "风声骤变"
+    },
+    {
+      "no": 10,
+      "name": "禁卫军符 · 燃烧",
+      "beatRef": "第 02 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "特写",
+      "cameraMovement": "pan_horizontal",
+      "cameraPrompt": "crisp horizontal pan scanning across the crowd",
+      "visualDesc": "禁卫军符在叶凡掌心化为灰烬，金粉飘散，赵擎脸色煞白，难以置信",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace; 30-year-old Chinese male imperial guard commander, arrogant smirk, high ponytail, golden armor, longsword [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Props] golden imperial guard token, engraved insignia, combustible into ash [Action] Military emblem burning to ash in palm, Zhao Qing shocked face, pale complexion [Camera] crisp horizontal pan scanning across the crowd [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 特写 framing, cinematic quality",
+      "energy": 80,
+      "sfxHint": "符咒燃烧"
+    },
+    {
+      "no": 11,
+      "name": "黑影军团 · 显现",
+      "beatRef": "第 02 幕",
+      "subtitle": "你早该认出我",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "远景",
+      "cameraMovement": "top_down",
+      "cameraPrompt": "top-down bird's eye view, god-like overview",
+      "visualDesc": "黑影军团从天而降，单膝跪地，战旗猎猎，叶凡眼神冰冷，嘴角微扬",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace; 30-year-old Chinese male imperial guard commander, arrogant smirk, high ponytail, golden armor, longsword; faceless black-armored warriors, obsidian gear, imposing silence, identical dark helmets [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Action] Shadow army descending, kneeling, war banners waving, Ye cold eyes, slight smile [Camera] top-down bird's eye view, god-like overview [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 远景 framing, cinematic quality",
+      "energy": 95,
+      "sfxHint": "战鼓雷鸣"
+    },
+    {
+      "no": 12,
+      "name": "战甲浮现",
+      "beatRef": "第 03 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "特写",
+      "cameraMovement": "dolly_zoom",
+      "cameraPrompt": "dolly zoom, vertigo effect, background warps while subject locked",
+      "visualDesc": "叶凡面部特写，战甲纹路从颈部如闪电般蔓延至脸颊，眼神骤然锐利，雪光反射在金属质感的战甲上",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Action] Close-up on Ye Fan's face, armor patterns spreading like lightning from neck to cheek, eyes suddenly sharp [Camera] dolly zoom, vertigo effect, background warps while subject locked [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 特写 framing, cinematic quality",
+      "energy": 70,
+      "sfxHint": "金属蔓延声"
+    },
+    {
+      "no": 13,
+      "name": "黑影军团",
+      "beatRef": "第 03 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "大特写",
+      "cameraMovement": "crane_up",
+      "cameraPrompt": "crane up, rising overhead reveal",
+      "visualDesc": "叶凡眼部大特写，瞳孔中倒映出雪山之巅整齐排列的黑影军团轮廓，战甲光芒与黑暗形成强烈对比",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Action] Extreme close-up on Ye Fan's eyes, reflecting the silhouettes of shadow legion on mountain peak [Camera] crane up, rising overhead reveal [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 大特写 framing, cinematic quality",
+      "energy": 75,
+      "sfxHint": "风声渐强"
+    },
+    {
+      "no": 14,
+      "name": "军团跪拜",
+      "beatRef": "第 03 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "全景",
+      "cameraMovement": "orbit",
+      "cameraPrompt": "360 degree dynamic circular orbit around subject",
+      "visualDesc": "360度环绕全景，黑影军团单膝跪地，战旗在风中猎猎作响，叶凡矗立中央如战神降临",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace; faceless black-armored warriors, obsidian gear, imposing silence, identical dark helmets [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Props] metallic war medal with black base and golden dragon emblem, cold glow [Action] 360° panoramic shot, shadow legion kneeling on one knee, banners flapping in wind [Camera] 360 degree dynamic circular orbit around subject [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 全景 framing, cinematic quality",
+      "energy": 80,
+      "sfxHint": "战旗猎猎"
+    },
+    {
+      "no": 15,
+      "name": "赵擎震惊",
+      "beatRef": "第 03 幕",
+      "subtitle": "",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "中景",
+      "cameraMovement": "top_down",
+      "cameraPrompt": "top-down bird's eye view, god-like overview",
+      "visualDesc": "俯瞰中景，赵擎震惊后退，手中禁卫军符掉落雪中，表情从狂妄转为恐惧，风雪吹乱他的发丝",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 30-year-old Chinese male imperial guard commander, arrogant smirk, high ponytail, golden armor, longsword [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Props] golden imperial guard token, engraved insignia, combustible into ash [Action] Top-down medium shot, Zhao Jing shocked and stepping back, military symbol dropping in snow [Camera] top-down bird's eye view, god-like overview [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 中景 framing, cinematic quality",
+      "energy": 85,
+      "sfxHint": "武器落地"
+    },
+    {
+      "no": 16,
+      "name": "战神归来",
+      "beatRef": "第 03 幕",
+      "subtitle": "战神归来",
+      "format": "mp4",
+      "status": "待生成",
+      "mediaUrl": "",
+      "shotSize": "近景",
+      "cameraMovement": "dolly_zoom",
+      "cameraPrompt": "dolly zoom, vertigo effect, background warps while subject locked",
+      "visualDesc": "慢动作近景，叶凡身后战旗猎猎，风雪中传来神秘低语，战神项链光芒四射，字幕'战神归来'浮现",
+      "plannedMs": 3000,
+      "finalPrompt": "[Characters] 25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace [Scene] snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall [Action] Slow motion close-up, banners flapping behind Ye Fan, mysterious whispers in wind [Camera] dolly zoom, vertigo effect, background warps while subject locked [Style] high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions [Technical] vertical 9:16 format, 3s duration, 720p, 近景 framing, cinematic quality",
+      "energy": 100,
+      "sfxHint": "低语回响"
+    }
+  ],
+  "statistics": {
+    "totalBeats": 3,
+    "totalClips": 16,
+    "hasSynthesizedOutput": false
+  },
+  "assets": [
+    {
+      "kind": "character",
+      "name": "五大战区统领",
+      "lockedAppearance": "40岁左右男性，军人气质，寸头，坚毅面容，身穿黑色军装，手持战令",
+      "visualAnchor": "40-year-old Chinese male soldiers, buzz cuts, stern faces, black military uniforms, holding war medals",
+      "portraitUrl": "/assets/asset_cmwatzt4c00x3pzia5qxf5woc.png",
+      "refCount": 0
+    },
+    {
+      "kind": "character",
+      "name": "北境信使",
+      "lockedAppearance": "神秘人物，黑色斗篷遮面，只露出一双锐利眼睛，手持加密手机",
+      "visualAnchor": "mysterious figure in black cloak, concealed face, piercing eyes, holding encrypted phone",
+      "portraitUrl": "/assets/asset_cmwatzt4g00x7pziajqfrdixi.png",
+      "refCount": 0
+    },
+    {
+      "kind": "character",
+      "name": "叶凡",
+      "lockedAppearance": "25岁男性，战神后裔，冷峻坚毅，黑色短发，剑眉星目，身着黑色风雪斗篷，脖颈佩戴战神项链",
+      "visualAnchor": "25-year-old Chinese male warlord descendant, sharp jawline, intense eyes, black cloak, war god necklace",
+      "portraitUrl": "/assets/asset_cmwatzt4600wxpziajcs7fiiu.png",
+      "refCount": 14
+    },
+    {
+      "kind": "character",
+      "name": "宾客",
+      "lockedAppearance": "30-50岁男女，各色礼服，表情各异，有嘲笑有同情",
+      "visualAnchor": "30-50-year-old wedding guests in formal attire, mixed expressions of mockery and sympathy",
+      "portraitUrl": "/assets/asset_cmwatzt4e00x5pzian76b6q80.png",
+      "refCount": 0
+    },
+    {
+      "kind": "character",
+      "name": "岳父",
+      "lockedAppearance": "55岁男性，傲慢势利，花白头发，国字脸，身穿深色礼服，表情轻蔑",
+      "visualAnchor": "55-year-old Chinese male, arrogant with thinning white hair, square face, dark formal suit, contemptuous expression",
+      "portraitUrl": "/assets/asset_cmwatzt4800wzpzia8ndzkp5m.png",
+      "refCount": 0
+    },
+    {
+      "kind": "character",
+      "name": "苏晚",
+      "lockedAppearance": "25岁女性，温婉美丽，长发及腰，鹅蛋脸，身穿白色婚纱，眼神复杂",
+      "visualAnchor": "25-year-old Chinese female, long black hair, oval face, white wedding dress, conflicted expression",
+      "portraitUrl": "/assets/asset_cmwatzt4a00x1pziaxu6o7btz.png",
+      "refCount": 0
+    },
+    {
+      "kind": "character",
+      "name": "赵擎",
+      "lockedAppearance": "30岁男性，禁卫军统领，傲慢阴狠，束发高冠，鹰钩鼻，身着金色铠甲，手持长剑",
+      "visualAnchor": "30-year-old Chinese male imperial guard commander, arrogant smirk, high ponytail, golden armor, longsword",
+      "portraitUrl": "/assets/asset_cmwaugrx30187pziao97oxyip.png",
+      "refCount": 9
+    },
+    {
+      "kind": "character",
+      "name": "黑影军团",
+      "lockedAppearance": "神秘黑甲战士，全身覆盖暗色盔甲，面罩遮面，手持黑色长兵器，沉默肃杀",
+      "visualAnchor": "faceless black-armored warriors, obsidian gear, imposing silence, identical dark helmets",
+      "portraitUrl": "/assets/asset_cmwaugrx60189pzianyqmxu7f.png",
+      "refCount": 3
+    },
+    {
+      "kind": "prop",
+      "name": "加密手机",
+      "lockedAppearance": "黑色高端手机，屏幕显示北境紧急消息，震动时发出红光",
+      "visualAnchor": "luxury black phone with red glow when vibrating, displaying emergency message",
+      "portraitUrl": "/assets/asset_cmwatzt4q00xnpzia7nlj4id4.png",
+      "refCount": 0
+    },
+    {
+      "kind": "prop",
+      "name": "战神令",
+      "lockedAppearance": "金属令牌，黑色底座，金色龙纹，发出冷光，象征战神权威",
+      "visualAnchor": "metallic war medal with black base and golden dragon emblem, cold glow",
+      "portraitUrl": "/assets/asset_cmwatzt4o00xlpziad22xzhfq.png",
+      "refCount": 1
+    },
+    {
+      "kind": "prop",
+      "name": "离婚协议",
+      "lockedAppearance": "白色纸张，皱巴巴，被摔在叶凡脸上，上面印有一块钱标记",
+      "visualAnchor": "crumpled white paper with one-dollar stamp, thrown at protagonist's face",
+      "portraitUrl": "/assets/asset_cmwatzt4n00xjpziatp8kwa4k.png",
+      "refCount": 0
+    },
+    {
+      "kind": "prop",
+      "name": "龙形纹章戒指",
+      "lockedAppearance": "银质戒指，精细雕刻龙形纹路，在光线下若隐若现，象征身份",
+      "visualAnchor": "silver ring with intricate dragon engraving, subtle glow under lighting",
+      "portraitUrl": "/assets/asset_cmwatzt4r00xppziacvreqeyd.png",
+      "refCount": 0
+    },
+    {
+      "kind": "prop",
+      "name": "婚书",
+      "lockedAppearance": "红色丝绸婚书，金色边框装饰，赵家徽记印于中央，已被撕碎",
+      "visualAnchor": "red silk marriage certificate, golden border, Zhao family seal, torn into pieces",
+      "portraitUrl": "/assets/asset_cmwaugrxb018fpziaafjr9au4.png",
+      "refCount": 1
+    },
+    {
+      "kind": "prop",
+      "name": "禁卫军符",
+      "lockedAppearance": "金色金属符印，刻有禁卫军徽记，可燃烧化为灰烬",
+      "visualAnchor": "golden imperial guard token, engraved insignia, combustible into ash",
+      "portraitUrl": "/assets/asset_cmwaugrxd018hpziamrahiha9.png",
+      "refCount": 4
+    },
+    {
+      "kind": "scene",
+      "name": "别墅客厅",
+      "lockedAppearance": "现代简约风格，深色家具，落地窗，光影对比强烈，私密空间感",
+      "visualAnchor": "modern minimalist living room, dark furniture, floor-to-ceiling windows, dramatic lighting",
+      "portraitUrl": "/assets/asset_cmwatzt4k00xdpziazpmiwcsk.png",
+      "refCount": 0
+    },
+    {
+      "kind": "scene",
+      "name": "北境边境",
+      "lockedAppearance": "荒凉边境地区，风雪交加，军事设施，紧张氛围",
+      "visualAnchor": "desolate border region, snowstorm, military installations, tense atmosphere",
+      "portraitUrl": "/assets/asset_cmwatzt4l00xfpzia2cuqmz4u.png",
+      "refCount": 0
+    },
+    {
+      "kind": "scene",
+      "name": "战神密室",
+      "lockedAppearance": "隐秘空间，墙上挂满地图，金属装饰，战令陈列，神秘氛围",
+      "visualAnchor": "secret war room, wall maps, metallic decor, war medals display, mysterious ambiance",
+      "portraitUrl": "/assets/asset_cmwatzt4m00xhpziat3tndwnt.png",
+      "refCount": 0
+    },
+    {
+      "kind": "scene",
+      "name": "深夜别墅外",
+      "lockedAppearance": "私人别墅庭院，夜晚氛围，冷色调照明，低角度拍摄强调威严",
+      "visualAnchor": "villa courtyard at night, cool lighting, low angle shots emphasizing authority",
+      "portraitUrl": "/assets/asset_cmwaugje5017wpzia7p5vovtb.png",
+      "refCount": 0
+    },
+    {
+      "kind": "scene",
+      "name": "豪华婚礼现场",
+      "lockedAppearance": "奢华宴会厅，金色与黑色主调，水晶吊灯，高对比度光影，宾客环绕",
+      "visualAnchor": "luxury wedding venue, gold and black color scheme, crystal chandeliers, high contrast lighting",
+      "portraitUrl": "/assets/asset_cmwaugje7017ypziacucjqzk2.png",
+      "refCount": 0
+    },
+    {
+      "kind": "scene",
+      "name": "暴风雪山巅",
+      "lockedAppearance": "雪山之巅，狂风呼啸，大雪纷飞，天色阴沉，地面覆盖厚厚积雪，岩石嶙峋",
+      "visualAnchor": "snow mountain peak, blizzard conditions, dark storm clouds, rocky terrain, heavy snowfall",
+      "portraitUrl": "/assets/asset_cmwaugrx8018bpziavb0ovtla.png",
+      "refCount": 16
+    },
+    {
+      "kind": "scene",
+      "name": "禁卫军营地",
+      "lockedAppearance": "临时军营，帐篷环绕，中央营火摇曳，禁卫军旗帜飘扬，金色符印标志明显",
+      "visualAnchor": "military encampment, tents arranged in circle, central bonfire, imperial banners, golden insignia",
+      "portraitUrl": "/assets/asset_cmwaugrxa018dpziawp2fjb5j.png",
+      "refCount": 0
+    }
+  ],
+  "tracks": {
+    "subtitle": [
+      {
+        "id": "cmwauhcgg01c6pzia4e0xn774",
+        "kind": "subtitle",
+        "clipId": "cmwaugyp1018rpzia9mje9oiq",
+        "startMs": 12000,
+        "endMs": 15000,
+        "text": "这次没人救得了你",
+        "style": {
+          "scale": "xl",
+          "position": "center",
+          "golden": true
+        }
+      },
+      {
+        "id": "cmwauhcgg01cdpziabu0uuzvx",
+        "kind": "subtitle",
+        "clipId": "cmwauh66u019zpziaz4kllzbl",
+        "startMs": 30000,
+        "endMs": 33000,
+        "text": "你早该认出我",
+        "style": {
+          "scale": "xl",
+          "position": "center",
+          "golden": true
+        }
+      },
+      {
+        "id": "cmwauhcgg01cjpziaomow23jd",
+        "kind": "subtitle",
+        "clipId": "cmwauhcdr01bbpziayc7qd8gf",
+        "startMs": 45000,
+        "endMs": 48000,
+        "text": "战神归来",
+        "style": {
+          "scale": "xl",
+          "position": "center",
+          "golden": true
+        }
+      }
+    ],
+    "sfx": [
+      {
+        "id": "cmwauhcgg01c2pziaz9vouqdk",
+        "kind": "sfx",
+        "clipId": "cmwaugyow018jpziabcmmre75",
+        "startMs": 0,
+        "endMs": 600,
+        "text": "纸张撕裂",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01c3pzialravp761",
+        "kind": "sfx",
+        "clipId": "cmwaugyox018lpzia7uo05vzh",
+        "startMs": 3000,
+        "endMs": 3600,
+        "text": "剑风呼啸",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01c4pziavekiw351",
+        "kind": "sfx",
+        "clipId": "cmwaugyoy018npziazxeiokrs",
+        "startMs": 6000,
+        "endMs": 6600,
+        "text": "风声呼啸",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01c5pziaa09j59u6",
+        "kind": "sfx",
+        "clipId": "cmwaugyp0018ppzia6tdqzka1",
+        "startMs": 9000,
+        "endMs": 9600,
+        "text": "风雪声",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01c7pziak4ngzeic",
+        "kind": "sfx",
+        "clipId": "cmwaugyp1018rpzia9mje9oiq",
+        "startMs": 12000,
+        "endMs": 12600,
+        "text": "心跳声",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01c8pziajjtn453l",
+        "kind": "sfx",
+        "clipId": "cmwaugyp2018tpziaiwono0op",
+        "startMs": 15000,
+        "endMs": 15600,
+        "text": "符咒发光",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01c9pziaq51ofjl9",
+        "kind": "sfx",
+        "clipId": "cmwauh66b019rpziajm8dh2m9",
+        "startMs": 18000,
+        "endMs": 18600,
+        "text": "狂笑回音",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01capziavlc6x92b",
+        "kind": "sfx",
+        "clipId": "cmwauh66d019tpzial2bc515h",
+        "startMs": 21000,
+        "endMs": 21600,
+        "text": "项链嗡鸣",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01cbpziacxjzuxvw",
+        "kind": "sfx",
+        "clipId": "cmwauh66e019vpziaknv1759d",
+        "startMs": 24000,
+        "endMs": 24600,
+        "text": "风声骤变",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01ccpzia0dln4g55",
+        "kind": "sfx",
+        "clipId": "cmwauh66s019xpziaqswyvfo5",
+        "startMs": 27000,
+        "endMs": 27600,
+        "text": "符咒燃烧",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01cepziaa68xnrcq",
+        "kind": "sfx",
+        "clipId": "cmwauh66u019zpziaz4kllzbl",
+        "startMs": 30000,
+        "endMs": 30600,
+        "text": "战鼓雷鸣",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01cfpziamdrnlkq3",
+        "kind": "sfx",
+        "clipId": "cmwauhcdm01b3pziauchm30tt",
+        "startMs": 33000,
+        "endMs": 33600,
+        "text": "金属蔓延声",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01cgpzialhzjlbzl",
+        "kind": "sfx",
+        "clipId": "cmwauhcdo01b5pzia5qfi9fz9",
+        "startMs": 36000,
+        "endMs": 36600,
+        "text": "风声渐强",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01chpzia5ybq47rp",
+        "kind": "sfx",
+        "clipId": "cmwauhcdp01b7pziau5k5umi2",
+        "startMs": 39000,
+        "endMs": 39600,
+        "text": "战旗猎猎",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01cipziaoupj9kye",
+        "kind": "sfx",
+        "clipId": "cmwauhcdq01b9pzianxdmrd3n",
+        "startMs": 42000,
+        "endMs": 42600,
+        "text": "武器落地",
+        "style": null
+      },
+      {
+        "id": "cmwauhcgg01ckpziatlml3hu8",
+        "kind": "sfx",
+        "clipId": "cmwauhcdr01bbpziayc7qd8gf",
+        "startMs": 45000,
+        "endMs": 45600,
+        "text": "低语回响",
+        "style": null
+      }
+    ],
+    "bgm": [
+      {
+        "id": "cmwauhcgg01clpzia6zvjzmuv",
+        "kind": "bgm",
+        "clipId": null,
+        "startMs": 0,
+        "endMs": 18000,
+        "text": "重低音震荡战鼓、霸气交响乐渐强、金属拔剑音效",
+        "style": {
+          "intensity": 1,
+          "moodStart": 62,
+          "moodEnd": 100
+        }
+      },
+      {
+        "id": "cmwauhcgg01cmpziawpn1wgpc",
+        "kind": "bgm",
+        "clipId": null,
+        "startMs": 18000,
+        "endMs": 33000,
+        "text": "重低音震荡战鼓、霸气交响乐渐强、金属拔剑音效",
+        "style": {
+          "intensity": 0.95,
+          "moodStart": 65,
+          "moodEnd": 95
+        }
+      },
+      {
+        "id": "cmwauhcgg01cnpziaj0ffrisl",
+        "kind": "bgm",
+        "clipId": null,
+        "startMs": 33000,
+        "endMs": 48000,
+        "text": "重低音震荡战鼓、霸气交响乐渐强、金属拔剑音效",
+        "style": {
+          "intensity": 1,
+          "moodStart": 70,
+          "moodEnd": 100
+        }
+      }
+    ]
+  },
+  "energyCurve": [
+    {
+      "clipId": "cmwaugyow018jpziabcmmre75",
+      "order": 0,
+      "beatIndex": 1,
+      "energy": 62
+    },
+    {
+      "clipId": "cmwaugyox018lpzia7uo05vzh",
+      "order": 1,
+      "beatIndex": 1,
+      "energy": 70
+    },
+    {
+      "clipId": "cmwaugyoy018npziazxeiokrs",
+      "order": 2,
+      "beatIndex": 1,
+      "energy": 78
+    },
+    {
+      "clipId": "cmwaugyp0018ppzia6tdqzka1",
+      "order": 3,
+      "beatIndex": 1,
+      "energy": 85
+    },
+    {
+      "clipId": "cmwaugyp1018rpzia9mje9oiq",
+      "order": 4,
+      "beatIndex": 1,
+      "energy": 95
+    },
+    {
+      "clipId": "cmwaugyp2018tpziaiwono0op",
+      "order": 5,
+      "beatIndex": 1,
+      "energy": 100
+    },
+    {
+      "clipId": "cmwauh66b019rpziajm8dh2m9",
+      "order": 6,
+      "beatIndex": 2,
+      "energy": 65
+    },
+    {
+      "clipId": "cmwauh66d019tpzial2bc515h",
+      "order": 7,
+      "beatIndex": 2,
+      "energy": 70
+    },
+    {
+      "clipId": "cmwauh66e019vpziaknv1759d",
+      "order": 8,
+      "beatIndex": 2,
+      "energy": 75
+    },
+    {
+      "clipId": "cmwauh66s019xpziaqswyvfo5",
+      "order": 9,
+      "beatIndex": 2,
+      "energy": 80
+    },
+    {
+      "clipId": "cmwauh66u019zpziaz4kllzbl",
+      "order": 10,
+      "beatIndex": 2,
+      "energy": 95
+    },
+    {
+      "clipId": "cmwauhcdm01b3pziauchm30tt",
+      "order": 11,
+      "beatIndex": 3,
+      "energy": 70
+    },
+    {
+      "clipId": "cmwauhcdo01b5pzia5qfi9fz9",
+      "order": 12,
+      "beatIndex": 3,
+      "energy": 75
+    },
+    {
+      "clipId": "cmwauhcdp01b7pziau5k5umi2",
+      "order": 13,
+      "beatIndex": 3,
+      "energy": 80
+    },
+    {
+      "clipId": "cmwauhcdq01b9pzianxdmrd3n",
+      "order": 14,
+      "beatIndex": 3,
+      "energy": 85
+    },
+    {
+      "clipId": "cmwauhcdr01bbpziayc7qd8gf",
+      "order": 15,
+      "beatIndex": 3,
+      "energy": 100
+    }
+  ]
+}
