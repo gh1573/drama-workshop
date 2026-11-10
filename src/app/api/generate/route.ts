@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import ZAI from "z-ai-web-dev-sdk";
 import { GENRES } from "@/lib/genres";
+import { fail, ok, handleRouteError } from "@/lib/api-utils";
 import {
   CAMERA_MOVEMENTS,
   NARRATIVE_META,
@@ -165,14 +166,11 @@ export async function POST(req: NextRequest) {
 
     const genre = GENRES.find((g) => g.id === body.genreId);
     if (!genre) {
-      return NextResponse.json({ error: "未知的题材，请重新选择" }, { status: 400 });
+      return fail("未知的题材，请重新选择", 400);
     }
     const synopsis = (body.synopsis ?? "").trim();
     if (synopsis.length < 10) {
-      return NextResponse.json(
-        { error: "剧情梗概太短，请输入至少 10 个字的梗概" },
-        { status: 400 }
-      );
+      return fail("剧情梗概太短，请输入至少 10 个字的梗概", 400);
     }
 
     const cfg = body.modelConfig ?? {};
@@ -231,18 +229,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (!beats) {
-      return NextResponse.json(
-        {
-          error: "AI 返回内容未能通过解析，请稍后重试或调整梗概后重试",
-          detail: lastRaw.slice(0, 300),
-        },
-        { status: 502 }
+      return fail(
+        "AI 返回内容未能通过解析，请稍后重试或调整梗概后重试",
+        502,
+        lastRaw.slice(0, 300)
       );
     }
 
-    return NextResponse.json({ storyBeats: beats });
+    return ok({ storyBeats: beats });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "未知错误";
-    return NextResponse.json({ error: `生成失败：${msg}` }, { status: 500 });
+    return handleRouteError(err);
   }
 }

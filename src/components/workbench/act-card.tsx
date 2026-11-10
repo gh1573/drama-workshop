@@ -1,0 +1,142 @@
+"use client";
+
+import { motion } from "framer-motion";
+import { Clock, Copy, Plus, Quote, Timer, Video } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import {
+  CAMERA_MOVEMENTS,
+  NARRATIVE_META,
+  type NarrativeFunction,
+  type StoryBeat,
+} from "@/lib/drama";
+import { useWorkbench } from "@/store/workbench";
+
+export const FN_STYLE: Record<
+  NarrativeFunction,
+  { badgeCls: string; barCls: string; quoteCls: string }
+> = {
+  hook: {
+    badgeCls: "border-amber-500/40 bg-amber-500/10 text-amber-400",
+    barCls: "from-amber-500 to-orange-500",
+    quoteCls: "border-amber-400/70 bg-amber-500/10",
+  },
+  climax: {
+    badgeCls: "border-rose-500/40 bg-rose-500/10 text-rose-400",
+    barCls: "from-rose-500 to-red-500",
+    quoteCls: "border-rose-400/70 bg-rose-500/10",
+  },
+  cliffhanger: {
+    badgeCls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+    barCls: "from-emerald-500 to-teal-500",
+    quoteCls: "border-emerald-400/70 bg-emerald-500/10",
+  },
+};
+
+/** 单幕分镜卡：内容展示 + 台词复制 + 加入镜头轨 */
+export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
+  const { toast } = useToast();
+  const fn = NARRATIVE_META[beat.narrativeFunction];
+  const style = FN_STYLE[beat.narrativeFunction];
+  const dbId = useWorkbench((s) => s.session?.dbId ?? null);
+  const addClip = useWorkbench((s) => s.addClip);
+
+  async function handleAdd() {
+    const success = await addClip(beat.index);
+    toast({
+      title: success ? "已加入镜头轨" : "加入失败",
+      description: success
+        ? `第 ${String(beat.index).padStart(2, "0")} 幕已追加到时间轨末尾`
+        : "请先「保存到项目库」后再添加镜头片段",
+      variant: success ? "default" : "destructive",
+    });
+  }
+
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+      className="overflow-hidden rounded-xl border bg-card"
+    >
+      <div className={`h-1 bg-gradient-to-r ${style.barCls}`} />
+      <div className="space-y-4 p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="bg-gradient-to-r from-red-500 to-amber-500 bg-clip-text text-sm font-black tracking-wider text-transparent">
+            【第 {String(beat.index).padStart(2, "0")} 幕】
+          </span>
+          <h3 className="text-base font-bold">{beat.actTitle}</h3>
+          <Badge variant="outline" className={`ml-auto ${style.badgeCls}`}>
+            {fn.tag}
+          </Badge>
+        </div>
+
+        <p className="flex gap-2 text-xs text-muted-foreground">
+          <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+          {beat.pacingNote}
+        </p>
+
+        <div>
+          <p className="mb-1.5 text-xs font-semibold text-muted-foreground">情节画面</p>
+          <p className="text-sm leading-relaxed">{beat.description}</p>
+        </div>
+
+        <div
+          className={`flex items-start gap-2.5 rounded-lg border-l-4 p-3 ${style.quoteCls}`}
+        >
+          <Quote className="mt-0.5 h-4 w-4 shrink-0 opacity-70" />
+          <p className="flex-1 text-base font-bold leading-snug">
+            {beat.dialogueSubtitle}
+          </p>
+          <button
+            aria-label="复制台词"
+            onClick={() =>
+              navigator.clipboard
+                ?.writeText(beat.dialogueSubtitle)
+                .then(() => toast({ title: "已复制到剪贴板" }))
+                .catch(() => toast({ title: "复制失败", variant: "destructive" }))
+            }
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="border-border/70 text-xs">
+            <Video className="mr-1 h-3 w-3" />
+            {CAMERA_MOVEMENTS[beat.cameraMovement] ?? beat.cameraMovement}
+          </Badge>
+          <Badge variant="outline" className="border-border/70 text-xs">
+            <Timer className="mr-1 h-3 w-3" />
+            镜头产出状态：⏳ 待生成
+          </Badge>
+          <Badge
+            variant="outline"
+            role="button"
+            tabIndex={0}
+            onClick={handleAdd}
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+            className={`ml-auto cursor-pointer border-dashed text-xs transition-colors ${
+              dbId
+                ? "border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+                : "border-border/70 text-muted-foreground hover:border-rose-500/50 hover:text-rose-400"
+            }`}
+          >
+            <Plus className="mr-1 h-3 w-3" />
+            加入镜头轨
+          </Badge>
+        </div>
+
+        <div>
+          <p className="mb-1.5 text-xs font-semibold text-muted-foreground">
+            画面提示补充
+          </p>
+          <p className="rounded-lg bg-black/30 p-3 font-mono text-xs leading-relaxed text-foreground/85">
+            {beat.promptGuidance}
+          </p>
+        </div>
+      </div>
+    </motion.article>
+  );
+}

@@ -107,40 +107,6 @@ function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-/** 组装与原版 schema 完全对齐的工程 JSON */
-export function buildProjectJson(
-  genre: GenrePreset,
-  synopsis: string,
-  modelConfig: ModelConfig,
-  beats: StoryBeat[]
-): DramaProjectData {
-  return {
-    project: {
-      title: "剧集智能创编工坊 - 短剧工程",
-      version: "1.2.0",
-      exportedAt: new Date().toISOString(),
-      genre: {
-        id: genre.id,
-        name: genre.name,
-        badge: genre.badge,
-        hookTactic: genre.hookTactic,
-        musicMood: genre.musicMood,
-        tonePrompt: genre.tonePrompt,
-      },
-      aspectRatio: "9:16",
-      synopsis: synopsis.trim(),
-      modelConfig,
-    },
-    storyBeats: beats,
-    timelineClips: [],
-    statistics: {
-      totalBeats: beats.length,
-      totalClips: 0,
-      hasSynthesizedOutput: false,
-    },
-  };
-}
-
 /** 生成与原版完全对齐的 Markdown 制作清单 */
 export function buildMarkdown(project: DramaProjectData): string {
   const p = project.project;
@@ -196,7 +162,7 @@ export function buildMarkdown(project: DramaProjectData): string {
   for (const clip of project.timelineClips) {
     const c = clip as Record<string, string>;
     lines.push(
-      `| ${c.no ?? ""} | ${c.name ?? ""} | ${c.beat ?? ""} | ${c.subtitle ?? ""} | ${c.format ?? ""} |`
+      `| ${c.no ?? ""} | ${c.name ?? ""} | ${c.beatRef ?? ""} | ${c.subtitle ?? ""} | ${c.format ?? ""} |`
     );
   }
   lines.push("");
@@ -218,4 +184,116 @@ export function downloadFile(filename: string, content: string, mime: string) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// 工作台扩展模型（项目持久化 / 镜头轨管理）
+// 状态枚举集中在此定义，新增状态只改这一处
+// ============================================================
+
+export const CLIP_STATUS = {
+  pending: { label: "待生成", cls: "border-zinc-500/40 bg-zinc-500/10 text-zinc-400" },
+  generating: { label: "生成中", cls: "border-amber-500/40 bg-amber-500/10 text-amber-400" },
+  ready: { label: "已生成", cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" },
+  failed: { label: "生成失败", cls: "border-rose-500/40 bg-rose-500/10 text-rose-400" },
+} as const;
+
+export type ClipStatus = keyof typeof CLIP_STATUS;
+
+export const PROJECT_STATUS = {
+  draft: "草稿",
+  beatsReady: "分镜就绪",
+  inProduction: "制作中",
+  archived: "已归档",
+} as const;
+
+export type ProjectStatus = keyof typeof PROJECT_STATUS;
+
+/** 镜头轨片段（客户端视图） */
+export interface ClipData {
+  id: string;
+  beatIndex: number;
+  order: number;
+  name: string;
+  subtitle: string;
+  format: string;
+  status: ClipStatus;
+  mediaUrl: string | null;
+  durationMs: number | null;
+}
+
+/** 项目库列表项（摘要） */
+export interface ProjectSummary {
+  id: string;
+  title: string;
+  status: ProjectStatus;
+  genreId: string;
+  genreName: string;
+  genreBadge: string;
+  clipCount: number;
+  beatCount: number;
+  updatedAt: string;
+}
+
+/** 项目详情（项目 + 分镜 + 镜头轨） */
+export interface ProjectDetail extends ProjectSummary {
+  synopsis: string;
+  aspectRatio: string;
+  modelConfig: ModelConfig;
+  genre: {
+    id: string;
+    name: string;
+    badge: string;
+    hookTactic: string;
+    musicMood: string;
+    tonePrompt: string;
+  };
+  storyBeats: StoryBeat[];
+  timelineClips: ClipData[];
+  createdAt: string;
+  schemaVersion: string;
+}
+
+/** 保存项目的请求体 */
+export interface SaveProjectPayload {
+  title?: string;
+  genre: GenrePreset;
+  synopsis: string;
+  modelConfig: ModelConfig;
+  storyBeats: StoryBeat[];
+  status?: ProjectStatus;
+}
+
+/**
+ * 将项目详情转换为与原版对齐的导出工程数据。
+ * timelineClips 按 order 排序填入，含状态与成片地址（原版 schema 的前向兼容超集）。
+ */
+export function toExportData(detail: ProjectDetail): DramaProjectData {
+  const clips = [...detail.timelineClips].sort((a, b) => a.order - b.order);
+  return {
+    project: {
+      title: detail.title,
+      version: detail.schemaVersion,
+      exportedAt: new Date().toISOString(),
+      genre: { ...detail.genre },
+      aspectRatio: detail.aspectRatio,
+      synopsis: detail.synopsis,
+      modelConfig: detail.modelConfig,
+    },
+    storyBeats: detail.storyBeats,
+    timelineClips: clips.map((c, i) => ({
+      no: i + 1,
+      name: c.name,
+      beatRef: `第 ${String(c.beatIndex).padStart(2, "0")} 幕`,
+      subtitle: c.subtitle,
+      format: c.format,
+      status: CLIP_STATUS[c.status].label,
+      mediaUrl: c.mediaUrl ?? "",
+    })),
+    statistics: {
+      totalBeats: detail.storyBeats.length,
+      totalClips: clips.length,
+      hasSynthesizedOutput: clips.length > 0 && clips.every((c) => c.status === "ready"),
+    },
+  };
 }
