@@ -1,0 +1,62 @@
+{
+  "project": {
+    "title": "剧集智能创编工坊 - 短剧工程",
+    "version": "1.2.0",
+    "exportedAt": "2026-11-10T05:58:14.259Z",
+    "genre": {
+      "id": "shuangwen",
+      "name": "战神逆袭 · 龙王归来",
+      "badge": "高燃打脸 · 爽感爆棚",
+      "hookTactic": "0~3s 冲突爆发：撕毁婚书当众羞辱，主角眼神冰冷，身份信物若隐若现",
+      "musicMood": "重低音震荡战鼓、霸气交响乐渐强、金属拔剑音效",
+      "tonePrompt": "high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions"
+    },
+    "aspectRatio": "9:16",
+    "synopsis": "赘婿隐忍三年受尽欺凌，反派当众撕碎婚书泼菜汤；主角冷笑亮出信物，顶级统帅带十万将士破门而入跪地齐呼龙王！",
+    "modelConfig": {
+      "videoModel": "Omni 1.2 Flash",
+      "durationSeconds": 5,
+      "resolution": "720p",
+      "scriptThinkingLevel": "low",
+      "enablePromptEnhance": true
+    }
+  },
+  "storyBeats": [
+    {
+      "index": 1,
+      "actTitle": "第一幕：极致冲突 (黄金开头 Hook)",
+      "narrativeFunction": "hook",
+      "pacingNote": "0~3s 强冲突切入！拒绝无效铺垫，拉满情绪张力",
+      "description": "豪门盛宴上反派当众将退婚文书砸向主角，肆意讥讽，逼其签下放弃协议",
+      "dialogueSubtitle": "“今天立刻签下协议，拿着施舍滚出家族大门！”",
+      "cameraMovement": "push",
+      "promptGuidance": "手持特写快速推拉，反派狞笑与主角冷漠深邃的目光碰撞，低角度仰拍"
+    },
+    {
+      "index": 2,
+      "actTitle": "第二幕：身份揭晓 (绝地反转 Clash)",
+      "narrativeFunction": "climax",
+      "pacingNote": "4~8s 顶级大佬强势登场，局势瞬间颠覆",
+      "description": "大门被巨力踹开，全省顶级巨擘率黑衣近卫齐刷刷单膝下跪：“恭迎龙帅归位！”全场骇然失色",
+      "dialogueSubtitle": "“参见统帅！三军精锐已集结完毕，听候调遣！”",
+      "cameraMovement": "push",
+      "promptGuidance": "大广角对称构图，黑衣人整齐跪拜，反派众人惊恐倒退、酒杯摔碎慢动作"
+    },
+    {
+      "index": 3,
+      "actTitle": "第三幕：致命悬念 (卡点留钩 Cliffhanger)",
+      "narrativeFunction": "cliffhanger",
+      "pacingNote": "9~12s 意犹未尽，悬念卡点让观众欲罢不能",
+      "description": "主角冷眼俯视瘫软在地的反派，通讯器突然急促亮起：“报告统帅，当年真正设局的幕后之人现身了...”",
+      "dialogueSubtitle": "“当年欠下血债的仇人，一个都别想逃！”",
+      "cameraMovement": "push",
+      "promptGuidance": "主角冷酷眼神特写，警报声与回音，画面在嘴角微扬的一瞬强力卡点定格"
+    }
+  ],
+  "timelineClips": [],
+  "statistics": {
+    "totalBeats": 3,
+    "totalClips": 0,
+    "hasSynthesizedOutput": false
+  }
+}
