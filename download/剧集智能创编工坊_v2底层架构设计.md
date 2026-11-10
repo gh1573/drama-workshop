@@ -1,6 +1,6 @@
 # 剧集智能创编工坊 · v2 底层架构设计
 
-> 版本：v2.0-draft1 ｜ 日期：2026-11-10 ｜ 状态：待实施
+> 版本：v2.0-draft1 ｜ 日期：2026-11-10 ｜ 状态：**v2.0～v2.2 已实施（v2.3 系列/批量待启动）**
 > 本文档是 v2 全部扩容的唯一设计依据。实施时新建代码必须与本文的模型、接口、目录、阶段划分一致；如需偏离，先改文档再改代码。
 
 ---
@@ -353,7 +353,8 @@ export interface EnergyCurvePoint { clipId: string; order: number; energy: numbe
 
 **核心思想**：角色「不换脸」不依赖模型记忆，而是让每个镜头的提示词携带同一份不可变语义锚点 + 同一张参考图。
 
-1. **锁定外观（lockedAppearance）**：资产定稿后其外观描述冻结。服务层对定稿资产加防改检查——若镜头已引用且已产出 finalPrompt，改锚点需先「解冻确认」（前端二次确认后置 `promptVersion=null` 并将关联镜头回置 pending）。
+1. **锁定外观（lockedAppearance）**：资产定稿后其外观描述冻结。服务层对定稿资产加防改检查——若镜头已引用且已产出 finalPrompt，改锚点需先「解冻确认」（前端二次确认后，绑定镜头 `promptVersion` 置为 **"stale"** 标记并回置 pending；分镜表对 stale 镜头标「锚点过期」，资产库面板出现「重新锚定过期镜头」入口，一键重跑组装管线恢复一致）。
+   - 指纹取值约定：`null` = 从未组装；`"stale"` = 曾组装但锚点已解冻；`"manual"` = 人工微调（锚定跳过、过期判定豁免）；12 位哈希 = 与当前锚点一致。
 2. **视觉锚点（visualAnchor）**：英文视觉描述串，是组装管线资产段的唯一来源。派生自 lockedAppearance，由 LLM 翻译定稿，人工可改。
 3. **锚点指纹（promptVersion）**：`sha256(所有引用资产的 visualAnchor + tonePrompt).slice(0,12)`。镜头完成渲染后记录指纹；资产锚点变动 → 指纹失配 → 该镜头在故事板上标「锚点过期」，提示重渲。这让「改了角色长相 → 哪些镜头受影响」变成可计算的。
 4. **参考图注入**：资产定妆图（portraitUrl）作为图生视频的参考输入（平台视频通道支持参考图时传入；不支持时锚点串兜底）。数据结构已预留，不阻塞文本锚点先行。
@@ -475,6 +476,7 @@ export interface Provider<TIn, TOut> {
 | POST `/api/projects/[id]/shots/[clipId]/refs` | 镜头绑定资产（kind+assetId+stateNote） | **新增 v2.0** |
 | DELETE `/api/shots/[clipId]/refs/[refId]` | 解绑资产 | **新增 v2.0** |
 | POST `/api/projects/[id]/tasks` | 提交任务 `{ kind, target }`（breakdown/portrait/video/voiceover） | **新增 v2.1** |
+| POST `/api/projects/[id]/anchor` | 重新锚定：全部非人工微调镜头重跑组装管线（解冻恢复入口） | **新增 v2.0** |
 | GET `/api/tasks?projectId=&status=` | 任务列表（轮询，`Cache-Control: no-store`） | **新增 v2.1** |
 | GET/POST `/api/tasks/[id]` `/retry` `/cancel` | 任务详情 / 重试 / 取消 | **新增 v2.1** |
 | GET `/api/projects/[id]/energy-curve` | 能量曲线点集 | **新增 v2.2** |
@@ -533,22 +535,22 @@ src/
 
 每阶段独立可验收、可发版；阶段内任务顺序即依赖顺序。
 
-### v2.0 —— 资产库与锚定地基（纯数据 + 组装，无外部通道）
+### v2.0 —— 资产库与锚定地基（纯数据 + 组装，无外部通道）✅ 已实施
 1. Prisma 迁移：Asset / ShotRef + TimelineClip/StoryBeat 加列；
-2. `asset-service` + 资产 API + 解冻保护；
+2. `asset-service` + 资产 API + 解冻保护（stale 标记 + /anchor 重新锚定入口）；
 3. `prompt-engine`（纯函数 + 单测：组装顺序、指纹、分段）；
 4. breakdown-service 输出协议升级：每镜头输出引用资产名/energy/sfxHint（LLM 提示词同步升级）；
 5. 工作区页面骨架 `/project/[id]`：故事板视图 + 资产面板（建/绑/改/删）+ 镜头卡显示 finalPrompt 分段。
 **验收**：建角色 → 绑定到镜头 → 组装出带锚点的 finalPrompt；改角色锚点 → 镜头标「锚点过期」。
 
-### v2.1 —— 任务管线与视频接入
+### v2.1 —— 任务管线与视频接入 ✅ 已实施（视频通道当前为 noop 降级，接口就绪）
 1. RenderTask 迁移 + `task-service` + 任务 API；
 2. `dispatcher`（内存队列 + 并发 + 重试 + 重启恢复）+ 四类 handler；
 3. `ZaiVideoProvider`（video.generations + async.result.query 轮询）+ `ZaiImageProvider`（定妆图）；
 4. 前端任务中心：提交/轮询/重试/取消，镜头状态与任务状态联动。
 **验收**：镜头一键渲染 → 任务流转 → mediaUrl 回写故事板；断网/超时 → failed + 可重试；进程重启 → running 任务自动恢复。
 
-### v2.2 —— 轨道、能量曲线与配音
+### v2.2 —— 轨道、能量曲线与配音 ✅ 数据层与拆镜协议已实施（TTS 通道待接入）
 1. TrackItem 迁移 + track-service + 轨道 API；
 2. 拆镜产物自动落三轨；能量曲线 API + 前端曲线图 + 节奏预警；
 3. `ZaiAudioProvider`（TTS）+ voiceProfile 编辑 UI + 配音任务接入。
@@ -568,6 +570,7 @@ src/
 | --- | --- | --- |
 | 视频通道配额/速率限制 | 任务积压 | 并发上限可配；失败重试退避；noop 降级允许手动贴片不阻塞创作 |
 | LLM 拆镜输出不稳定 | 镜头数据非法 | 沿用现有「围栏剥离 + 截取 JSON」解析；zod 校验失败自动重试 1 次；人工编辑兜底 |
+| dev 多 worker / 热重载误触发重启恢复 | 运行中的流水线被误标 failed | 恢复逻辑只回收「过期」记录（updatedAt 落后 3 分钟），运行记录具备事实心跳；生产多实例沿用同一判据 |
 | 锚点漂移（改资产引发连锁重渲） | 成本失控 | 锚点指纹只标记不自动重渲；重渲由用户显式触发 |
 | SQLite 单写并发 | 任务高频回写冲突 | 调度器写操作串行化（单 worker 回写队列）；数据量增长后换 Postgres 仅改连接串 |
 | 内存队列进程重启丢任务 | 任务卡 running | 启动恢复逻辑强制回置 queued（§7.3）；v3 若多实例部署再引入持久化队列 |

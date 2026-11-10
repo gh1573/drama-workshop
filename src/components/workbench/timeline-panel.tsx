@@ -24,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
+  ASSET_KIND_META,
   CLIP_STATUS,
   NARRATIVE_META,
   type ClipData,
@@ -48,6 +49,8 @@ export function TimelinePanel() {
   const { toast } = useToast();
   const clips = useWorkbench((s) => s.session?.clips ?? []);
   const beats = useWorkbench((s) => s.session?.beats ?? []);
+  const shotRefs = useWorkbench((s) => s.session?.shotRefs ?? []);
+  const staleIds = useWorkbench((s) => s.session?.anchorStaleClipIds ?? []);
   const moveClip = useWorkbench((s) => s.moveClip);
   const removeClip = useWorkbench((s) => s.removeClip);
   const patchClip = useWorkbench((s) => s.patchClip);
@@ -255,6 +258,27 @@ export function TimelinePanel() {
                           {fmtSec(clip.plannedMs)}
                         </span>
                         <StatusBadge clip={clip} />
+                        {staleIds.includes(clip.id) && clip.promptVersion !== "manual" && (
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-400"
+                          >
+                            锚点过期
+                          </Badge>
+                        )}
+                        {shotRefs
+                          .filter((r) => r.clipId === clip.id)
+                          .slice(0, 3)
+                          .map((r) => (
+                            <Badge
+                              key={r.id}
+                              variant="outline"
+                              className="shrink-0 border-border/60 text-[10px] text-muted-foreground"
+                            >
+                              {ASSET_KIND_META[r.kind]?.icon}
+                              {r.assetName}
+                            </Badge>
+                          ))}
                         {clip.mediaUrl && (
                           <a
                             href={clip.mediaUrl}

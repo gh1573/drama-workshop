@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { GENRES } from "@/lib/genres";
 import {
+  type AssetDTO,
   type ClipData,
   type ClipStatus,
   type GenrePreset,
@@ -10,10 +11,13 @@ import {
   type ProjectDetail,
   type ProjectStatus,
   type ProjectSummary,
-  type SaveProjectPayload,
+  type RunDTO,
+  type ShotRefDTO,
   type StoryBeat,
+  type TaskDTO,
+  type TaskKind,
+  type TrackItemDTO,
 } from "@/lib/drama";
-
 /**
  * 工作台全局状态（Zustand）
  * - 服务器状态（项目库、镜头轨）经 API 同步于此
@@ -31,6 +35,11 @@ export interface WorkbenchSession {
   modelConfig: ModelConfig;
   beats: StoryBeat[];
   clips: ClipData[];
+  /** —— v2 制作包（立项后由服务端聚合） —— */
+  assets: AssetDTO[];
+  shotRefs: ShotRefDTO[];
+  tracks: TrackItemDTO[];
+  anchorStaleClipIds: string[];
 }
 
 interface WorkbenchState {
@@ -45,6 +54,13 @@ interface WorkbenchState {
   generatingStep: number;
   saving: boolean;
   lastError: string | null;
+  // —— v2 剧组流水线 ——
+  /** 进行中/最近一次流水线运行（null = 从未开机） */
+  activeRun: RunDTO | null;
+  /** 开机请求进行中（防止重复点击） */
+  pipelineStarting: boolean;
+  /** 渲染任务列表（定妆照/镜头渲染，轮询刷新） */
+  tasks: TaskDTO[];
   // 项目库
   library: ProjectSummary[];
   libraryOpen: boolean;
@@ -65,6 +81,29 @@ interface WorkbenchState {
   removeProject: (id: string) => Promise<boolean>;
   renameProject: (id: string, title: string) => Promise<boolean>;
   setLibraryOpen: (open: boolean) => void;
+
+  /** —— v2 剧组流水线 —— */
+  /** 全组开机：未立项先立项草稿，已立项则同步最新梗概后启动流水线 */
+  startPipeline: () => Promise<boolean>;
+  /** 断点续拍：从首个未成功阶段继续 */
+  retryPipeline: () => Promise<boolean>;
+  /** 拉取项目详情并刷新会话（制作包全量） */
+  refreshProject: () => Promise<void>;
+  /** 拉取渲染任务列表；存在活跃任务时自动继续轮询 */
+  fetchTasks: () => Promise<void>;
+  /** 提交渲染任务（portrait/video），返回错误信息或 null */
+  createTask: (kind: TaskKind, target: { assetId?: string; clipId?: string }) => Promise<string | null>;
+  /** 重试/取消任务 */
+  retryTask: (taskId: string) => Promise<void>;
+  cancelTask: (taskId: string) => Promise<void>;
+  /** 编辑资产锚点（refCount>0 时需显式解冻确认） */
+  updateAsset: (
+    assetId: string,
+    patch: { name?: string; lockedAppearance?: string; visualAnchor?: string },
+    confirmUnfreeze: boolean
+  ) => Promise<string | null>;
+  /** 重新锚定：对全部非人工微调镜头重跑组装管线（解冻后的恢复入口） */
+  reanchor: () => Promise<boolean>;
 
   addClip: (beatIndex: number) => Promise<boolean>;
   patchClip: (clipId: string, patch: Partial<ClipData>) => Promise<boolean>;
@@ -113,6 +152,24 @@ function fallbackGenre(detail: ProjectDetail): GenrePreset {
   };
 }
 
+/** 项目详情 → 会话（loadProject / refreshProject 共用） */
+function detailToSession(detail: ProjectDetail): WorkbenchSession {
+  return {
+    dbId: detail.id,
+    title: detail.title,
+    status: detail.status,
+    genre: fallbackGenre(detail),
+    synopsis: detail.synopsis,
+    modelConfig: detail.modelConfig,
+    beats: detail.storyBeats,
+    clips: detail.timelineClips,
+    assets: detail.assets,
+    shotRefs: detail.shotRefs,
+    tracks: detail.tracks,
+    anchorStaleClipIds: detail.anchorStaleClipIds,
+  };
+}
+
 /** 会话 → 导出用项目详情（未入库项目以本地形态导出，schema 不变） */
 export function sessionToDetail(s: WorkbenchSession): ProjectDetail {
   return {
@@ -140,7 +197,68 @@ export function sessionToDetail(s: WorkbenchSession): ProjectDetail {
     },
     storyBeats: s.beats,
     timelineClips: s.clips,
+    assets: s.assets,
+    shotRefs: s.shotRefs,
+    tracks: s.tracks,
+    anchorStaleClipIds: s.anchorStaleClipIds,
+    activeRun: null,
   };
+}
+
+// ============================================================
+// 轮询器（模块级单例，与页面同生命周期；切换项目时由动作显式停止）
+// 设计依据：docs/architecture-v2.md §7.3 —— 前端不连队列，只轮询 REST
+// ============================================================
+
+let runPollTimer: ReturnType<typeof setInterval> | null = null;
+let taskPollTimer: ReturnType<typeof setTimeout> | null = null;
+
+function stopRunPolling() {
+  if (runPollTimer) {
+    clearInterval(runPollTimer);
+    runPollTimer = null;
+  }
+}
+
+/** 流水线运行轮询：1.5s 间隔；终态时停止并回灌最新制作包 */
+function startRunPolling(runId: string) {
+  stopRunPolling();
+  runPollTimer = setInterval(() => {
+    void (async () => {
+      try {
+        const run = await api<RunDTO>(`/api/runs/${runId}`);
+        useWorkbench.setState({ activeRun: run });
+        if (run.status !== "running") {
+          stopRunPolling();
+          const dbId = useWorkbench.getState().session?.dbId;
+          if (dbId) {
+            if (run.status === "succeeded") {
+              await useWorkbench.getState().refreshProject();
+              useWorkbench.setState((s) => ({ outputNonce: s.outputNonce + 1 }));
+            }
+            void useWorkbench.getState().fetchTasks();
+          }
+        }
+      } catch {
+        /* 瞬时网络错误：保留轮询，下次重试 */
+      }
+    })();
+  }, 1500);
+}
+
+function stopTaskPolling() {
+  if (taskPollTimer) {
+    clearTimeout(taskPollTimer);
+    taskPollTimer = null;
+  }
+}
+
+/** 渲染任务轮询：存在活跃任务时 2.5s 链式轮询；静默后回灌项目详情 */
+function scheduleTaskPolling() {
+  stopTaskPolling();
+  taskPollTimer = setTimeout(() => {
+    void useWorkbench.getState().fetchTasks();
+  }, 2500);
 }
 
 export const useWorkbench = create<WorkbenchState>((set, get) => ({
@@ -158,6 +276,9 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   generatingStep: 0,
   saving: false,
   lastError: null,
+  activeRun: null,
+  pipelineStarting: false,
+  tasks: [],
   library: [],
   libraryOpen: false,
   libraryLoading: false,
@@ -165,7 +286,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
 
   selectGenre: (genreId) => {
     if (genreId === get().genreId) return;
-    set({ genreId, session: null });
+    set({ genreId, session: null, activeRun: null, tasks: [] });
   },
   setSynopsis: (synopsis) => set({ synopsis: synopsis.slice(0, 500) }),
   patchModelConfig: (patch) =>
@@ -184,33 +305,31 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
         modelConfig,
         beats,
         clips: session?.clips ?? [],
+        assets: session?.assets ?? [],
+        shotRefs: session?.shotRefs ?? [],
+        tracks: session?.tracks ?? [],
+        anchorStaleClipIds: session?.anchorStaleClipIds ?? [],
       },
       outputNonce: get().outputNonce + 1,
     });
   },
 
   loadProject: (detail) => {
-    const genre = fallbackGenre(detail);
     set({
       genreId: detail.genreId,
       synopsis: detail.synopsis,
       modelConfig: detail.modelConfig,
-      session: {
-        dbId: detail.id,
-        title: detail.title,
-        status: detail.status,
-        genre,
-        synopsis: detail.synopsis,
-        modelConfig: detail.modelConfig,
-        beats: detail.storyBeats,
-        clips: detail.timelineClips,
-      },
+      session: detailToSession(detail),
+      activeRun: detail.activeRun,
       libraryOpen: false,
       outputNonce: get().outputNonce + 1,
     });
+    if (detail.activeRun?.status === "running") startRunPolling(detail.activeRun.id);
+    void get().fetchTasks();
   },
 
-  closeSession: () => set({ session: null, outputNonce: get().outputNonce + 1 }),
+  closeSession: () =>
+    set({ session: null, activeRun: null, tasks: [], outputNonce: get().outputNonce + 1 }),
 
   generate: async () => {
     const { genreId, synopsis, modelConfig } = get();
@@ -232,7 +351,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   },
 
   saveProject: async () => {
-    const { session, modelConfig, genreId, synopsis } = get();
+    const { session } = get();
     if (!session) return false;
     set({ saving: true });
     try {
@@ -251,29 +370,27 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
             : s.session,
         }));
       } else {
-        const payload: SaveProjectPayload = {
-          genre: {
-            id: genreId,
-            name: session.genre.name,
-            badge: session.genre.badge,
-            hookTactic: session.genre.hookTactic,
-            musicMood: session.genre.musicMood,
-            tonePrompt: session.genre.tonePrompt,
-          },
-          synopsis: synopsis || session.synopsis,
-          modelConfig,
-          storyBeats: session.beats,
-          status: "beatsReady",
-        };
-        const detail = await api<ProjectDetail>("/api/projects", {
+        // v2 契约：先立项草稿（题材快照 + 工程参数），再回写三幕分镜
+        const created = await api<ProjectDetail>("/api/projects", {
           method: "POST",
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            genre: {
+              id: session.genre.id,
+              name: session.genre.name,
+              badge: session.genre.badge,
+              hookTactic: session.genre.hookTactic,
+              musicMood: session.genre.musicMood,
+              tonePrompt: session.genre.tonePrompt,
+            },
+            synopsis: session.synopsis,
+            modelConfig: session.modelConfig,
+          }),
         });
-        set((s) => ({
-          session: s.session
-            ? { ...s.session, dbId: detail.id, title: detail.title, status: detail.status }
-            : s.session,
-        }));
+        const detail = await api<ProjectDetail>(`/api/projects/${created.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ storyBeats: session.beats }),
+        });
+        set((s) => ({ session: s.session ? detailToSession(detail) : s.session }));
       }
       await get().fetchLibrary();
       return true;
@@ -458,6 +575,173 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       return err instanceof Error ? err.message : "拆解失败，请重试";
     } finally {
       set({ breakingDown: null });
+    }
+  },
+
+  // ============================================================
+  // v2 · 剧组流水线与渲染任务（docs/architecture-v2.md §7.3/§8）
+  // ============================================================
+
+  startPipeline: async () => {
+    const { genreId, synopsis, modelConfig, session, pipelineStarting } = get();
+    if (pipelineStarting) return false;
+    if (synopsis.trim().length < 10) {
+      set({ lastError: "请先输入至少 10 个字的剧情梗概" });
+      return false;
+    }
+    set({ pipelineStarting: true, lastError: null });
+    try {
+      let projectId = session?.dbId ?? null;
+      if (projectId && session && session.synopsis !== synopsis.trim()) {
+        // 梗概有改动：先同步到项目再开机（流水线读取服务端项目数据）
+        await api(`/api/projects/${projectId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ synopsis: synopsis.trim(), modelConfig }),
+        });
+      }
+      if (!projectId) {
+        // 立项草稿：题材快照 + 工程参数，剧本/资产/分镜全部由流水线产出
+        const genre = GENRES.find((g) => g.id === genreId) ?? GENRES[0];
+        const created = await api<ProjectDetail>("/api/projects", {
+          method: "POST",
+          body: JSON.stringify({
+            genre: {
+              id: genre.id,
+              name: genre.name,
+              badge: genre.badge,
+              hookTactic: genre.hookTactic,
+              musicMood: genre.musicMood,
+              tonePrompt: genre.tonePrompt,
+            },
+            synopsis: synopsis.trim(),
+            modelConfig,
+          }),
+        });
+        projectId = created.id;
+        set({ session: detailToSession(created) });
+      }
+      const run = await api<RunDTO>(`/api/projects/${projectId}/runs`, {
+        method: "POST",
+      });
+      set({ activeRun: run });
+      startRunPolling(run.id);
+      void get().fetchLibrary();
+      return true;
+    } catch (err) {
+      set({ lastError: err instanceof Error ? err.message : "开机失败，请稍后重试" });
+      return false;
+    } finally {
+      set({ pipelineStarting: false });
+    }
+  },
+
+  retryPipeline: async () => {
+    const runId = get().activeRun?.id;
+    if (!runId) return false;
+    try {
+      const run = await api<RunDTO>(`/api/runs/${runId}/retry`, { method: "POST" });
+      set({ activeRun: run, lastError: null });
+      startRunPolling(run.id);
+      return true;
+    } catch (err) {
+      set({ lastError: err instanceof Error ? err.message : "续拍失败" });
+      return false;
+    }
+  },
+
+  refreshProject: async () => {
+    const dbId = get().session?.dbId;
+    if (!dbId) return;
+    try {
+      const detail = await api<ProjectDetail>(`/api/projects/${dbId}`);
+      set((s) => ({
+        session: s.session ? detailToSession(detail) : s.session,
+        activeRun: detail.activeRun,
+      }));
+    } catch {
+      /* 项目可能已被删除：保留当前会话 */
+    }
+  },
+
+  fetchTasks: async () => {
+    const dbId = get().session?.dbId;
+    if (!dbId) return;
+    try {
+      const tasks = await api<TaskDTO[]>(`/api/projects/${dbId}/tasks`);
+      const hadActive = get().tasks.some(
+        (t) => t.status === "queued" || t.status === "running"
+      );
+      set({ tasks });
+      if (tasks.some((t) => t.status === "queued" || t.status === "running")) {
+        scheduleTaskPolling();
+      } else if (hadActive) {
+        // 从活跃转静默：回灌一次项目详情（产物地址可能已回写）
+        stopTaskPolling();
+        void get().refreshProject();
+      }
+    } catch {
+      /* 忽略瞬时错误 */
+    }
+  },
+
+  createTask: async (kind, target) => {
+    const { session } = get();
+    if (!session?.dbId) return "请先立项（全组开机或保存项目）再提交任务";
+    try {
+      await api(`/api/projects/${session.dbId}/tasks`, {
+        method: "POST",
+        body: JSON.stringify({ kind, ...target }),
+      });
+      void get().fetchTasks();
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "任务提交失败";
+    }
+  },
+
+  retryTask: async (taskId) => {
+    try {
+      await api(`/api/tasks/${taskId}/retry`, { method: "POST" });
+      void get().fetchTasks();
+    } catch {
+      /* 任务中心会展示最新状态 */
+    }
+  },
+
+  cancelTask: async (taskId) => {
+    try {
+      await api(`/api/tasks/${taskId}/cancel`, { method: "POST" });
+      void get().fetchTasks();
+    } catch {
+      /* 任务中心会展示最新状态 */
+    }
+  },
+
+  updateAsset: async (assetId, patch, confirmUnfreeze) => {
+    try {
+      await api(`/api/assets/${assetId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ ...patch, confirmUnfreeze }),
+      });
+      await get().refreshProject();
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "资产更新失败";
+    }
+  },
+
+  reanchor: async () => {
+    const dbId = get().session?.dbId;
+    if (!dbId) return false;
+    try {
+      await api<{ anchored: number; skipped: number }>(
+        `/api/projects/${dbId}/anchor`,
+        { method: "POST" }
+      );
+      await get().refreshProject();
+      return true;
+    } catch {
+      return false;
     }
   },
 }));

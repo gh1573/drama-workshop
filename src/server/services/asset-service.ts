@@ -174,7 +174,9 @@ export async function updateAsset(
       for (const shot of anchoredShots) {
         await tx.timelineClip.update({
           where: { id: shot.id },
-          data: { promptVersion: null, status: "pending" },
+          // "stale" 而非 null：区分「从未组装」与「锚点已解冻」，
+          // 前者静默等待流水线，后者在分镜表标「锚点过期」等待重新锚定
+          data: { promptVersion: "stale", status: "pending" },
         });
         unfrozeClipIds.push(shot.id);
       }

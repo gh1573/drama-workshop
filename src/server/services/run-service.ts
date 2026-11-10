@@ -512,7 +512,23 @@ async function stageDirecting(
   };
 
   let totalShots = 0;
+  let skippedActs = 0;
   for (const beat of beats) {
+    // 成片保护：该幕已有已生成镜头时跳过拆解（不覆盖劳动成果），
+    // 由日志明确告知；如需重拍请先在镜头轨把该幕镜头重置为待生成
+    const hasReadyClip = await db.timelineClip.findFirst({
+      where: { projectId: project.id, beatIndex: beat.index, status: "ready" },
+      select: { id: true },
+    });
+    if (hasReadyClip) {
+      skippedActs++;
+      await appendLog(
+        runId,
+        "director",
+        `第 ${beat.index} 幕已有已生成镜头，跳过拆解以保护成片（重拍请先重置该幕镜头）`
+      );
+      continue;
+    }
     const shots = await breakdownAct({
       genreName: project.genreName,
       genreBadge: project.genreBadge,
@@ -547,7 +563,9 @@ async function stageDirecting(
     );
   }
   return {
-    summary: `三幕拆镜完成：共 ${totalShots} 个镜头，正反打景别交替已就位`,
+    summary: `三幕拆镜完成：共 ${totalShots} 个镜头，正反打景别交替已就位${
+      skippedActs > 0 ? `；${skippedActs} 幕含成片已跳过` : ""
+    }`,
   };
 }
 
@@ -910,14 +928,20 @@ export async function listRuns(projectId: string): Promise<RunDTO[]> {
 }
 
 // ============================================================
-// 进程重启恢复：残留 running 的运行一律回置 failed（可断点重试）
+// 进程重启恢复：残留 running 的运行回置 failed（可断点重试）
+// 注意：只回置「过期」的运行（updatedAt 落后 3 分钟以上）。
+// Next dev 按路由懒编译 + worker 隔离，本模块会被多次求值；
+// 无差别回置会把正在执行的流水线误杀（生产多实例同理需要心跳判据）。
 // ============================================================
 const g = globalThis as unknown as { __dramaRunRecovered?: boolean };
 if (!g.__dramaRunRecovered) {
   g.__dramaRunRecovered = true;
   void db.productionRun
     .updateMany({
-      where: { status: "running" },
+      where: {
+        status: "running",
+        updatedAt: { lt: new Date(Date.now() - 3 * 60_000) },
+      },
       data: {
         status: "failed",
         error: "服务重启导致流水线中断，可点击重试从断点继续",

@@ -49,13 +49,17 @@ function state(): DispatcherState {
   return g.__dramaDispatcher;
 }
 
-/** 进程重启恢复：把残留 running 的任务回置 queued 并重新入队 */
+/** 进程重启恢复：把残留 running 的任务回置 queued 并重新入队
+ *  同 run-service：只回收「过期」任务（3 分钟无更新），防止 dev 多 worker 误回收执行中的任务 */
 async function recoverOrphanTasks(s: DispatcherState) {
   if (s.recovered) return;
   s.recovered = true;
   try {
     const orphans = await db.renderTask.findMany({
-      where: { status: "running" },
+      where: {
+        status: "running",
+        updatedAt: { lt: new Date(Date.now() - 3 * 60_000) },
+      },
       select: { id: true, kind: true },
     });
     if (orphans.length > 0) {

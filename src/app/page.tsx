@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GenrePanel } from "@/components/workbench/genre-panel";
 import { SynopsisPanel } from "@/components/workbench/synopsis-panel";
@@ -20,6 +21,8 @@ import { ModelConfigPanel } from "@/components/workbench/model-config-panel";
 import { ActCard } from "@/components/workbench/act-card";
 import { TimelinePanel } from "@/components/workbench/timeline-panel";
 import { RhythmPanel } from "@/components/workbench/rhythm-panel";
+import { CrewPipelinePanel } from "@/components/workbench/crew-pipeline-panel";
+import { AssetLibraryPanel } from "@/components/workbench/asset-library-panel";
 import { ProjectInfoCard } from "@/components/workbench/project-info-card";
 import { ProjectLibraryDrawer } from "@/components/workbench/project-library-drawer";
 import { useToast } from "@/hooks/use-toast";
@@ -42,7 +45,13 @@ export default function Home() {
   const synopsis = useWorkbench((s) => s.synopsis);
   const setLibraryOpen = useWorkbench((s) => s.setLibraryOpen);
   const outputNonce = useWorkbench((s) => s.outputNonce);
+  // —— v2 剧组流水线 ——
+  const activeRun = useWorkbench((s) => s.activeRun);
+  const pipelineStarting = useWorkbench((s) => s.pipelineStarting);
+  const startPipeline = useWorkbench((s) => s.startPipeline);
   const outputRef = useRef<HTMLDivElement>(null);
+
+  const pipelineRunning = activeRun?.status === "running";
 
   useEffect(() => {
     if (outputNonce > 0) {
@@ -74,6 +83,32 @@ export default function Home() {
     } else {
       toast({
         title: "生成失败",
+        description: useWorkbench.getState().lastError ?? "请稍后重试或调整梗概",
+        variant: "destructive",
+      });
+    }
+  }
+
+  /** 全组开机：立项（如未立项）→ 启动剧组流水线 → 轮询观测 */
+  async function handleStartPipeline() {
+    if (synopsis.trim().length < 10) {
+      toast({
+        title: "梗概太短",
+        description: "请输入至少 10 个字的剧情梗概，或点击「填充示例梗概」",
+        variant: "destructive",
+      });
+      return;
+    }
+    const ok = await startPipeline();
+    if (ok) {
+      toast({
+        title: "剧组已开机 🎬",
+        description: "编剧 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包，全程可在流水线面板观测",
+      });
+      outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      toast({
+        title: "开机失败",
         description: useWorkbench.getState().lastError ?? "请稍后重试或调整梗概",
         variant: "destructive",
       });
@@ -139,24 +174,40 @@ export default function Home() {
             <ModelConfigPanel />
 
             <div className="space-y-3">
+              {/* 主 CTA：AI 剧组流水线 */}
               <Button
                 size="lg"
-                disabled={generating || synopsis.trim().length < 10}
-                onClick={handleGenerate}
+                disabled={pipelineRunning || pipelineStarting || synopsis.trim().length < 10}
+                onClick={handleStartPipeline}
                 className="h-14 w-full bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 text-base font-bold text-white shadow-xl shadow-red-600/25 hover:opacity-90"
               >
-                {generating ? (
+                {pipelineRunning || pipelineStarting ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    AI 推演中…
+                    剧组拍摄中 {activeRun ? `· ${activeRun.progress}%` : "…"}
                   </>
                 ) : (
                   <>
-                    <Sparkles className="h-5 w-5" />
-                    开始生成分镜
+                    <Clapperboard className="h-5 w-5" />
+                    全组开机 · AI 剧组流水线
                   </>
                 )}
               </Button>
+              {pipelineRunning && activeRun && (
+                <Progress value={activeRun.progress} className="h-1.5" />
+              )}
+
+              {/* 副路径：仅快速推演三幕（不立项） */}
+              <p className="text-center text-xs text-muted-foreground">
+                只想先试试剧本？
+                <button
+                  onClick={handleGenerate}
+                  disabled={generating || pipelineRunning}
+                  className="mx-1 underline underline-offset-2 transition-colors hover:text-foreground disabled:opacity-40"
+                >
+                  仅快速推演三幕剧本（不立项）
+                </button>
+              </p>
 
               {generating && (
                 <div className="space-y-2 rounded-xl border bg-card p-4">
@@ -203,10 +254,11 @@ export default function Home() {
                 </div>
                 <h3 className="mt-6 text-lg font-bold">工作台准备就绪</h3>
                 <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                  选择题材 → 输入梗概 → 点击「开始生成分镜」
+                  选择题材 → 输入梗概 → 点击「全组开机」
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground/70">
-                  生成后可保存项目、编排镜头轨，随时从「项目库」载入继续创作
+                  剧组流水线自动完成：编剧三幕 → 选角定妆 → 导演拆镜 → 锚定组装 → 后期成包；
+                  也可从「项目库」载入历史项目继续创作
                 </p>
               </div>
             )}
@@ -219,15 +271,17 @@ export default function Home() {
                 className="space-y-6"
               >
                 <ProjectInfoCard />
+                <CrewPipelinePanel />
                 {session.beats.map((beat, idx) => (
                   <ActCard key={beat.index} beat={beat} delay={idx * 0.1} />
                 ))}
+                <AssetLibraryPanel />
                 <TimelinePanel />
                 <RhythmPanel />
 
                 <p className="flex items-center justify-center gap-1.5 pb-2 text-center text-xs text-muted-foreground">
                   <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" />
-                  满意就保存或导出，不满意改梗概再点一次「开始生成分镜」
+                  满意就保存或导出，不满意改梗概再点一次「重新开机」
                   <Gauge className="h-3.5 w-3.5 text-amber-400" />
                 </p>
               </motion.div>
