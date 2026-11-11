@@ -88,7 +88,7 @@ export function CrewPipelinePanel() {
     const ok = await startPipeline();
     if (ok) {
       toast({
-        title: "剧组已开机 🎬",
+        title: "剧组已开机",
         description: "编剧 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包，进度见下方流水线",
       });
     } else {

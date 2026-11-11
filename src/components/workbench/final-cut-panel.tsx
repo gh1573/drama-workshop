@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
-  CheckCircle2,
+  BadgeCheck,
   Download,
   Film,
+  Info,
   Loader2,
   Play,
   RefreshCw,
@@ -18,9 +19,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useWorkbench } from "@/store/workbench";
 
 /**
- * 成片面板（v2.4 §7.9）—— 「一键成片」的结果出口。
+ * 成片面板（v2.4 §7.9 / v2.4.3 §7.4）—— 「一键成片」的结果出口。
  * 三态：待渲染（一键渲染全片）→ 渲染中（进度 + 自动合成）→ 成片（播放器 + 下载/重合成）。
  * 全部镜头就绪且尚未合成时自动触发合成（失败需手动重试，避免死循环）。
+ * 占位模式（noop 视频）下透出通道状态与贴片指引，创作流不阻塞。
  */
 export function FinalCutPanel() {
   const { toast } = useToast();
@@ -33,8 +35,13 @@ export function FinalCutPanel() {
   const fetchTasks = useWorkbench((s) => s.fetchTasks);
 
   const [composeError, setComposeError] = useState<string | null>(null);
+  /** 视频通道是否真机（null = 未探明，按真机口径展示不误导） */
+  const [realVideo, setRealVideo] = useState<boolean | null>(null);
   const composingRef = useRef(false);
-  composingRef.current = composing;
+  // ref 同步放 effect：避免渲染期写 ref（react-hooks/refs），提交后更新不误自动合成 guard
+  useEffect(() => {
+    composingRef.current = composing;
+  }, [composing]);
 
   const sorted = [...clips].sort((a, b) => a.order - b.order);
   const total = sorted.length;
@@ -51,6 +58,19 @@ export function FinalCutPanel() {
     (t) => t.kind === "video" && t.status === "failed"
   );
   const renderProgress = total > 0 ? Math.round((readyCount / total) * 100) : 0;
+
+  // 通道模式探明（一次）：占位模式下渲染任务秒级落 failed + 贴片指引（§7.4）
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/channel");
+        const json = await res.json();
+        if (json?.ok) setRealVideo(Boolean(json.data?.realVideo));
+      } catch {
+        /* 探明失败按真机口径，不误导读用户 */
+      }
+    })();
+  }, []);
 
   // 渲染进行中保持任务轮询（复用 store 的链式轮询）
   useEffect(() => {
@@ -70,7 +90,7 @@ export function FinalCutPanel() {
             variant: "destructive",
           });
         } else {
-          toast({ title: "成片已就绪 🎬", description: "可在下方播放器直接看片" });
+          toast({ title: "成片已就绪", description: "可在下方播放器直接看片" });
         }
       })();
     }
@@ -81,8 +101,10 @@ export function FinalCutPanel() {
     const okDone = await renderAll();
     if (okDone) {
       toast({
-        title: "全片渲染已提交 🎬",
-        description: "视频 + 配音任务已进入渲染队列，进度将实时更新",
+        title: "全片渲染已提交",
+        description: realVideo === false
+          ? "占位模式：视频任务将秒级落为待处理（零配额消耗），配音任务正常出片"
+          : "视频 + 配音任务已进入渲染队列，进度将实时更新",
       });
     } else {
       toast({
@@ -97,10 +119,9 @@ export function FinalCutPanel() {
     setComposeError(null);
     const err = await composeEpisode();
     if (err) {
-      setComposeError(err);
       toast({ title: "合成失败", description: err, variant: "destructive" });
     } else {
-      toast({ title: "成片已就绪 🎬", description: "可在下方播放器直接看片" });
+      toast({ title: "成片已就绪", description: "可在下方播放器直接看片" });
     }
   }
 
@@ -132,14 +153,7 @@ export function FinalCutPanel() {
           >
             渲染中 {activeVideoTasks} 镜在途
           </Badge>
-        ) : (
-          <Badge
-            variant="outline"
-            className="border-zinc-500/40 text-[10px] text-zinc-400"
-          >
-            待渲染
-          </Badge>
-        )}
+        ) : null}
         <span className="ml-auto font-mono text-xs text-muted-foreground">
           {readyCount}/{total} 镜就绪 · 约{" "}
           {Math.round(
@@ -149,7 +163,7 @@ export function FinalCutPanel() {
         </span>
       </div>
 
-      {/* —— 播放器 / 占位 —— */}
+      {/* —— 播放器 / 占位（镜头级进度网格让空态有生命感） —— */}
       <div className="flex justify-center">
         {finalVideoUrl ? (
           <video
@@ -160,7 +174,7 @@ export function FinalCutPanel() {
             className="max-h-[560px] w-auto max-w-full rounded-xl border border-border/70 bg-black shadow-2xl"
           />
         ) : (
-          <div className="flex aspect-[9/16] w-full max-w-[315px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border/70 bg-gradient-to-b from-red-600/5 via-transparent to-amber-500/10 p-6 text-center">
+          <div className="flex aspect-[9/16] w-full max-w-[315px] flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border-2 border-dashed border-border/70 bg-gradient-to-b from-red-600/5 via-transparent to-amber-500/10 p-6 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary/60">
               {composing ? (
                 <Loader2 className="h-7 w-7 animate-spin text-amber-400" />
@@ -182,28 +196,67 @@ export function FinalCutPanel() {
                   ? "合成完成后自动播放"
                   : `还差 ${pendingCount} 个镜头出片`}
             </p>
-            {renderProgress > 0 && !allReady && (
-              <div className="w-full max-w-56 space-y-1">
-                <Progress value={renderProgress} className="h-1.5" />
-                <p className="font-mono text-[10px] text-muted-foreground">
-                  渲染进度 {renderProgress}%
-                </p>
+
+            {/* 镜头级状态网格：一镜一格，就绪亮绿，未出灰格 */}
+            {!composing && !allReady && (
+              <div className="w-full space-y-1.5">
+                <div className="grid grid-cols-6 gap-1">
+                  {sorted.map((c, i) => {
+                    const ready = c.status === "ready" && c.mediaUrl;
+                    return (
+                      <span
+                        key={c.id ?? i}
+                        title={`镜 ${String(i + 1).padStart(2, "0")} · ${
+                          ready ? "已出片" : "待出片"
+                        }`}
+                        className={`flex h-6 items-center justify-center rounded-[5px] border font-mono text-[9px] ${
+                          ready
+                            ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-400"
+                            : "border-border/60 bg-secondary/50 text-muted-foreground/60"
+                        }`}
+                      >
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                    );
+                  })}
+                </div>
+                {renderProgress > 0 && (
+                  <div className="space-y-1">
+                    <Progress value={renderProgress} className="h-1.5" />
+                    <p className="font-mono text-[10px] text-muted-foreground">
+                      渲染进度 {renderProgress}%（{readyCount}/{total}）
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* —— 操作区 —— */}
-      <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+      {/* —— 操作区（CTA 居中 + 流程说明紧随） —— */}
+      <div className="flex flex-col items-center gap-2 border-t border-border/60 pt-3">
         {!finalVideoUrl && !allReady && activeVideoTasks === 0 && (
-          <Button
-            onClick={handleRenderAll}
-            className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 font-bold text-white hover:opacity-90"
-          >
-            <Video className="h-4 w-4" />
-            一键渲染全片（{pendingCount} 镜 + 配音）
-          </Button>
+          <div className="flex flex-col items-center gap-1.5">
+            <Button
+              onClick={handleRenderAll}
+              className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 font-bold text-white shadow-lg shadow-red-600/25 hover:opacity-90"
+            >
+              <Video className="h-4 w-4" />
+              一键渲染全片（{pendingCount} 镜 + 配音）
+            </Button>
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" />
+              渲染 → 合成 → 看片，一条流水线直达成片
+            </p>
+            {realVideo === false && (
+              <p className="flex max-w-md items-start gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/8 px-2.5 py-2 text-left text-[11px] leading-relaxed text-amber-300/90">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                视频通道为占位模式（零配额消耗）：视频任务将秒级标记待处理并给出贴片指引，配音照常出片；
+                真机出片需设置 VIDEO_PROVIDER=zai 后重启。
+              </p>
+            )}
+          </div>
         )}
         {activeVideoTasks > 0 && (
           <p className="flex items-center gap-1.5 text-xs text-amber-400">
@@ -227,7 +280,7 @@ export function FinalCutPanel() {
           </Button>
         )}
         {finalVideoUrl && (
-          <>
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <a href={finalVideoUrl} download target="_blank" rel="noreferrer">
               <Button
                 variant="outline"
@@ -250,14 +303,20 @@ export function FinalCutPanel() {
               )}
               镜头有改动？重新合成
             </Button>
-          </>
+            <p className="flex items-center gap-1 text-xs text-emerald-400">
+              <BadgeCheck className="h-3.5 w-3.5" />
+              片头卡 + 字幕烧录 + 配音混音 已合入成片
+            </p>
+          </div>
         )}
 
-        {/* 失败提示 */}
+        {/* 失败提示（占位模式下改写文案，避免误导重试 */}
         {failedVideoTasks.length > 0 && !finalVideoUrl && (
-          <p className="flex items-center gap-1.5 text-xs text-rose-400">
+          <p className="flex items-center gap-1.5 text-center text-xs text-rose-400">
             <AlertTriangle className="h-3.5 w-3.5" />
-            {failedVideoTasks.length} 个渲染任务失败，可在「剧组进程」页签重试后再次渲染
+            {realVideo === false
+              ? `${failedVideoTasks.length} 个镜头在占位模式下待处理：可逐镜手动贴片（镜头轨内粘贴成片地址），或启用真机通道后重试`
+              : `${failedVideoTasks.length} 个渲染任务失败，可在「剧组进程」页签重试后再次渲染`}
           </p>
         )}
         {composeError && (
@@ -270,12 +329,6 @@ export function FinalCutPanel() {
             >
               重试
             </button>
-          </p>
-        )}
-        {finalVideoUrl && allReady && (
-          <p className="ml-auto flex items-center gap-1 text-xs text-emerald-400">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            片头卡 + 字幕烧录 + 配音混音 已合入成片
           </p>
         )}
       </div>

@@ -6,11 +6,12 @@ import type {
 } from "./types";
 
 /**
- * 视频通道降级实现：真实视频通道不可用时的占位（工厂 VIDEO_PROVIDER=noop 启用）。
+ * 视频通道缺省实现（docs §7.4 通道缺省策略，v2.4.3）。
  *
- * 语义（与既有「手动回填成片」能力对齐，能力不回退）：
- * - 镜头允许在外部工具成片后手动标记完成并粘贴地址；
- * - 本实现返回 failed + 明确原因，由任务中心透出，不阻塞创作流。
+ * 缺省语义（配额墙根除）：
+ * - 批量流水线/一键渲染永不消耗视频配额——真实通道需显式 VIDEO_PROVIDER=zai opt-in；
+ * - 本实现返回 failed + 可读引导，任务中心透出，不阻塞创作流；
+ * - 与既有「手动回填成片」能力对齐：外部工具出片后可回镜头轨粘贴地址。
  */
 export class NoopVideoProvider implements VideoProvider {
   readonly name = "noop-video";
@@ -19,7 +20,7 @@ export class NoopVideoProvider implements VideoProvider {
     return {
       mode: "sync",
       status: "failed",
-      reason: `视频生成通道未启用（目标规格 ${req.aspectRatio} ${req.resolution} ${req.durationSeconds}s）。可在外部工具按最终提示词出片后，回到镜头轨手动标记完成并粘贴成片地址。`,
+      reason: `视频真机通道未启用（占位模式，零配额消耗；目标规格 ${req.aspectRatio} ${req.resolution} ${req.durationSeconds}s）。两种出片方式：① 配额窗口可用时设 VIDEO_PROVIDER=zai 重启后重试此镜；② 外部工具按最终提示词出片后，回镜头轨手动标记完成并粘贴成片地址。`,
     };
   }
 

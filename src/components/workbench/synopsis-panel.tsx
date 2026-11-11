@@ -20,7 +20,7 @@ export function SynopsisPanel() {
         value={synopsis}
         onChange={(e) => setSynopsis(e.target.value)}
         placeholder={`输入你的故事梗概（10~500 字）……\n例如：${genre.sampleSynopsis}`}
-        className="min-h-32 resize-none border-border/70 bg-secondary/30 text-sm leading-relaxed"
+        className="min-h-28 resize-none border-border/70 bg-secondary/30 text-sm leading-relaxed"
       />
       <div className="flex items-center justify-between">
         <Button

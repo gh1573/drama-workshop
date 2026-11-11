@@ -476,17 +476,17 @@ export const ASSET_KIND_META: Record<
 > = {
   character: {
     label: "角色",
-    icon: " 👤",
+    icon: "user",
     cls: "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-300",
   },
   scene: {
     label: "场景",
-    icon: "🏙️",
+    icon: "city",
     cls: "border-sky-500/40 bg-sky-500/10 text-sky-300",
   },
   prop: {
     label: "道具",
-    icon: "🎁",
+    icon: "gift",
     cls: "border-amber-500/40 bg-amber-500/10 text-amber-300",
   },
 };

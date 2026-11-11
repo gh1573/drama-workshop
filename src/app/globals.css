@@ -79,19 +79,19 @@
 }
 
 .dark {
-  /* 黑曜石暖调影棚配色 */
+  /* 黑曜石暖调影棚配色（v2.4.3：muted-foreground 提亮至 ≥4.5:1 可读档） */
   --background: oklch(0.135 0.008 70);
   --foreground: oklch(0.96 0.005 80);
-  --card: oklch(0.175 0.01 70);
+  --card: oklch(0.185 0.01 70);
   --card-foreground: oklch(0.96 0.005 80);
-  --popover: oklch(0.175 0.01 70);
+  --popover: oklch(0.185 0.01 70);
   --popover-foreground: oklch(0.96 0.005 80);
   --primary: oklch(0.92 0.005 80);
   --primary-foreground: oklch(0.17 0.01 70);
   --secondary: oklch(0.235 0.012 70);
   --secondary-foreground: oklch(0.96 0.005 80);
   --muted: oklch(0.235 0.012 70);
-  --muted-foreground: oklch(0.7 0.012 70);
+  --muted-foreground: oklch(0.75 0.012 70);
   --accent: oklch(0.235 0.012 70);
   --accent-foreground: oklch(0.96 0.005 80);
   --destructive: oklch(0.704 0.191 22.216);

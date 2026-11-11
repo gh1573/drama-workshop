@@ -29,11 +29,15 @@ function providers() {
     g.__dramaProviders = {
       text: process.env.TEXT_PROVIDER === "noop" ? new NoopText() : new ZaiTextProvider(),
       image: new ZaiImageProvider(),
-      // 真实视频通道（异步任务制）；VIDEO_PROVIDER=noop 降级占位
+      /**
+       * 视频通道缺省策略（docs §7.4 通道缺省策略，v2.4.3）：
+       * 缺省 = noop 占位（零配额消耗，任务秒级落 failed + 引导贴片）；
+       * 显式 VIDEO_PROVIDER=zai 才接真机异步通道（配额窗口由运维决策开启）。
+       */
       video:
-        process.env.VIDEO_PROVIDER === "noop"
-          ? new NoopVideoProvider()
-          : new ZaiVideoProvider(),
+        process.env.VIDEO_PROVIDER === "zai"
+          ? new ZaiVideoProvider()
+          : new NoopVideoProvider(),
       voice: new ZaiVoiceProvider(),
     };
   }

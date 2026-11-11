@@ -3,15 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  Anchor,
   BadgeCheck,
   Check,
   Clapperboard,
   FolderOpen,
   Gauge,
+  History,
   Layers,
   Film,
   Loader2,
+  PenLine,
+  Play,
+  ScanFace,
+  Scissors,
+  Smartphone,
   Sparkles,
+  UserRound,
   Users,
   Workflow,
 } from "lucide-react";
@@ -38,6 +46,9 @@ import { ProjectInfoCard } from "@/components/workbench/project-info-card";
 import { ProjectLibraryDrawer } from "@/components/workbench/project-library-drawer";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkbench } from "@/store/workbench";
+import { CREW_ROLES, RUN_STAGES, CAMERA_MOVEMENTS } from "@/lib/drama";
+import { GENRES } from "@/lib/genres";
+import type { LucideIcon } from "lucide-react";
 
 const LOADING_STEPS = [
   "解析题材调性与钩子策略",
@@ -48,6 +59,43 @@ const LOADING_STEPS = [
 ];
 
 type WorkbenchTab = "cut" | "script" | "assets" | "rhythm" | "pipeline";
+
+/** 流水线阶段 icon 映射（视图层；阶段数据在 drama.ts RUN_STAGES） */
+const STAGE_ICONS: Record<string, LucideIcon> = {
+  screenwriting: PenLine,
+  casting: UserRound,
+  directing: Clapperboard,
+  anchoring: Anchor,
+  postproduction: Scissors,
+};
+
+/** 开机前置亮点（产品能力导览，数据驱动计数） */
+const VALUE_PROPS: Array<{ icon: LucideIcon; title: string; desc: string; tint: string }> = [
+  {
+    icon: ScanFace,
+    title: "定妆参考图注入",
+    desc: "角色定妆照作为首帧参考提交视频通道，跨镜头面孔一致",
+    tint: "text-sky-400 bg-sky-500/10 border-sky-500/20",
+  },
+  {
+    icon: History,
+    title: "断点恢复 · 限流自愈",
+    desc: "阶段幂等推进，中断原地进行接力；429 指数退避错峰重试",
+    tint: "text-teal-400 bg-teal-500/10 border-teal-500/20",
+  },
+  {
+    icon: Sparkles,
+    title: "一键成片 ffmpeg",
+    desc: "片头卡 + 字幕烧录 + 配音混音 + 逐镜裁剪，直出 9:16 MP4",
+    tint: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+  },
+  {
+    icon: Users,
+    title: "六岗位剧组协作",
+    desc: "制片/编剧/选角/导演/场记/后期按阶段接力，全链路可观测",
+    tint: "text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20",
+  },
+];
 
 export default function Home() {
   const { toast } = useToast();
@@ -63,12 +111,18 @@ export default function Home() {
   const startPipeline = useWorkbench((s) => s.startPipeline);
 
   // 工作台页签：流水线运行中自动切「剧组进程」，成功后自动切「成片」
+  // （订阅状态迁移而非渲染期同步 setState，仅切换瞬间生效，用户手动切页不被覆盖）
   const [tab, setTab] = useState<WorkbenchTab>("cut");
-  const runStatus = activeRun?.status ?? null;
   useEffect(() => {
-    if (runStatus === "running") setTab("pipeline");
-    else if (runStatus === "succeeded") setTab("cut");
-  }, [runStatus]);
+    const unsub = useWorkbench.subscribe((s, prev) => {
+      const next = s.activeRun?.status ?? null;
+      const before = prev.activeRun?.status ?? null;
+      if (next === before) return;
+      if (next === "running") setTab("pipeline");
+      else if (next === "succeeded") setTab("cut");
+    });
+    return unsub;
+  }, []);
 
   // v2.4.1 §7.10：页签切换重置右列内滚位置，避免新页签停在旧滚动深处
   const workColRef = useRef<HTMLDivElement>(null);
@@ -76,12 +130,15 @@ export default function Home() {
     workColRef.current?.scrollTo({ top: 0 });
   }, [tab]);
 
-  // 开机后左列配置自动折叠
+  // 开机后左列配置自动折叠（订阅会话从无到有的迁移，用户可再次展开）
   const [configOpen, setConfigOpen] = useState(true);
   const hasSession = !!session;
   useEffect(() => {
-    if (hasSession) setConfigOpen(false);
-  }, [hasSession]);
+    const unsub = useWorkbench.subscribe((s, prev) => {
+      if (!prev.session && s.session) setConfigOpen(false);
+    });
+    return unsub;
+  }, []);
 
   const pipelineRunning = activeRun?.status === "running";
 
@@ -129,7 +186,7 @@ export default function Home() {
     const ok = await startPipeline();
     if (ok) {
       toast({
-        title: "剧组已开机 🎬",
+        title: "剧组已开机",
         description: "编剧 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包，进度见「剧组进程」页签",
       });
     } else {
@@ -184,7 +241,11 @@ export default function Home() {
               <FolderOpen className="h-3.5 w-3.5" />
               项目库
             </Button>
-            <Badge className="hidden border-0 bg-gradient-to-r from-red-600/85 to-amber-500/85 text-white sm:inline-flex">
+            <Badge
+              variant="outline"
+              className="hidden gap-1.5 border-border/70 text-muted-foreground sm:inline-flex"
+            >
+              <Smartphone className="h-3 w-3" />
               9:16 竖屏短剧工作台
             </Badge>
           </div>
@@ -195,7 +256,7 @@ export default function Home() {
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:min-h-0 lg:overflow-hidden lg:py-4">
         <div className="grid gap-6 lg:grid-cols-12 lg:h-full lg:min-h-0">
           {/* ===== 左列：创作配置（开机后自动折叠） ===== */}
-          <div className="space-y-5 lg:col-span-4 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-1">
+          <div className="space-y-4 lg:col-span-4 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-1">
             {hasSession && (
               <Collapsible
                 open={configOpen}
@@ -253,7 +314,7 @@ export default function Home() {
             )}
 
             {!hasSession && (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <GenrePanel />
                 <SynopsisPanel />
                 <ModelConfigPanel />
@@ -330,22 +391,134 @@ export default function Home() {
             )}
 
             {!generating && !session && (
-              <div className="flex min-h-[460px] flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-card/40 p-8 text-center">
-                <div className="relative flex h-44 w-24 items-center justify-center rounded-2xl border-2 border-border/80 bg-gradient-to-b from-red-600/10 via-transparent to-amber-500/10">
-                  <Sparkles className="h-8 w-8 text-amber-400/80" />
-                  <span className="absolute bottom-2 text-[10px] text-muted-foreground">
-                    9:16
+              <section className="flex min-h-[520px] flex-col gap-4 rounded-2xl border border-border/70 bg-card/50 p-5 sm:p-6">
+                {/* —— 导览头部 —— */}
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-red-600 to-amber-500 shadow-lg shadow-red-600/20">
+                    <Clapperboard className="h-4.5 w-4.5 text-white" />
                   </span>
+                  <div>
+                    <h2 className="text-lg font-bold tracking-wide">
+                      AI 剧组 · 五阶段流水线
+                    </h2>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      左侧选择题材、输入梗概并「全组开机」后，从一句创意到可下载的 9:16 成片全流程自动推进。
+                    </p>
+                  </div>
                 </div>
-                <h3 className="mt-6 text-lg font-bold">工作台准备就绪</h3>
-                <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                  选择题材 → 输入梗概 → 点击「全组开机」
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground/70">
-                  剧组流水线自动完成：编剧三幕 → 选角定妆 → 导演拆镜 → 锚定组装 → 后期成包；
-                  也可从「项目库」载入历史项目继续创作
-                </p>
-              </div>
+
+                {/* —— 五阶段导览（数据驱动：RUN_STAGES × CREW_ROLES） —— */}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                  {RUN_STAGES.map((st, i) => {
+                    const Icon = STAGE_ICONS[st.key] ?? Sparkles;
+                    const role = CREW_ROLES[st.role as keyof typeof CREW_ROLES];
+                    return (
+                      <div
+                        key={st.key}
+                        className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card p-3 transition-colors hover:border-muted-foreground/30"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[10px] text-muted-foreground/70">
+                            0{i + 1}
+                          </span>
+                          <Icon className={`h-4 w-4 ${role?.color ?? ""}`} />
+                        </div>
+                        <p className="text-xs font-semibold leading-tight">{st.name}</p>
+                        <p className="text-[10px] leading-snug text-muted-foreground">
+                          {role?.duty}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* —— 成片预览手机模型 × 能力亮点 —— */}
+                <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-[200px,1fr]">
+                  <div className="relative mx-auto flex aspect-[9/16] max-h-[380px] w-full max-w-[200px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black shadow-2xl">
+                    {/* 弱光晕场景底 */}
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(239,68,68,0.18),transparent_60%)]" />
+                    <div className="absolute left-1/2 top-2 h-1 w-14 -translate-x-1/2 rounded-full bg-white/10" />
+                    <div className="absolute left-2.5 top-5 flex gap-1.5">
+                      <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[9px] text-white/80">
+                        EP.01
+                      </span>
+                      <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[9px] text-white/60">
+                        1080p
+                      </span>
+                    </div>
+                    <div className="relative flex flex-1 flex-col items-center justify-center gap-2.5">
+                      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-xl shadow-red-600/30">
+                        <Play className="h-6 w-6 translate-x-[1px] text-red-600" />
+                      </span>
+                      <p className="font-mono text-[9px] text-white/40">
+                        SHOT 03 · 逆光特写 · 5s
+                      </p>
+                    </div>
+                    {/* 章节刻度（分镜时间轴示意） */}
+                    <div className="absolute inset-x-4 bottom-[52px] flex gap-1">
+                      {[0.4, 0.6, 1, 0.7, 0.5].map((w, i) => (
+                        <span
+                          key={i}
+                          style={{ flexGrow: w }}
+                          className={`h-4 rounded-[3px] border border-white/10 ${
+                            i === 2
+                              ? "bg-gradient-to-b from-red-600/70 to-amber-500/70"
+                              : "bg-white/[0.07]"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <div className="absolute inset-x-4 bottom-8 space-y-1.5">
+                      <div className="h-1 rounded-full bg-white/10">
+                        <div className="h-1 w-2/5 rounded-full bg-gradient-to-r from-red-600 to-amber-500" />
+                      </div>
+                      <div className="flex justify-between font-mono text-[9px] text-white/50">
+                        <span>00:24</span>
+                        <span>00:58</span>
+                      </div>
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/60 to-transparent" />
+                  </div>
+
+                  <div className="grid content-center gap-2.5">
+                    {VALUE_PROPS.map((v) => (
+                      <div
+                        key={v.title}
+                        className="flex items-start gap-3 rounded-xl border border-border/60 bg-card p-3.5"
+                      >
+                        <span
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${v.tint}`}
+                        >
+                          <v.icon className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <p className="text-xs font-semibold">{v.title}</p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                            {v.desc}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* —— 数据规模尾条 —— */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/60 pt-3 text-[10px] text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="h-3 w-3 text-amber-400/80" />
+                    {GENRES.length} 套题材预设
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Film className="h-3 w-3 text-sky-400/80" />
+                    {Object.keys(CAMERA_MOVEMENTS).length} 式运镜库
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Users className="h-3 w-3 text-fuchsia-400/80" />
+                    {Object.keys(CREW_ROLES).length} 个剧组岗位
+                  </span>
+                  <span className="ml-auto font-mono">v2.4 · 配额友好的占位视频通道</span>
+                </div>
+              </section>
             )}
 
             {!generating && session && (
@@ -389,10 +562,6 @@ export default function Home() {
 
                   <TabsContent value="cut" className="mt-0 space-y-4">
                     <FinalCutPanel />
-                    <p className="flex items-center justify-center gap-1.5 pb-2 text-center text-xs text-muted-foreground">
-                      <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" />
-                      渲染 → 合成 → 看片，一条流水线直达成片
-                    </p>
                   </TabsContent>
 
                   <TabsContent value="script" className="mt-0 space-y-5">

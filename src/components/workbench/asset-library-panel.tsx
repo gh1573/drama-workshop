@@ -27,6 +27,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { ASSET_KIND_META, type AssetDTO, type AssetKind } from "@/lib/drama";
 import { useWorkbench } from "@/store/workbench";
+import { UserRound } from "lucide-react";
+import { ASSET_ICONS } from "./asset-icons";
 
 /**
  * 资产库面板 —— 一致性锚定的可视化载体（角色/场景/道具）。
@@ -48,6 +50,7 @@ function AssetCard({
   portraitBusy: boolean;
 }) {
   const meta = ASSET_KIND_META[asset.kind];
+  const KindIcon = ASSET_ICONS[meta.icon] ?? UserRound;
   return (
     <div className="flex gap-3 rounded-lg border border-border/60 bg-secondary/20 p-3">
       {asset.portraitUrl ? (
@@ -57,8 +60,8 @@ function AssetCard({
           className="h-24 w-16 shrink-0 rounded-md border border-border/60 object-cover"
         />
       ) : (
-        <div className="flex h-24 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-border/60 bg-background/40 text-xl">
-          {meta.icon.trim() || "🎬"}
+        <div className="flex h-24 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-border/60 bg-background/40">
+          <KindIcon className="h-7 w-7 text-muted-foreground/60" />
         </div>
       )}
       <div className="min-w-0 flex-1 space-y-1.5">
@@ -201,7 +204,7 @@ export function AssetLibraryPanel() {
       return;
     }
     toast({
-      title: "定妆照任务已提交 📸",
+      title: "定妆照任务已提交",
       description: `${asset.name} · 生成完成后自动回填资产卡，可在流水线面板任务中心查看进度`,
     });
   }
@@ -252,12 +255,16 @@ export function AssetLibraryPanel() {
       ) : (
         <Tabs defaultValue="character">
           <TabsList className="h-9 w-full justify-start overflow-x-auto bg-secondary/40">
-            {KIND_ORDER.map((kind) => (
-              <TabsTrigger key={kind} value={kind} className="text-xs">
-                {ASSET_KIND_META[kind].icon} {ASSET_KIND_META[kind].label}
-                <span className="ml-1 text-muted-foreground">{byKind[kind].length}</span>
-              </TabsTrigger>
-            ))}
+            {KIND_ORDER.map((kind) => {
+              const KindIcon = ASSET_ICONS[ASSET_KIND_META[kind].icon] ?? UserRound;
+              return (
+                <TabsTrigger key={kind} value={kind} className="gap-1.5 text-xs">
+                  <KindIcon className="h-3.5 w-3.5" />
+                  {ASSET_KIND_META[kind].label}
+                  <span className="text-muted-foreground">{byKind[kind].length}</span>
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
           {KIND_ORDER.map((kind) => (
             <TabsContent key={kind} value={kind} className="mt-3">
@@ -357,7 +364,7 @@ export function AssetLibraryPanel() {
       {/* 后备提示：定妆照任务进行中的资产 */}
       {portraitActiveIds.size > 0 && (
         <p className="text-center text-[10px] text-muted-foreground">
-          📸 {portraitActiveIds.size} 张定妆照生成中，完成后自动回填资产卡
+          {portraitActiveIds.size} 张定妆照生成中，完成后自动回填资产卡
         </p>
       )}
     </section>

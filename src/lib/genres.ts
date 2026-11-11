@@ -10,7 +10,7 @@ export const GENRES: GenrePreset[] = [
     name: "战神逆袭 · 龙王归来",
     short: "战神逆袭",
     badge: "高燃打脸 · 爽感爆棚",
-    icon: "⚔️",
+    icon: "swords",
     hookTactic:
       "0~3s 冲突爆发：撕毁婚书当众羞辱，主角眼神冰冷，身份信物若隐若现",
     musicMood: "重低音震荡战鼓、霸气交响乐渐强、金属拔剑音效",
@@ -27,7 +27,7 @@ export const GENRES: GenrePreset[] = [
     name: "赘婿甜宠 · 隐藏首富",
     short: "赘婿甜宠",
     badge: "反差萌 · 甜到齁",
-    icon: "💐",
+    icon: "flower",
     hookTactic:
       "0~3s 反差登场：主角被嘲讽吃软饭，转身低调接起神秘电话，声音是千亿集团会议的背景音",
     musicMood: "轻快钢琴与弦乐交织、心动瞬间八音盒音效、华丽转场重拍",
@@ -44,7 +44,7 @@ export const GENRES: GenrePreset[] = [
     name: "重生复仇 · 逆天改命",
     short: "重生复仇",
     badge: "前世记忆 · 步步为营",
-    icon: "🕰️",
+    icon: "hourglass",
     hookTactic:
       "0~3s 死亡瞬间闪回：被害坠楼与睁眼回到十年前叠化，仇人笑脸特写与记忆重合",
     musicMood: "空灵女声吟唱渐入、心跳音效渐强、时钟倒转混响",
@@ -61,7 +61,7 @@ export const GENRES: GenrePreset[] = [
     name: "悬疑反转 · 层层迷局",
     short: "悬疑反转",
     badge: "高能烧脑 · 真相反转",
-    icon: "🔍",
+    icon: "search",
     hookTactic:
       "0~3s 异常细节切入：欢庆画面中一个反常的冷笑特写，关键证据在背景里一闪而过",
     musicMood: "低频弦乐持续压迫、突然静默留白、玻璃碎裂与耳语声",
@@ -78,7 +78,7 @@ export const GENRES: GenrePreset[] = [
     name: "穿越古代 · 权谋天下",
     short: "穿越古代",
     badge: "步步惊心 · 扶摇直上",
-    icon: "🏯",
+    icon: "landmark",
     hookTactic:
       "0~3s 身份错位：现代灵魂睁眼身处古代宫廷，刺客刀光与手机屏幕碎影交错",
     musicMood: "古筝与编钟混响、战马嘶鸣、朝堂钟声回荡",
@@ -95,7 +95,7 @@ export const GENRES: GenrePreset[] = [
     name: "都市神豪 · 挥金如土",
     short: "都市神豪",
     badge: "低调奢华 · 土豪碾压",
-    icon: "💰",
+    icon: "wallet",
     hookTactic:
       "0~3s 装扮反差：主角穿地摊货进奢侈品店被驱赶，反手掏出黑金卡全店买下",
     musicMood: "电子节拍混搭嘻哈、钞票翻动音效、超跑引擎轰鸣",
@@ -112,7 +112,7 @@ export const GENRES: GenrePreset[] = [
     name: "霸道总裁 · 强势契约",
     short: "霸道总裁",
     badge: "高冷禁欲 · 先婚后爱",
-    icon: "🍷",
+    icon: "wine",
     hookTactic:
       "0~3s 契约碰撞：一纸婚约甩在桌上，男主俯身逼近，眼神危险而克制",
     musicMood: "大提琴沉郁主旋律、电梯开门音效、高跟鞋走廊回响",
@@ -129,7 +129,7 @@ export const GENRES: GenrePreset[] = [
     name: "马甲大佬 · 全能团宠",
     short: "马甲大佬",
     badge: "大佬马甲 · 逐层揭开",
-    icon: "🎭",
+    icon: "drama",
     hookTactic:
       "0~3s 身份亮相：被全场嘲小看的路人，直播镜头意外扫过其与世界领奖台的合影",
     musicMood: "电音混搭军鼓、消息提示音连响、全场哗然人声鼎沸",

@@ -34,7 +34,7 @@ export function ModelConfigPanel() {
       icon={<MonitorPlay className="h-4 w-4" />}
     >
       <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2 space-y-1.5">
+        <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">AI 视频基模</Label>
           <Select
             value={modelConfig.videoModel}
@@ -47,6 +47,28 @@ export function ModelConfigPanel() {
               {VIDEO_MODELS.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
                   {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">剧本思考深度</Label>
+          <Select
+            value={modelConfig.scriptThinkingLevel}
+            onValueChange={(v) =>
+              patchModelConfig({
+                scriptThinkingLevel: v as "low" | "medium" | "high",
+              })
+            }
+          >
+            <SelectTrigger className="w-full border-border/70 bg-secondary/30">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {THINKING_LEVELS.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -88,30 +110,8 @@ export function ModelConfigPanel() {
             </SelectContent>
           </Select>
         </div>
-        <div className="col-span-2 space-y-1.5">
-          <Label className="text-xs text-muted-foreground">剧本思考深度</Label>
-          <Select
-            value={modelConfig.scriptThinkingLevel}
-            onValueChange={(v) =>
-              patchModelConfig({
-                scriptThinkingLevel: v as "low" | "medium" | "high",
-              })
-            }
-          >
-            <SelectTrigger className="w-full border-border/70 bg-secondary/30">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {THINKING_LEVELS.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
-      <div className="flex items-center justify-between rounded-lg border border-border/70 bg-secondary/30 p-3">
+      <div className="flex items-center justify-between rounded-lg border border-border/70 bg-secondary/30 px-3 py-2.5">
         <div>
           <p className="flex items-center gap-1.5 text-sm font-medium">
             <Wand2 className="h-3.5 w-3.5 text-fuchsia-400" />

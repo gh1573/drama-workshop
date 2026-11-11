@@ -16,7 +16,7 @@ export function StepCard({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-4 rounded-xl border bg-card p-5">
+    <section className="space-y-3.5 rounded-xl border bg-card p-4">
       <div className="flex items-center gap-2">
         <span className="rounded-md bg-secondary px-2 py-0.5 text-xs font-semibold text-muted-foreground">
           {step}

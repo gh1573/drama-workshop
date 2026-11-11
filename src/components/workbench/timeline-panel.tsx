@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { UserRound } from "lucide-react";
+import { ASSET_ICONS } from "./asset-icons";
 import {
   ASSET_KIND_META,
   CLIP_STATUS,
@@ -89,7 +91,7 @@ export function TimelinePanel() {
       toast({ title: "渲染提交失败", description: err, variant: "destructive" });
     } else {
       toast({
-        title: "已提交渲染 🎬",
+        title: "已提交渲染",
         description: `「${clip.name}」进入视频队列，完成后自动回填成片`,
       });
     }
@@ -364,16 +366,21 @@ export function TimelinePanel() {
                         {shotRefs
                           .filter((r) => r.clipId === clip.id)
                           .slice(0, 3)
-                          .map((r) => (
-                            <Badge
-                              key={r.id}
-                              variant="outline"
-                              className="shrink-0 border-border/60 text-[10px] text-muted-foreground"
-                            >
-                              {ASSET_KIND_META[r.kind]?.icon}
-                              {r.assetName}
-                            </Badge>
-                          ))}
+                          .map((r) => {
+                            const RefIcon =
+                              ASSET_ICONS[ASSET_KIND_META[r.kind]?.icon ?? ""] ??
+                              UserRound;
+                            return (
+                              <Badge
+                                key={r.id}
+                                variant="outline"
+                                className="shrink-0 gap-1 border-border/60 text-[10px] text-muted-foreground"
+                              >
+                                <RefIcon className="h-3 w-3" />
+                                {r.assetName}
+                              </Badge>
+                            );
+                          })}
                         {clip.mediaUrl && (
                           <a
                             href={clip.mediaUrl}

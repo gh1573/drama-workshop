@@ -226,7 +226,9 @@ export function ProjectLibraryDrawer() {
                   </Badge>
                 </div>
                 <ul className="space-y-2.5 border-l border-amber-500/20 pl-3">
-                  {g.episodes.map((p) => renderCard(p))}
+                  {g.episodes.map((p) => (
+                    <li key={p.id}>{renderCard(p)}</li>
+                  ))}
                 </ul>
               </li>
             ))}
