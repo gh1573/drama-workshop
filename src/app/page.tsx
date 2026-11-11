@@ -70,6 +70,12 @@ export default function Home() {
     else if (runStatus === "succeeded") setTab("cut");
   }, [runStatus]);
 
+  // v2.4.1 §7.10：页签切换重置右列内滚位置，避免新页签停在旧滚动深处
+  const workColRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    workColRef.current?.scrollTo({ top: 0 });
+  }, [tab]);
+
   // 开机后左列配置自动折叠
   const [configOpen, setConfigOpen] = useState(true);
   const hasSession = !!session;
@@ -136,7 +142,7 @@ export default function Home() {
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-background text-foreground">
+    <div className="relative flex min-h-dvh flex-col overflow-x-hidden bg-background text-foreground lg:h-dvh lg:min-h-0 lg:overflow-hidden">
       {/* 氛围光效 */}
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute -left-24 -top-32 h-96 w-96 rounded-full bg-red-600/10 blur-3xl" />
@@ -185,10 +191,11 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-        <div className="grid gap-6 lg:grid-cols-12">
+      {/* v2.4.1 §7.10：桌面端锁定视口，main 占满剩余高度且不滚动，双列各自内滚 */}
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:min-h-0 lg:overflow-hidden lg:py-4">
+        <div className="grid gap-6 lg:grid-cols-12 lg:h-full lg:min-h-0">
           {/* ===== 左列：创作配置（开机后自动折叠） ===== */}
-          <div className="space-y-5 lg:col-span-4">
+          <div className="space-y-5 lg:col-span-4 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-1">
             {hasSession && (
               <Collapsible
                 open={configOpen}
@@ -309,8 +316,11 @@ export default function Home() {
             {hasSession && <ProjectInfoCard />}
           </div>
 
-          {/* ===== 右列：工作台页签（一次聚焦一个环节） ===== */}
-          <div className="lg:col-span-8">
+          {/* ===== 右列：工作台页签（一次聚焦一个环节，内容内滚） ===== */}
+          <div
+            ref={workColRef}
+            className="lg:col-span-8 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pl-1"
+          >
             {generating && (
               <div className="space-y-4">
                 <Skeleton className="h-40 w-full rounded-xl" />
@@ -412,8 +422,8 @@ export default function Home() {
 
       <ProjectLibraryDrawer />
 
-      {/* 页脚（吸底） */}
-      <footer className="mt-auto border-t border-border/60 bg-background/60">
+      {/* 页脚（移动端展示；桌面端锁定视口布局下隐藏，见 §7.10） */}
+      <footer className="mt-auto border-t border-border/60 bg-background/60 lg:hidden">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-1.5 px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:px-6">
           <p>制作团队：剧集智能创编工坊 (DRAMA STUDIO) · 本页为该工具的复刻实现，仅用于剧本创意推演</p>
           <p>三幕结构：Hook 黄金开头 → Clash 绝地反转 → Cliffhanger 卡点留钩</p>

@@ -17,7 +17,11 @@ import {
 import { getTextProvider, parseJsonLoose } from "@/server/providers";
 import { composeVideoPrompt } from "@/server/engines/prompt-engine";
 import { ORPHAN_RECOVERY_WINDOW_MS } from "@/config/runtime";
-import { CASTING_FACE_RULE } from "@/config/templates";
+import {
+  CASTING_FACE_RULE,
+  ETHNICITY_FALLBACK,
+  ETHNICITY_KEYWORDS,
+} from "@/config/templates";
 import { breakdownAct } from "./breakdown-service";
 import {
   replaceActClips,
@@ -377,6 +381,24 @@ ${script}
 {"characters":[{"name":"…","lockedAppearance":"…","visualAnchor":"…"}],"scenes":[{"name":"…","lockedAppearance":"…","visualAnchor":"…"}],"props":[{"name":"…","lockedAppearance":"…","visualAnchor":"…"}]}`;
 }
 
+/**
+ * 角色锚点 ethnicity 兜底校验（v2.4.1，docs §7.1 第 5 条防线二）：
+ * 不信任 LLM 遵守选角铁律——落库前确定性地校验每个角色锚点是否含
+ * ethnicity 关键词，缺失则追加兜底词。场景/道具不涉及面孔，不校验。
+ */
+function ensureCharacterEthnicity(drafts: CastingAssetDraft[]): CastingAssetDraft[] {
+  return drafts.map((d) => {
+    const hasEthnicity = ETHNICITY_KEYWORDS.some((kw) =>
+      d.visualAnchor.toLowerCase().includes(kw)
+    );
+    if (hasEthnicity) return d;
+    return {
+      ...d,
+      visualAnchor: `${d.visualAnchor}, ${ETHNICITY_FALLBACK}`,
+    };
+  });
+}
+
 function parseCasting(
   raw: string
 ): { characters: CastingAssetDraft[]; scenes: CastingAssetDraft[]; props: CastingAssetDraft[] } | null {
@@ -403,7 +425,7 @@ function parseCasting(
       .filter((x): x is CastingAssetDraft => !!x)
       .slice(0, max);
 
-  const characters = map(data.characters, 6);
+  const characters = ensureCharacterEthnicity(map(data.characters, 6));
   const scenes = map(data.scenes, 5);
   const props = map(data.props, 4);
   if (characters.length === 0 && scenes.length === 0) return null;

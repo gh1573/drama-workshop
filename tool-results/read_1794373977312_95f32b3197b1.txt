@@ -1,0 +1,957 @@
+     1→import { db } from "@/lib/db";
+     2→import { RouteError } from "@/lib/api-utils";
+     3→import {
+     4→  ACT_MOVEMENT_POOLS,
+     5→  CAMERA_MOVEMENTS,
+     6→  NARRATIVE_META,
+     7→  RUN_STAGES,
+     8→  type AssetKind,
+     9→  type CrewRoleKey,
+    10→  type NarrativeFunction,
+    11→  type RunDTO,
+    12→  type RunLogEntry,
+    13→  type RunStageInfo,
+    14→  type ShotBreakdownItem,
+    15→  type StoryBeat,
+    16→} from "@/lib/drama";
+    17→import { getTextProvider, parseJsonLoose } from "@/server/providers";
+    18→import { composeVideoPrompt } from "@/server/engines/prompt-engine";
+    19→import { ORPHAN_RECOVERY_WINDOW_MS } from "@/config/runtime";
+    20→import { CASTING_FACE_RULE } from "@/config/templates";
+    21→import { breakdownAct } from "./breakdown-service";
+    22→import {
+    23→  replaceActClips,
+    24→  updateBeatEnergy,
+    25→  updateProject,
+    26→} from "./project-service";
+    27→import type { ProductionRun, Project, StoryBeat as DbBeat } from "@prisma/client";
+    28→
+    29→/**
+    30→ * 剧组流水线服务 —— 「AI 剧组」的编排核心。
+    31→ *
+    32→ * 产品定位：不是视频生成器，而是一条剧组流水线——
+    33→ * 制片立项 → 编剧三幕 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包。
+    34→ * 普通用户不慬运镜/景别/轴线，也能拿到专业级制作包。
+    35→ *
+    36→ * 工程语义：
+    37→ * - 每个阶段幂等（断点重试从首个未成功阶段继续）；
+    38→ * - 阶段快照 + 剧组日志持久化，前端轮询即可获得完整生产观测；
+    39→ * - LLM 调用全部经 Provider 通道（解析级重试 2 次）。
+    40→ */
+    41→
+    42→type StageKey = string;
+    43→
+    44→interface StageResult {
+    45→  summary: string;
+    46→}
+    47→
+    48→const STAGE_START_MESSAGE: Record<string, string> = {
+    49→  screenwriting: "领取任务：围绕黄金 3 秒钩子推演三幕剧本（节奏模式：{mode}）",
+    50→  casting: "通读剧本，提取角色 / 场景 / 道具，逐一完成定妆锁定",
+    51→  directing: "逐幕拆解分镜：正反打节奏、景别交替、运镜梯级调度",
+    52→  anchoring: "按「角色段 → 场景段 → 道具段 → 动作段 → 运镜段 → 影调段」组装每镜提示词",
+    53→  postproduction: "字幕 / 音效 / 配乐三轨落轨，生成情绪能量曲线",
+    54→};
+    55→
+    56→// ============================================================
+    57→// 行映射与解析
+    58→// ============================================================
+    59→
+    60→function parseStages(raw: string): RunStageInfo[] {
+    61→  try {
+    62→    const parsed = JSON.parse(raw) as RunStageInfo[];
+    63→    if (Array.isArray(parsed) && parsed.length === RUN_STAGES.length) {
+    64→      return parsed;
+    65→    }
+    66→  } catch {
+    67→    /* fallthrough */
+    68→  }
+    69→  return freshStages();
+    70→}
+    71→
+    72→function parseJournal(raw: string): RunLogEntry[] {
+    73→  try {
+    74→    const parsed = JSON.parse(raw) as RunLogEntry[];
+    75→    if (Array.isArray(parsed)) return parsed;
+    76→  } catch {
+    77→    /* fallthrough */
+    78→  }
+    79→  return [];
+    80→}
+    81→
+    82→function freshStages(): RunStageInfo[] {
+    83→  return RUN_STAGES.map((def) => ({
+    84→    key: def.key,
+    85→    name: def.name,
+    86→    role: def.role,
+    87→    status: "pending",
+    88→    startedAt: null,
+    89→    finishedAt: null,
+    90→    error: null,
+    91→  }));
+    92→}
+    93→
+    94→function toRunDTO(row: ProductionRun): RunDTO {
+    95→  return {
+    96→    id: row.id,
+    97→    projectId: row.projectId,
+    98→    status: row.status as RunDTO["status"],
+    99→    progress: row.progress,
+   100→    stage: row.stage,
+   101→    stages: parseStages(row.stages),
+   102→    journal: parseJournal(row.journal),
+   103→    error: row.error,
+   104→    createdAt: row.createdAt.toISOString(),
+   105→    updatedAt: row.updatedAt.toISOString(),
+   106→  };
+   107→}
+   108→
+   109→// ============================================================
+   110→// 持久化小件
+   111→// ============================================================
+   112→
+   113→async function loadRun(runId: string): Promise<ProductionRun> {
+   114→  const row = await db.productionRun.findUnique({ where: { id: runId } });
+   115→  if (!row) throw new RouteError("流水线运行不存在", 404);
+   116→  return row;
+   117→}
+   118→
+   119→async function appendLog(
+   120→  runId: string,
+   121→  role: CrewRoleKey,
+   122→  message: string
+   123→): Promise<void> {
+   124→  const row = await db.productionRun.findUnique({
+   125→    where: { id: runId },
+   126→    select: { journal: true },
+   127→  });
+   128→  const journal = parseJournal(row?.journal ?? "[]");
+   129→  journal.push({ at: new Date().toISOString(), role, message });
+   130→  // 日志上限 200 条，防止极端情况无限膨胀
+   131→  const trimmed = journal.slice(-200);
+   132→  await db.productionRun.update({
+   133→    where: { id: runId },
+   134→    data: { journal: JSON.stringify(trimmed) },
+   135→  });
+   136→}
+   137→
+   138→async function patchStages(
+   139→  runId: string,
+   140→  stages: RunStageInfo[]
+   141→): Promise<void> {
+   142→  await db.productionRun.update({
+   143→    where: { id: runId },
+   144→    data: { stages: JSON.stringify(stages) },
+   145→  });
+   146→}
+   147→
+   148→async function recomputeProgress(runId: string): Promise<void> {
+   149→  const row = await loadRun(runId);
+   150→  const stages = parseStages(row.stages);
+   151→  const done = stages
+   152→    .filter((s) => s.status === "succeeded")
+   153→    .reduce(
+   154→      (sum, s) =>
+   155→        sum + (RUN_STAGES.find((d) => d.key === s.key)?.weight ?? 0),
+   156→      0
+   157→    );
+   158→  const total = RUN_STAGES.reduce((sum, d) => sum + d.weight, 0);
+   159→  await db.productionRun.update({
+   160→    where: { id: runId },
+   161→    data: { progress: Math.min(100, Math.round((done / total) * 100)) },
+   162→  });
+   163→}
+   164→
+   165→// ============================================================
+   166→// 编剧阶段（提示词自 v1 generate 路由迁移，质量约束不变）
+   167→// ============================================================
+   168→
+   169→const PACING_FALLBACK: Record<NarrativeFunction, string> = {
+   170→  hook: "0~3s 强冲突切入！拒绝无效铺垫，拉满情绪张力",
+   171→  climax: "4~8s 顶级反转登场，局势瞬间颠覆",
+   172→  cliffhanger: "9~12s 意犹未尽，悬念卡点让观众欲罢不能",
+   173→};
+   174→
+   175→function thinkingModeLabel(level: string): string {
+   176→  if (level === "high") return "伏笔回收";
+   177→  if (level === "medium") return "节奏铺垫";
+   178→  return "直给爆点";
+   179→}
+   180→
+   181→function buildScreenwritingMessages(project: Project): {
+   182→  messages: Array<{ role: "assistant" | "user"; content: string }>;
+   183→} {
+   184→  const thinkingLevel = project.thinkingLevel;
+   185→  const enhance = project.promptEnhance;
+   186→
+   187→  const levelDesc =
+   188→    thinkingLevel === "high"
+   189→      ? "伏笔回收模式：第一幕埋入一个不起眼的道具/细节伏笔，第三幕反转时回收该伏笔，制造双重反转"
+   190→      : thinkingLevel === "medium"
+   191→        ? "节奏铺垫模式：第一幕冲突前允许 1 拍情绪铺垫，随后立即爆点"
+   192→        : "直给爆点模式：第一幕 0 秒直接进入最强冲突，拒绝任何铺垫";
+   193→
+   194→  const enhanceDesc = enhance
+   195→    ? "【提示词增强已开启】每幕的 promptGuidance 需在中文镜头提示末尾追加 2~3 个英文电影级关键词（如 cinematic lighting, slow motion, anamorphic flare, shallow depth of field），用逗号自然衔接，强化 AI 视频出片质量。"
+   196→    : "【提示词增强已关闭】promptGuidance 仅使用中文镜头提示。";
+   197→
+   198→  const poolDesc = (fn: NarrativeFunction) =>
+   199→    ACT_MOVEMENT_POOLS[fn]
+   200→      .map((k) => `${k}=${CAMERA_MOVEMENTS[k].label}`)
+   201→      .join("、");
+   202→
+   203→  const system = `你是一位顶级竖屏微短剧编剧兼分镜导演，精通 9:16 黄金三幕结构与 AI 视频提示词工程，作品以"3 秒抓人、8 秒反转、12 秒留钩"著称。
+   204→
+   205→【任务】根据【题材预设】与【剧情梗概】，产出一支约 12 秒竖屏短剧的完整三幕分镜脚本，严格输出 JSON。
+   206→
+   207→【三幕结构（必须严格遵守）】
+   208→- 第 1 幕 narrativeFunction=hook（0~3s 黄金开头）：actTitle 固定为「第一幕：极致冲突 (黄金开头 Hook)」
+   209→- 第 2 幕 narrativeFunction=climax（4~8s 绝地反转）：actTitle 固定为「第二幕：身份揭晓 (绝地反转 Clash)」
+   210→- 第 3 幕 narrativeFunction=cliffhanger（9~12s 卡点留钩）：actTitle 固定为「第三幕：致命悬念 (卡点留钩 Cliffhanger)」
+   211→
+   212→【节奏策略（本次采用）】${levelDesc}
+   213→
+   214→【三幕梯级运镜调度（视听导演硬约束）】
+   215→三幕必须呈现递进的视角层次，禁止同质化：
+   216→- 第 1 幕 hook（锁定/冲击类）：${poolDesc("hook")}
+   217→- 第 2 幕 climax（排场/压迫类）：${poolDesc("climax")}
+   218→- 第 3 幕 cliffhanger（炫技/悬念类）：${poolDesc("cliffhanger")}
+   219→每幕只能从本幕推荐池中选择 cameraMovement，且三幕之间不得重复。
+   220→
+   221→【写作要求】
+   222→1. 情节画面 description：40~80 字，完全可视化——人物在做什么、穿着、环境、冲突焦点，禁止抽象抒情
+   223→2. 台词金句 dialogueSubtitle：该幕的"封神台词"，口语化、有记忆点，不超过 18 个字，用中文双引号包裹
+   224→3. 节奏要求 pacingNote：说明该幕时间区间（0~3s / 4~8s / 9~12s）与节奏策略
+   225→4. 画面提示补充 promptGuidance：包含构图方式、人物微表情、关键道具、光效氛围
+   226→5. 三幕必须形成完整因果链：冲突 → 反转 → 留钩，梗概中的所有关键元素都要用上
+   227→6. 紧扣题材的钩子策略与调性，台词金句要有该题材的"爽点/甜点/悬念点"
+   228→7. ${enhanceDesc}
+   229→
+   230→【输出格式】只输出 JSON，禁止任何解释文字、禁止 markdown 代码块围栏：
+   231→{
+   232→  "storyBeats": [
+   233→    { "index": 1, "actTitle": "第一幕：极致冲突 (黄金开头 Hook)", "narrativeFunction": "hook", "pacingNote": "…", "description": "…", "dialogueSubtitle": "…", "cameraMovement": "push", "promptGuidance": "…" },
+   234→    { "index": 2, "narrativeFunction": "climax", "…": "…" },
+   235→    { "index": 3, "narrativeFunction": "cliffhanger", "…": "…" }
+   236→  ]
+   237→}`;
+   238→
+   239→  const user = `【题材预设】
+   240→题材：${project.genreName}（${project.genreBadge}）
+   241→黄金3秒钩子策略：${project.hookTactic}
+   242→建议配乐音效：${project.musicMood}
+   243→英文影调锚点：${project.tonePrompt}
+   244→
+   245→【剧情梗概】
+   246→${project.synopsis}
+   247→
+   248→【模型配置】
+   249→单镜时长：${project.durationSeconds} 秒 | 分辨率：${project.resolution} | 剧本思考深度：${thinkingLevel} | 提示词增强：${enhance ? "开启" : "关闭"}
+   250→
+   251→请基于以上信息生成三幕分镜 JSON。`;
+   252→
+   253→  return { messages: [{ role: "assistant", content: system }, { role: "user", content: user }] };
+   254→}
+   255→
+   256→function parseBeats(raw: string): StoryBeat[] | null {
+   257→  const data = parseJsonLoose(raw) as { storyBeats?: unknown[] } | null;
+   258→  const arr = data?.storyBeats;
+   259→  if (!Array.isArray(arr) || arr.length < 3) return null;
+   260→
+   261→  const funcs: NarrativeFunction[] = ["hook", "climax", "cliffhanger"];
+   262→  const beats: StoryBeat[] = [];
+   263→  for (let i = 0; i < 3; i++) {
+   264→    const item = arr[i] as Record<string, unknown>;
+   265→    const fn = funcs.includes(item?.narrativeFunction as NarrativeFunction)
+   266→      ? (item.narrativeFunction as NarrativeFunction)
+   267→      : funcs[i];
+   268→    const meta = NARRATIVE_META[fn];
+   269→    const str = (v: unknown, fallback: string) =>
+   270→      typeof v === "string" && v.trim() ? v.trim() : fallback;
+   271→    const cam =
+   272→      typeof item?.cameraMovement === "string" &&
+   273→      item.cameraMovement in CAMERA_MOVEMENTS
+   274→        ? item.cameraMovement
+   275→        : "";
+   276→    beats.push({
+   277→      index: i + 1,
+   278→      actTitle: `${meta.actNo}：${meta.label} (${meta.tag})`,
+   279→      narrativeFunction: fn,
+   280→      pacingNote: str(item?.pacingNote, PACING_FALLBACK[fn]),
+   281→      description: str(item?.description, "（分镜内容生成异常，请重试）"),
+   282→      dialogueSubtitle: str(item?.dialogueSubtitle, "台词生成异常，请重试"),
+   283→      cameraMovement: cam,
+   284→      promptGuidance: str(item?.promptGuidance, "提示生成异常，请重试"),
+   285→      energyStart: null,
+   286→      energyEnd: null,
+   287→    });
+   288→  }
+   289→  // 运镜合规修复：池外 → 本幕池；三幕互斥 → 换池内备选
+   290→  const used = new Set<string>();
+   291→  for (const beat of beats) {
+   292→    const pool = ACT_MOVEMENT_POOLS[beat.narrativeFunction];
+   293→    let mv = beat.cameraMovement;
+   294→    if (!pool.includes(mv)) mv = pool[0];
+   295→    if (used.has(mv)) {
+   296→      const alt = pool.find((k) => !used.has(k));
+   297→      if (alt) mv = alt;
+   298→    }
+   299→    used.add(mv);
+   300→    beat.cameraMovement = mv;
+   301→  }
+   302→  return beats;
+   303→}
+   304→
+   305→async function stageScreenwriting(
+   306→  runId: string,
+   307→  project: Project
+   308→): Promise<StageResult> {
+   309→  const provider = getTextProvider();
+   310→  const base = buildScreenwritingMessages(project);
+   311→
+   312→  let beats: StoryBeat[] | null = null;
+   313→  let lastRaw = "";
+   314→  for (let attempt = 0; attempt < 2 && !beats; attempt++) {
+   315→    const { text } = await provider.complete({
+   316→      messages: [
+   317→        base.messages[0],
+   318→        {
+   319→          role: "user",
+   320→          content:
+   321→            attempt === 0
+   322→              ? base.messages[1].content
+   323→              : `${base.messages[1].content}\n\n注意：上一次输出无法解析。请严格只输出一个合法 JSON 对象（含 storyBeats 数组），不要任何其他文字。`,
+   324→        },
+   325→      ],
+   326→      thinking: { type: project.thinkingLevel === "low" ? "disabled" : "enabled" },
+   327→    });
+   328→    lastRaw = text;
+   329→    beats = parseBeats(text);
+   330→  }
+   331→  if (!beats) {
+   332→    throw new Error(`剧本解析失败（${lastRaw.slice(0, 120)}…）`);
+   333→  }
+   334→  await updateProject(project.id, { storyBeats: beats, status: "beatsReady" });
+   335→  return {
+   336→    summary: `三幕剧本定稿：${beats
+   337→      .map((b) => NARRATIVE_META[b.narrativeFunction].label)
+   338→      .join(" → ")}，运镜 ${beats.map((b) => b.cameraMovement).join(" / ")}`,
+   339→  };
+   340→}
+   341→
+   342→// ============================================================
+   343→// 选角定妆阶段
+   344→// ============================================================
+   345→
+   346→interface CastingAssetDraft {
+   347→  name: string;
+   348→  lockedAppearance: string;
+   349→  visualAnchor: string;
+   350→}
+   351→
+   352→function buildCastingMessages(beats: DbBeat[], project: Project): string {
+   353→  const script = beats
+   354→    .map(
+   355→      (b) =>
+   356→        `【第 ${b.index} 幕 · ${b.actTitle}】\n画面：${b.description}\n金句：${b.dialogueSubtitle}\n提示：${b.promptGuidance}`
+   357→    )
+   358→    .join("\n\n");
+   359→
+   360→  return `你是微短剧剧组的选角导演兼美术指导。任务：通读三幕剧本，建立全剧资产库（角色 / 场景 / 道具），供后续所有镜头做「一致性锚定」——每个镜头的提示词都将引用这里的定妆描述，保证跨镜头不换脸、不穿帮。
+   361→
+   362→【题材调性】${project.genreName}（${project.genreBadge}）；英文影调锚点：${project.tonePrompt}
+   363→
+   364→${CASTING_FACE_RULE}
+   365→
+   366→【三幕剧本】
+   367→${script}
+   368→
+   369→【要求（严格遵守）】
+   370→1. characters：主角、对手与关键配角，最多 6 个。lockedAppearance 为中文定妆描述（25~60 字：年龄、性别、身份气质、发型、脸型特征、服装、标志物）；visualAnchor 为对应英文串（15~30 words，如 "35-year-old Chinese male special forces captain, buzz cut, scar on left brow, black tactical vest"）
+   371→2. scenes：关键场景，最多 5 个。name 为短名（如「宴会厅」「冷宫」）；lockedAppearance 描述空间与光线；visualAnchor 为英文
+   372→3. props：推动剧情的关键道具，最多 4 个，没有则输出空数组
+   373→4. 名称必须与剧本用词一致，不得杜撰剧本中未出现的角色
+   374→5. visualAnchor 是所有镜头共用的视觉锚点，聚焦「跨镜头不变的外观特征」，不要写动作
+   375→
+   376→【输出格式】只输出 JSON，禁止解释文字、禁止 markdown 围栏：
+   377→{"characters":[{"name":"…","lockedAppearance":"…","visualAnchor":"…"}],"scenes":[{"name":"…","lockedAppearance":"…","visualAnchor":"…"}],"props":[{"name":"…","lockedAppearance":"…","visualAnchor":"…"}]}`;
+   378→}
+   379→
+   380→function parseCasting(
+   381→  raw: string
+   382→): { characters: CastingAssetDraft[]; scenes: CastingAssetDraft[]; props: CastingAssetDraft[] } | null {
+   383→  const data = parseJsonLoose(raw) as Record<string, unknown> | null;
+   384→  if (!data) return null;
+   385→
+   386→  const map = (v: unknown, max: number): CastingAssetDraft[] =>
+   387→    (Array.isArray(v) ? v : [])
+   388→      .map((item) => {
+   389→        const o = item as Record<string, unknown>;
+   390→        const name = typeof o?.name === "string" ? o.name.trim().slice(0, 20) : "";
+   391→        if (!name) return null;
+   392→        const lockedAppearance =
+   393→          typeof o?.lockedAppearance === "string" ? o.lockedAppearance.trim().slice(0, 200) : "";
+   394→        const visualAnchor =
+   395→          typeof o?.visualAnchor === "string" ? o.visualAnchor.trim().slice(0, 300) : "";
+   396→        if (!lockedAppearance && !visualAnchor) return null;
+   397→        return {
+   398→          name,
+   399→          lockedAppearance: lockedAppearance || "（定妆描述待补充）",
+   400→          visualAnchor: visualAnchor || lockedAppearance,
+   401→        } satisfies CastingAssetDraft;
+   402→      })
+   403→      .filter((x): x is CastingAssetDraft => !!x)
+   404→      .slice(0, max);
+   405→
+   406→  const characters = map(data.characters, 6);
+   407→  const scenes = map(data.scenes, 5);
+   408→  const props = map(data.props, 4);
+   409→  if (characters.length === 0 && scenes.length === 0) return null;
+   410→  return { characters, scenes, props };
+   411→}
+   412→
+   413→async function stageCasting(
+   414→  runId: string,
+   415→  project: Project
+   416→): Promise<StageResult> {
+   417→  const beats = await db.storyBeat.findMany({
+   418→    where: { projectId: project.id },
+   419→    orderBy: { index: "asc" },
+   420→  });
+   421→  if (beats.length < 3) {
+   422→    throw new Error("剧本尚未就绪，请先完成编剧阶段");
+   423→  }
+   424→
+   425→  const provider = getTextProvider();
+   426→  const prompt = buildCastingMessages(beats, project);
+   427→  let casting: ReturnType<typeof parseCasting> = null;
+   428→  let lastRaw = "";
+   429→  for (let attempt = 0; attempt < 2 && !casting; attempt++) {
+   430→    const { text } = await provider.complete({
+   431→      messages: [
+   432→        { role: "assistant", content: prompt },
+   433→        {
+   434→          role: "user",
+   435→          content:
+   436→            attempt === 0
+   437→              ? "请建立资产库并只输出 JSON。"
+   438→              : "上一次输出无法解析。请严格只输出一个合法 JSON 对象（characters/scenes/props 三个数组），不要任何其他文字。",
+   439→        },
+   440→      ],
+   441→      thinking: { type: "disabled" },
+   442→    });
+   443→    lastRaw = text;
+   444→    casting = parseCasting(text);
+   445→  }
+   446→  if (!casting) {
+   447→    throw new Error(`选角定妆解析失败（${lastRaw.slice(0, 120)}…）`);
+   448→  }
+   449→
+   450→  // 幂等 upsert：同名资产更新锚点（保证与最新剧本一致）
+   451→  const kindGroups: Array<[AssetKind, CastingAssetDraft[]]> = [
+   452→    ["character", casting.characters],
+   453→    ["scene", casting.scenes],
+   454→    ["prop", casting.props],
+   455→  ];
+   456→  let count = 0;
+   457→  for (const [kind, drafts] of kindGroups) {
+   458→    for (const draft of drafts) {
+   459→      await db.asset.upsert({
+   460→        where: {
+   461→          projectId_kind_name: {
+   462→            projectId: project.id,
+   463→            kind,
+   464→            name: draft.name,
+   465→          },
+   466→        },
+   467→        create: {
+   468→          projectId: project.id,
+   469→          kind,
+   470→          name: draft.name,
+   471→          lockedAppearance: draft.lockedAppearance,
+   472→          visualAnchor: draft.visualAnchor,
+   473→          source: "crew",
+   474→        },
+   475→        update: {
+   476→          lockedAppearance: draft.lockedAppearance,
+   477→          visualAnchor: draft.visualAnchor,
+   478→        },
+   479→      });
+   480→      count++;
+   481→    }
+   482→  }
+   483→  await appendLog(
+   484→    runId,
+   485→    "casting",
+   486→    `资产入库：角色 ${casting.characters.length} · 场景 ${casting.scenes.length} · 道具 ${casting.props.length}`
+   487→  );
+   488→  return {
+   489→    summary: `资产库建立：${count} 项定妆锁定（角色 ${casting.characters.length} / 场景 ${casting.scenes.length} / 道具 ${casting.props.length}）`,
+   490→  };
+   491→}
+   492→
+   493→// ============================================================
+   494→// 导演拆镜阶段
+   495→// ============================================================
+   496→
+   497→async function stageDirecting(
+   498→  runId: string,
+   499→  project: Project
+   500→): Promise<StageResult> {
+   501→  const [beats, assets] = await Promise.all([
+   502→    db.storyBeat.findMany({
+   503→      where: { projectId: project.id },
+   504→      orderBy: { index: "asc" },
+   505→    }),
+   506→    db.asset.findMany({ where: { projectId: project.id } }),
+   507→  ]);
+   508→  if (beats.length < 3) {
+   509→    throw new Error("剧本尚未就绪，请先完成编剧阶段");
+   510→  }
+   511→
+   512→  const roster = {
+   513→    characters: assets.filter((a) => a.kind === "character").map((a) => a.name),
+   514→    scenes: assets.filter((a) => a.kind === "scene").map((a) => a.name),
+   515→    props: assets.filter((a) => a.kind === "prop").map((a) => a.name),
+   516→  };
+   517→
+   518→  let totalShots = 0;
+   519→  let skippedActs = 0;
+   520→  for (const beat of beats) {
+   521→    // 成片保护：该幕已有已生成镜头时跳过拆解（不覆盖劳动成果），
+   522→    // 由日志明确告知；如需重拍请先在镜头轨把该幕镜头重置为待生成
+   523→    const hasReadyClip = await db.timelineClip.findFirst({
+   524→      where: { projectId: project.id, beatIndex: beat.index, status: "ready" },
+   525→      select: { id: true },
+   526→    });
+   527→    if (hasReadyClip) {
+   528→      skippedActs++;
+   529→      await appendLog(
+   530→        runId,
+   531→        "director",
+   532→        `第 ${beat.index} 幕已有已生成镜头，跳过拆解以保护成片（重拍请先重置该幕镜头）`
+   533→      );
+   534→      continue;
+   535→    }
+   536→    const shots = await breakdownAct({
+   537→      genreName: project.genreName,
+   538→      genreBadge: project.genreBadge,
+   539→      tonePrompt: project.tonePrompt,
+   540→      synopsis: project.synopsis,
+   541→      beats: beats.map((b) => ({
+   542→        index: b.index,
+   543→        actTitle: b.actTitle,
+   544→        narrativeFunction: b.narrativeFunction as StoryBeat["narrativeFunction"],
+   545→        pacingNote: b.pacingNote,
+   546→        description: b.description,
+   547→        dialogueSubtitle: b.dialogueSubtitle,
+   548→        cameraMovement: b.cameraMovement,
+   549→        promptGuidance: b.promptGuidance,
+   550→      })),
+   551→      targetIndex: beat.index,
+   552→      assetRoster: roster,
+   553→    });
+   554→    const clips = await replaceActClips(project.id, beat.index, shots);
+   555→    await bindRefsFromShots(project.id, beat.index, shots, clips);
+   556→    await updateBeatEnergy(project.id, beat.index, {
+   557→      energyStart: shots[0]?.energy ?? null,
+   558→      energyEnd: shots[shots.length - 1]?.energy ?? null,
+   559→    });
+   560→    totalShots += shots.length;
+   561→    await appendLog(
+   562→      runId,
+   563→      "director",
+   564→      `第 ${beat.index} 幕拆解完成：${shots.length} 镜（${shots
+   565→        .map((s) => s.shotSize)
+   566→        .join("→")}，能量 ${shots[0]?.energy ?? "-"}→${shots[shots.length - 1]?.energy ?? "-"}）`
+   567→    );
+   568→  }
+   569→  return {
+   570→    summary: `三幕拆镜完成：共 ${totalShots} 个镜头，正反打景别交替已就位${
+   571→      skippedActs > 0 ? `；${skippedActs} 幕含成片已跳过` : ""
+   572→    }`,
+   573→  };
+   574→}
+   575→
+   576→/** 按名称把拆镜产物中的资产引用解析为 ShotRef（精确名 → 包含式回退） */
+   577→export async function bindRefsFromShots(
+   578→  projectId: string,
+   579→  beatIndex: number,
+   580→  shots: ShotBreakdownItem[],
+   581→  clips: Array<{ id: string; beatIndex: number; order: number }>
+   582→): Promise<number> {
+   583→  const assets = await db.asset.findMany({ where: { projectId } });
+   584→  const byKind = (kind: AssetKind) => assets.filter((a) => a.kind === kind);
+   585→  const resolve = (kind: AssetKind, name: string) => {
+   586→    if (!name) return null;
+   587→    const pool = byKind(kind);
+   588→    return (
+   589→      pool.find((a) => a.name === name) ??
+   590→      pool.find(
+   591→        (a) => a.name.includes(name) || name.includes(a.name)
+   592→      ) ??
+   593→      null
+   594→    );
+   595→  };
+   596→
+   597→  const actClips = clips
+   598→    .filter((c) => c.beatIndex === beatIndex)
+   599→    .sort((a, b) => a.order - b.order);
+   600→  let bound = 0;
+   601→  for (let i = 0; i < actClips.length && i < shots.length; i++) {
+   602→    const shot = shots[i];
+   603→    const clip = actClips[i];
+   604→    const targets = new Set<string>();
+   605→    for (const name of shot.characters) {
+   606→      const asset = resolve("character", name);
+   607→      if (asset) targets.add(asset.id);
+   608→    }
+   609→    const scene = resolve("scene", shot.scene);
+   610→    if (scene) targets.add(scene.id);
+   611→    for (const name of shot.props) {
+   612→      const asset = resolve("prop", name);
+   613→      if (asset) targets.add(asset.id);
+   614→    }
+   615→    for (const assetId of targets) {
+   616→      await db.shotRef.upsert({
+   617→        where: { shotId_assetId: { shotId: clip.id, assetId } },
+   618→        create: { shotId: clip.id, assetId },
+   619→        update: {},
+   620→      });
+   621→      bound++;
+   622→    }
+   623→  }
+   624→  return bound;
+   625→}
+   626→
+   627→// ============================================================
+   628→// 场记锚定阶段
+   629→// ============================================================
+   630→
+   631→export async function anchorProjectClips(
+   632→  projectId: string,
+   633→  onlyClipIds?: string[]
+   634→): Promise<{ anchored: number; skipped: number }> {
+   635→  const [project, clips, refs] = await Promise.all([
+   636→    db.project.findUnique({ where: { id: projectId } }),
+   637→    db.timelineClip.findMany({
+   638→      where: { projectId, ...(onlyClipIds ? { id: { in: onlyClipIds } } : {}) },
+   639→      orderBy: { order: "asc" },
+   640→    }),
+   641→    db.shotRef.findMany({
+   642→      where: { shot: { projectId } },
+   643→      include: { asset: true },
+   644→    }),
+   645→  ]);
+   646→  if (!project) throw new RouteError("项目不存在或已被删除", 404);
+   647→
+   648→  const refsByClip = new Map<string, typeof refs>();
+   649→  for (const r of refs) {
+   650→    const list = refsByClip.get(r.shotId) ?? [];
+   651→    list.push(r);
+   652→    refsByClip.set(r.shotId, list);
+   653→  }
+   654→
+   655→  let anchored = 0;
+   656→  let skipped = 0;
+   657→  for (const clip of clips) {
+   658→    if (clip.promptVersion === "manual") {
+   659→      skipped++;
+   660→      continue;
+   661→    }
+   662→    const bound = refsByClip.get(clip.id) ?? [];
+   663→    const characters = bound
+   664→      .filter((r) => r.asset.kind === "character")
+   665→      .map((r) => ({
+   666→        name: r.asset.name,
+   667→        visualAnchor: r.asset.visualAnchor,
+   668→        stateNote: r.stateNote,
+   669→      }));
+   670→    const sceneRef = bound.find((r) => r.asset.kind === "scene");
+   671→    const props = bound
+   672→      .filter((r) => r.asset.kind === "prop")
+   673→      .map((r) => ({
+   674→        name: r.asset.name,
+   675→        visualAnchor: r.asset.visualAnchor,
+   676→        stateNote: r.stateNote,
+   677→      }));
+   678→
+   679→    const { finalPrompt, fingerprint } = composeVideoPrompt({
+   680→      shot: {
+   681→        visualDesc: clip.visualDesc ?? clip.name,
+   682→        visualPrompt: clip.visualPrompt,
+   683→        cameraMovement: clip.cameraMovement,
+   684→        shotSize: clip.shotSize,
+   685→        subtitle: clip.subtitle,
+   686→      },
+   687→      characters,
+   688→      scene: sceneRef
+   689→        ? {
+   690→            name: sceneRef.asset.name,
+   691→            visualAnchor: sceneRef.asset.visualAnchor,
+   692→            stateNote: sceneRef.stateNote,
+   693→          }
+   694→        : null,
+   695→      props,
+   696→      tonePrompt: project.tonePrompt,
+   697→      aspectRatio: project.aspectRatio,
+   698→      plannedMs: clip.plannedMs,
+   699→      resolution: project.resolution,
+   700→    });
+   701→
+   702→    await db.timelineClip.update({
+   703→      where: { id: clip.id },
+   704→      data: { finalPrompt, promptVersion: fingerprint },
+   705→    });
+   706→    anchored++;
+   707→  }
+   708→  return { anchored, skipped };
+   709→}
+   710→
+   711→async function stageAnchoring(
+   712→  _runId: string,
+   713→  project: Project
+   714→): Promise<StageResult> {
+   715→  const { anchored, skipped } = await anchorProjectClips(project.id);
+   716→  return {
+   717→    summary: `锚定组装完成：${anchored} 个镜头写入最终提示词与锚点指纹${
+   718→      skipped > 0 ? `（${skipped} 个为人工微调，已跳过）` : ""
+   719→    }`,
+   720→  };
+   721→}
+   722→
+   723→// ============================================================
+   724→// 后期成包阶段
+   725→// ============================================================
+   726→
+   727→async function stagePostproduction(
+   728→  _runId: string,
+   729→  project: Project
+   730→): Promise<StageResult> {
+   731→  const { rebuildTracks } = await import("./track-service");
+   732→  const tracks = await rebuildTracks(project.id);
+   733→  await db.project.update({
+   734→    where: { id: project.id },
+   735→    data: { status: "inProduction" },
+   736→  });
+   737→  const count = (kind: string) => tracks.filter((t) => t.kind === kind).length;
+   738→  return {
+   739→    summary: `三轨落轨：字幕 ${count("subtitle")} · 音效 ${count("sfx")} · 配乐 ${count("bgm")} 段；情绪能量曲线与制作包就绪`,
+   740→  };
+   741→}
+   742→
+   743→// ============================================================
+   744→// 编排状态机
+   745→// ============================================================
+   746→
+   747→const STAGE_FN: Record<
+   748→  StageKey,
+   749→  (runId: string, project: Project) => Promise<StageResult>
+   750→> = {
+   751→  screenwriting: stageScreenwriting,
+   752→  casting: stageCasting,
+   753→  directing: stageDirecting,
+   754→  anchoring: stageAnchoring,
+   755→  postproduction: stagePostproduction,
+   756→};
+   757→
+   758→async function executeRun(runId: string): Promise<void> {
+   759→  try {
+   760→    const run = await db.productionRun.findUnique({ where: { id: runId } });
+   761→    if (!run || run.status !== "running") return;
+   762→
+   763→    for (const def of RUN_STAGES) {
+   764→      const current = await loadRun(runId);
+   765→      if (current.status !== "running") return; // 被外部取消/覆盖
+   766→      const stages = parseStages(current.stages);
+   767→      const stage = stages.find((s) => s.key === def.key);
+   768→      if (!stage || stage.status === "succeeded") continue;
+   769→
+   770→      // —— 阶段置 running ——
+   771→      stage.status = "running";
+   772→      stage.startedAt = new Date().toISOString();
+   773→      stage.error = null;
+   774→      await patchStages(runId, stages);
+   775→      await db.productionRun.update({
+   776→        where: { id: runId },
+   777→        data: { stage: def.key },
+   778→      });
+   779→      const project = await db.project.findUnique({
+   780→        where: { id: current.projectId },
+   781→      });
+   782→      if (!project) throw new Error("项目不存在或已被删除");
+   783→
+   784→      const startMsg =
+   785→        STAGE_START_MESSAGE[def.key] ?? `进入「${def.name}」阶段`;
+   786→      const modeLabel =
+   787→        def.key === "screenwriting" ? thinkingModeLabel(project.thinkingLevel) : "";
+   788→      await appendLog(
+   789→        runId,
+   790→        def.role,
+   791→        startMsg.replace("{mode}", modeLabel)
+   792→      );
+   793→
+   794→      try {
+   795→        const result = await STAGE_FN[def.key](runId, project);
+   796→        const fresh = parseStages((await loadRun(runId)).stages);
+   797→        const stageRow = fresh.find((s) => s.key === def.key);
+   798→        if (stageRow) {
+   799→          stageRow.status = "succeeded";
+   800→          stageRow.finishedAt = new Date().toISOString();
+   801→          await patchStages(runId, fresh);
+   802→        }
+   803→        await appendLog(runId, def.role, result.summary);
+   804→        await recomputeProgress(runId);
+   805→      } catch (err) {
+   806→        const message =
+   807→          err instanceof Error ? err.message : "未知错误";
+   808→        const fresh = parseStages((await loadRun(runId)).stages);
+   809→        const stageRow = fresh.find((s) => s.key === def.key);
+   810→        if (stageRow) {
+   811→          stageRow.status = "failed";
+   812→          stageRow.finishedAt = new Date().toISOString();
+   813→          stageRow.error = message;
+   814→          await patchStages(runId, fresh);
+   815→        }
+   816→        await db.productionRun.update({
+   817→          where: { id: runId },
+   818→          data: { status: "failed", error: `「${def.name}」阶段失败：${message}` },
+   819→        });
+   820→        await appendLog(runId, def.role, `阶段失败：${message}`);
+   821→        return;
+   822→      }
+   823→    }
+   824→
+   825→    await db.productionRun.update({
+   826→      where: { id: runId },
+   827→      data: { status: "succeeded", progress: 100 },
+   828→    });
+   829→    await appendLog(
+   830→      runId,
+   831→      "producer",
+   832→      "全片杀青 🎬 制作包已就绪：三幕剧本 · 分镜表 · 资产定妆 · 镜头级提示词 · 三轨 · 能量曲线，可导出交付"
+   833→    );
+   834→  } catch (err) {
+   835→    const message = err instanceof Error ? err.message : "未知错误";
+   836→    await db.productionRun
+   837→      .update({
+   838→        where: { id: runId },
+   839→        data: { status: "failed", error: message },
+   840→      })
+   841→      .catch(() => undefined);
+   842→  }
+   843→}
+   844→
+   845→// ============================================================
+   846→// 对外 API
+   847→// ============================================================
+   848→
+   849→export async function startRun(projectId: string): Promise<RunDTO> {
+   850→  const project = await db.project.findUnique({ where: { id: projectId } });
+   851→  if (!project) throw new RouteError("项目不存在或已被删除", 404);
+   852→
+   853→  const running = await db.productionRun.findFirst({
+   854→    where: { projectId, status: "running" },
+   855→  });
+   856→  if (running) {
+   857→    throw new RouteError("该项目已有正在进行的流水线，请等待完成或稍后刷新", 409);
+   858→  }
+   859→
+   860→  const run = await db.productionRun.create({
+   861→    data: {
+   862→      projectId,
+   863→      status: "running",
+   864→      progress: 0,
+   865→      stage: RUN_STAGES[0].key,
+   866→      stages: JSON.stringify(freshStages()),
+   867→      journal: JSON.stringify([
+   868→        {
+   869→          at: new Date().toISOString(),
+   870→          role: "producer",
+   871→          message: `项目《${project.title}》正式开机 🎬 题材战术手册已下发全组（${project.genreName} · ${project.genreBadge}）`,
+   872→        },
+   873→      ]),
+   874→    },
+   875→  });
+   876→  // 异步执行：路由立即返回，前端轮询 run 状态
+   877→  void executeRun(run.id);
+   878→  return toRunDTO(run);
+   879→}
+   880→
+   881→/** 断点续跑：已成功阶段保留，从首个未成功阶段继续 */
+   882→export async function retryRun(runId: string): Promise<RunDTO> {
+   883→  const run = await loadRun(runId);
+   884→  if (run.status === "running") {
+   885→    throw new RouteError("流水线正在运行中，无需重试", 409);
+   886→  }
+   887→  const stages = parseStages(run.stages).map((s) =>
+   888→    s.status === "failed"
+   889→      ? { ...s, status: "pending", error: null, startedAt: null, finishedAt: null }
+   890→      : s
+   891→  );
+   892→  const resume = stages.find((s) => s.status !== "succeeded");
+   893→  await db.productionRun.update({
+   894→    where: { id: runId },
+   895→    data: {
+   896→      status: "running",
+   897→      error: null,
+   898→      stages: JSON.stringify(stages),
+   899→    },
+   900→  });
+   901→  await appendLog(
+   902→    runId,
+   903→    "producer",
+   904→    resume
+   905→      ? `断点续拍：从「${resume.name}」阶段继续（已完成阶段不重复执行）`
+   906→      : "复核完成，直接进入收尾"
+   907→  );
+   908→  void executeRun(runId);
+   909→  const fresh = await loadRun(runId);
+   910→  return toRunDTO(fresh);
+   911→}
+   912→
+   913→export async function getRun(runId: string): Promise<RunDTO> {
+   914→  return toRunDTO(await loadRun(runId));
+   915→}
+   916→
+   917→export async function getLatestRun(projectId: string): Promise<RunDTO | null> {
+   918→  const row = await db.productionRun.findFirst({
+   919→    where: { projectId },
+   920→    orderBy: { createdAt: "desc" },
+   921→  });
+   922→  return row ? toRunDTO(row) : null;
+   923→}
+   924→
+   925→export async function listRuns(projectId: string): Promise<RunDTO[]> {
+   926→  const rows = await db.productionRun.findMany({
+   927→    where: { projectId },
+   928→    orderBy: { createdAt: "desc" },
+   929→    take: 10,
+   930→  });
+   931→  return rows.map(toRunDTO);
+   932→}
+   933→
+   934→// ============================================================
+   935→// 进程重启恢复：残留 running 的运行回置 failed（可断点重试）
+   936→// 注意：只回置「过期」的运行（updatedAt 落后回收窗口以上，见
+   937→// ORPHAN_RECOVERY_WINDOW_MS）。
+   938→// Next dev 按路由懒编译 + worker 隔离，本模块会被多次求值；
+   939→// 无差别回置会把正在执行的流水线误杀（生产多实例同理需要心跳判据）。
+   940→// ============================================================
+   941→const g = globalThis as unknown as { __dramaRunRecovered?: boolean };
+   942→if (!g.__dramaRunRecovered) {
+   943→  g.__dramaRunRecovered = true;
+   944→  void db.productionRun
+   945→    .updateMany({
+   946→      where: {
+   947→        status: "running",
+   948→        updatedAt: { lt: new Date(Date.now() - ORPHAN_RECOVERY_WINDOW_MS) },
+   949→      },
+   950→      data: {
+   951→        status: "failed",
+   952→        error: "服务重启导致流水线中断，可点击重试从断点继续",
+   953→      },
+   954→    })
+   955→    .catch(() => undefined);
+   956→}
+   957→

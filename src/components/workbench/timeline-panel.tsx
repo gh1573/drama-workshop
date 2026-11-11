@@ -4,12 +4,16 @@ import { useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  ChevronDown,
+  ChevronRight,
   Clapperboard,
   ExternalLink,
   Film,
+  Loader2,
   Trash2,
   CheckCircle2,
   Layers,
+  Video,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,12 +58,51 @@ export function TimelinePanel() {
   const moveClip = useWorkbench((s) => s.moveClip);
   const removeClip = useWorkbench((s) => s.removeClip);
   const patchClip = useWorkbench((s) => s.patchClip);
+  const tasks = useWorkbench((s) => s.tasks);
+  const createTask = useWorkbench((s) => s.createTask);
   const [target, setTarget] = useState<ClipData | null>(null);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  // v2.4.1 §7.10：按幕折叠，默认全部收起（摘要行展示密度）
+  const [openActs, setOpenActs] = useState<ReadonlySet<number>>(new Set());
+  const [renderingClipId, setRenderingClipId] = useState<string | null>(null);
 
   const sorted = [...clips].sort((a, b) => a.order - b.order);
   const hasBreakdown = sorted.some((c) => c.shotSize || c.cameraMovement);
+
+  /** 该镜头是否有在途视频任务（用于行内按钮禁用与状态徽标） */
+  const isClipRendering = (clipId: string) =>
+    tasks.some(
+      (t) =>
+        t.kind === "video" &&
+        t.payload?.clipId === clipId &&
+        (t.status === "queued" || t.status === "running")
+    );
+
+  /** 行内单镜渲染（v2.4.1 §7.10）：服务端幂等去重，重复点击不会重复入队 */
+  async function handleRenderClip(clip: ClipData) {
+    if (renderingClipId) return;
+    setRenderingClipId(clip.id);
+    const err = await createTask("video", { clipId: clip.id });
+    setRenderingClipId(null);
+    if (err) {
+      toast({ title: "渲染提交失败", description: err, variant: "destructive" });
+    } else {
+      toast({
+        title: "已提交渲染 🎬",
+        description: `「${clip.name}」进入视频队列，完成后自动回填成片`,
+      });
+    }
+  }
+
+  function toggleAct(index: number) {
+    setOpenActs((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
 
   async function handleConfirmReady() {
     if (!target) return;
@@ -98,9 +141,26 @@ export function TimelinePanel() {
     });
   }
 
-  /** 行内操作按钮组 */
-  const Actions = ({ clip, i, total }: { clip: ClipData; i: number; total: number }) => (
+  /** 行内操作按钮组（v2.4.1：新增单镜渲染入口） */
+  const Actions = ({ clip, i, total }: { clip: ClipData; i: number; total: number }) => {
+    const rendering = isClipRendering(clip.id);
+    return (
     <div className="flex items-center gap-0.5">
+      {clip.status !== "ready" && clip.finalPrompt && (
+        <button
+          aria-label="渲染此镜"
+          title={rendering ? "渲染中…" : "渲染此镜（视频通道，约 60~90s）"}
+          disabled={rendering || renderingClipId !== null}
+          onClick={() => void handleRenderClip(clip)}
+          className="rounded-md p-1.5 text-amber-400 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {rendering ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Video className="h-3.5 w-3.5" />
+          )}
+        </button>
+      )}
       <button
         aria-label="上移"
         disabled={i === 0}
@@ -145,14 +205,27 @@ export function TimelinePanel() {
         <Trash2 className="h-3.5 w-3.5" />
       </button>
     </div>
-  );
+    );
+  };
 
   const StatusBadge = ({ clip }: { clip: ClipData }) => {
     const st = CLIP_STATUS[clip.status];
+    const rendering = isClipRendering(clip.id);
     return (
-      <Badge variant="outline" className={`text-[10px] ${st.cls}`}>
-        {st.label}
-      </Badge>
+      <>
+        {rendering && (
+          <Badge
+            variant="outline"
+            className="gap-1 border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-400"
+          >
+            <Loader2 className="h-2.5 w-2.5 animate-spin" />
+            渲染中
+          </Badge>
+        )}
+        <Badge variant="outline" className={`text-[10px] ${st.cls}`}>
+          {st.label}
+        </Badge>
+      </>
     );
   };
 
@@ -184,10 +257,22 @@ export function TimelinePanel() {
               if (group.length === 0) return null;
               const fn = beat.narrativeFunction as NarrativeFunction;
               const groupMs = group.reduce((m, c) => m + (c.plannedMs ?? 0), 0);
+              const groupReady = group.filter((c) => c.status === "ready").length;
+              const groupRendering = group.some((c) => isClipRendering(c.id));
+              const expanded = openActs.has(beat.index);
               return (
-                <div key={beat.index} className="space-y-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Layers className="h-3.5 w-3.5 text-sky-400" />
+                <div key={beat.index} className="overflow-hidden rounded-lg border border-border/60">
+                  {/* 摘要行：默认折叠，点击展开镜头行（v2.4.1 §7.10 分镜表密度） */}
+                  <button
+                    onClick={() => toggleAct(beat.index)}
+                    className="flex w-full flex-wrap items-center gap-2 bg-secondary/40 px-3 py-2.5 text-left transition-colors hover:bg-secondary/60"
+                  >
+                    {expanded ? (
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    )}
+                    <Layers className="h-3.5 w-3.5 shrink-0 text-sky-400" />
                     <p className="text-xs font-bold">
                       第 {String(beat.index).padStart(2, "0")} 幕 ·{" "}
                       {beat.actTitle.split("：")[1] ?? beat.actTitle}
@@ -196,11 +281,21 @@ export function TimelinePanel() {
                       variant="outline"
                       className="border-border/60 text-[10px] text-muted-foreground"
                     >
-                      {NARRATIVE_META[fn].tag} · {group.length} 镜头 ·{" "}
+                      {NARRATIVE_META[fn].tag} · {group.length} 镜头 · 就绪 {groupReady}/{group.length} ·{" "}
                       {fmtSec(groupMs)}
                     </Badge>
-                  </div>
-                  <div className="overflow-hidden rounded-lg border border-border/60">
+                    {groupRendering && (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-400"
+                      >
+                        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                        渲染中
+                      </Badge>
+                    )}
+                  </button>
+                  {expanded && (
+                  <div>
                     {group.map((clip, gi) => (
                       <div
                         key={clip.id}
@@ -294,6 +389,7 @@ export function TimelinePanel() {
                       </div>
                     ))}
                   </div>
+                  )}
                 </div>
               );
             })}
@@ -363,8 +459,8 @@ export function TimelinePanel() {
           <DialogHeader>
             <DialogTitle>回填成片 · {target?.name}</DialogTitle>
             <DialogDescription>
-              视频基模生成通道尚未接入时，可在外部工具成片后粘贴地址并标记完成；
-              未来接入后将由生成任务自动流转状态。
+              正常情况请用行内「渲染此镜」或成片页签「一键渲染全片」走视频通道；
+              本入口仅用于外部工具成片后粘贴地址并标记完成。
             </DialogDescription>
           </DialogHeader>
           <Input

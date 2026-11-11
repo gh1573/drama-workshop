@@ -39,17 +39,38 @@ export const PORTRAIT_PROMPT_TAIL =
   "dramatic lighting, highly detailed, consistent visual identity";
 
 /**
- * 角色定妆专用尾缀（v2.4）：在公共尾缀之外叠加演员面孔约束，
+ * 角色文化一致性（v2.4.1，docs §7.1 第 5 条）：题材库全部为国内短剧题材，
+ * 全链路强制单一文化面孔。三道防线共用本组常量，调整文化设定只改这里：
+ * - 防线一：CASTING_FACE_RULE 写入选角提示词（LLM 遵守是期望，不是保证）；
+ * - 防线二：run-service.parseCasting 用 ETHNICITY_KEYWORDS 校验锚点，
+ *   缺失时追加 ETHNICITY_FALLBACK（确定性兜底，不信任 LLM）；
+ * - 防线三：定妆提示词尾缀注入正 + 负向双向约束。
+ */
+/** 正向约束（写入定妆提示词与选角铁律） */
+export const CHARACTER_ETHNICITY_POSITIVE =
+  "Chinese actors, natural east asian features";
+
+/** 负向约束（写入定妆提示词，压制图像模型自由发挥） */
+export const CHARACTER_ETHNICITY_NEGATIVE =
+  "no western features, no caucasian face";
+
+/** 兜底注入词（锚点缺 ethnicity 时追加到描述末尾） */
+export const ETHNICITY_FALLBACK = "Chinese";
+
+/** ethnicity 关键词（大小写不敏感匹配 visualAnchor；命中任一即视为已含人种描述） */
+export const ETHNICITY_KEYWORDS = ["chinese", "east asian", "asian"];
+
+/**
+ * 角色定妆专用尾缀（v2.4 → v2.4.1）：由正负双向约束组合而成，
  * 与选角阶段 CASTING_FACE_RULE 呼应，保证头像库不出欧美面孔。
  */
-export const PORTRAIT_CHARACTER_TAIL =
-  "chinese actor face, natural east asian features";
+export const PORTRAIT_CHARACTER_TAIL = `${CHARACTER_ETHNICITY_POSITIVE}, ${CHARACTER_ETHNICITY_NEGATIVE}`;
 
 /**
  * 选角面孔统一规则（v2.4，docs §7.1 第 5 条）：写入选角阶段提示词，
  * 要求全部角色锚点为华人面孔（题材库全部为国内短剧题材）。
  */
-export const CASTING_FACE_RULE = `【面孔统一铁律】全部角色一律为华人面孔（Chinese actors, east asian features）；每个角色的 visualAnchor 必须含 ethnicity 描述（如 "Chinese male" / "Chinese woman"），严禁输出欧美或混血面孔描述；中文定妆描述同步体现国人特征。`;
+export const CASTING_FACE_RULE = `【面孔统一铁律】全部角色一律为华人面孔（${CHARACTER_ETHNICITY_POSITIVE}）；每个角色的 visualAnchor 必须含 ethnicity 描述（如 "Chinese male" / "Chinese woman"），严禁输出欧美或混血面孔描述（${CHARACTER_ETHNICITY_NEGATIVE}）；中文定妆描述同步体现国人特征。`;
 
 /** 视频提示词分段标签（组装顺序固定，标签文案可调） */
 export const PROMPT_SEGMENT_LABELS = {
