@@ -756,9 +756,27 @@ async function stagePostproduction(
     where: { id: project.id },
     data: { status: "inProduction" },
   });
+
+  // v2.4.1：缺定妆图的资产自动提交 portrait 任务（幂等去重），
+  // 消除「开机成功后资产页签全是占位符」的交互断层（docs §1.4 阶段表第 5 行）
+  const { createTask } = await import("./task-service");
+  const missing = await db.asset.findMany({
+    where: { projectId: project.id, portraitUrl: null },
+    select: { id: true },
+  });
+  let submitted = 0;
+  for (const a of missing) {
+    try {
+      await createTask(project.id, { kind: "portrait", assetId: a.id });
+      submitted += 1;
+    } catch {
+      // 已有活跃同目标任务等场景：跳过，不阻断流水线
+    }
+  }
+
   const count = (kind: string) => tracks.filter((t) => t.kind === kind).length;
   return {
-    summary: `三轨落轨：字幕 ${count("subtitle")} · 音效 ${count("sfx")} · 配乐 ${count("bgm")} 段；情绪能量曲线与制作包就绪`,
+    summary: `三轨落轨：字幕 ${count("subtitle")} · 音效 ${count("sfx")} · 配乐 ${count("bgm")} 段；${submitted > 0 ? `定妆任务 ${submitted} 个已入队，定妆图将陆续出片；` : ""}情绪能量曲线与制作包就绪`,
   };
 }
 
