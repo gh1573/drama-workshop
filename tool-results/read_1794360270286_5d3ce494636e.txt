@@ -1,0 +1,902 @@
+     1→/**
+     2→ * 剧集智能创编工坊 (DRAMA STUDIO) — 核心数据层
+     3→ * Schema 与原版导出的 drama_project_*.json 结构对齐 (v1.2.0)
+     4→ */
+     5→
+     6→export type NarrativeFunction = "hook" | "climax" | "cliffhanger";
+     7→
+     8→export interface GenrePreset {
+     9→  id: string;
+    10→  /** 完整名称，如：战神逆袭 · 龙王归来 */
+    11→  name: string;
+    12→  /** 卡片短名 */
+    13→  short: string;
+    14→  badge: string;
+    15→  icon: string;
+    16→  /** 黄金前 3 秒钩子策略 */
+    17→  hookTactic: string;
+    18→  /** 建议配乐音效 */
+    19→  musicMood: string;
+    20→  /** 英文影调 Prompt（AI 视频风格锚点） */
+    21→  tonePrompt: string;
+    22→  /** UI 点缀色 */
+    23→  gradient: string;
+    24→  ring: string;
+    25→  text: string;
+    26→  /** 示例梗概（一键填充） */
+    27→  sampleSynopsis: string;
+    28→}
+    29→
+    30→export interface ModelConfig {
+    31→  videoModel: string;
+    32→  durationSeconds: number;
+    33→  resolution: string;
+    34→  scriptThinkingLevel: "low" | "medium" | "high";
+    35→  enablePromptEnhance: boolean;
+    36→}
+    37→
+    38→export interface StoryBeat {
+    39→  index: number;
+    40→  actTitle: string;
+    41→  narrativeFunction: NarrativeFunction;
+    42→  pacingNote: string;
+    43→  description: string;
+    44→  dialogueSubtitle: string;
+    45→  cameraMovement: string;
+    46→  promptGuidance: string;
+    47→  /** —— v2：幕级情绪能量（拆镜阶段产出，可人工修正） —— */
+    48→  energyStart?: number | null;
+    49→  energyEnd?: number | null;
+    50→}
+    51→
+    52→export interface DramaProjectData {
+    53→  project: {
+    54→    title: string;
+    55→    version: string;
+    56→    exportedAt: string;
+    57→    genre: {
+    58→      id: string;
+    59→      name: string;
+    60→      badge: string;
+    61→      hookTactic: string;
+    62→      musicMood: string;
+    63→      tonePrompt: string;
+    64→    };
+    65→    aspectRatio: string;
+    66→    synopsis: string;
+    67→    modelConfig: ModelConfig;
+    68→  };
+    69→  storyBeats: StoryBeat[];
+    70→  timelineClips: unknown[];
+    71→  statistics: {
+    72→    totalBeats: number;
+    73→    totalClips: number;
+    74→    hasSynthesizedOutput: boolean;
+    75→  };
+    76→  /** —— v2 可选扩展段（旧消费者忽略未知字段即可无损消费） —— */
+    77→  assets?: AssetExportItem[];
+    78→  tracks?: {
+    79→    subtitle: TrackItemDTO[];
+    80→    sfx: TrackItemDTO[];
+    81→    bgm: TrackItemDTO[];
+    82→  };
+    83→  energyCurve?: EnergyCurvePoint[];
+    84→}
+    85→
+    86→/** 导出用资产条目（与原版 v1.2.0 schema 向后兼容的可选段） */
+    87→export interface AssetExportItem {
+    88→  kind: AssetKind;
+    89→  name: string;
+    90→  lockedAppearance: string;
+    91→  visualAnchor: string;
+    92→  portraitUrl?: string;
+    93→  refCount?: number;
+    94→}
+    95→
+    96→/** 运镜库（枚举值 → 中文机位说明 + 英文生成 Prompt），比原版单一 push 更丰富 */
+    97→export const CAMERA_MOVEMENTS: Record<
+    98→  string,
+    99→  { label: string; prompt: string }
+   100→> = {
+   101→  push: { label: "快速推近特写", prompt: "rapid push-in to close-up, aggressive framing" },
+   102→  pull: { label: "极速拉远全景", prompt: "fast pull-back revealing full scene scale" },
+   103→  handheld: { label: "手持跟拍", prompt: "handheld tracking shot, urgent and immersive" },
+   104→  whip_pan: { label: "闪电甩镜", prompt: "whip pan, lightning-fast camera swing" },
+   105→  dolly_zoom: { label: "希区柯克变焦", prompt: "dolly zoom, vertigo effect, background warps while subject locked" },
+   106→  crane_up: { label: "升降上摇", prompt: "crane up, rising overhead reveal" },
+   107→  orbit: { label: "360°环绕运镜", prompt: "360 degree dynamic circular orbit around subject" },
+   108→  low_angle_tracking: { label: "低角度仰拍跟拍", prompt: "low-angle ground shot tracking forward, dominant and imposing" },
+   109→  top_down: { label: "俯瞰全景", prompt: "top-down bird's eye view, god-like overview" },
+   110→  dutch_tilt: { label: "荷兰倾斜", prompt: "dutch tilt angle, destabilized off-kilter framing" },
+   111→  static_close: { label: "固定特写", prompt: "locked-off static close-up, tense stillness" },
+   112→  pan_horizontal: { label: "凌厉横摇", prompt: "crisp horizontal pan scanning across the crowd" },
+   113→};
+   114→
+   115→/** 运镜中文说明（兼容旧引用） */
+   116→export function cameraLabel(movement: string): string {
+   117→  return CAMERA_MOVEMENTS[movement]?.label ?? movement;
+   118→}
+   119→
+   120→/**
+   121→ * 三幕情绪梯级运镜池 —— 按叙事功能结构性分配机位调度，
+   122→ * 防止生成器落入同质化（如三幕全是 push）：
+   123→ * - hook：锁定/冲击类，3 秒内抓住眼球
+   124→ * - climax：排场/压迫类，展现反转的震撞力
+   125→ * - cliffhanger：炫技/悬念类，制造意犹未尽的离场感
+   126→ */
+   127→export const ACT_MOVEMENT_POOLS: Record<NarrativeFunction, string[]> = {
+   128→  hook: ["push", "whip_pan", "dutch_tilt", "static_close", "handheld"],
+   129→  climax: ["low_angle_tracking", "pull", "top_down", "pan_horizontal", "orbit"],
+   130→  cliffhanger: ["dolly_zoom", "crane_up", "orbit", "top_down"],
+   131→};
+   132→
+   133→/** 运镜是否属于指定幕的推荐池 */
+   134→export function isInActPool(fn: NarrativeFunction, movement: string): boolean {
+   135→  return ACT_MOVEMENT_POOLS[fn]?.includes(movement) ?? false;
+   136→}
+   137→
+   138→/** 景别库（分镜拆解用） */
+   139→export const SHOT_SIZES = [
+   140→  "远景",
+   141→  "全景",
+   142→  "中景",
+   143→  "近景",
+   144→  "特写",
+   145→  "大特写",
+   146→] as const;
+   147→export type ShotSize = (typeof SHOT_SIZES)[number];
+   148→
+   149→export const NARRATIVE_META: Record<
+   150→  NarrativeFunction,
+   151→  { actNo: string; tag: string; label: string }
+   152→> = {
+   153→  hook: { actNo: "第一幕", tag: "黄金开头 Hook", label: "极致冲突" },
+   154→  climax: { actNo: "第二幕", tag: "绝地反转 Clash", label: "身份揭晓" },
+   155→  cliffhanger: { actNo: "第三幕", tag: "卡点留钩 Cliffhanger", label: "致命悬念" },
+   156→};
+   157→
+   158→/** 本地时间戳，格式 2026/11/10 13:58:19 */
+   159→export function formatLocalTime(d: Date = new Date()): string {
+   160→  const p = (n: number) => String(n).padStart(2, "0");
+   161→  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(
+   162→    d.getHours()
+   163→  )}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+   164→}
+   165→
+   166→function pad2(n: number): string {
+   167→  return String(n).padStart(2, "0");
+   168→}
+   169→
+   170→/** 生成与原版完全对齐的 Markdown 制作清单 */
+   171→export function buildMarkdown(project: DramaProjectData): string {
+   172→  const p = project.project;
+   173→  const lines: string[] = [];
+   174→
+   175→  lines.push("# 🎬 《剧集智能创编工坊》分镜制作与录音清单");
+   176→  lines.push("");
+   177→  lines.push(`> 导出时间：${formatLocalTime(new Date(p.exportedAt))}  `);
+   178→  lines.push(`> 题材类型：**${p.genre.name}**（${p.genre.badge}）  `);
+   179→  lines.push(`> 画幅比例：**${p.aspectRatio} 竖屏短剧**  `);
+   180→  lines.push(
+   181→    `> AI 视频基模：**${p.modelConfig.videoModel}** (${p.modelConfig.durationSeconds}s / ${p.modelConfig.resolution})  `
+   182→  );
+   183→  lines.push(`> 建议配乐音效：${p.genre.musicMood}`);
+   184→  lines.push("");
+   185→  lines.push("---");
+   186→  lines.push("");
+   187→  lines.push("## 📖 核心剧情梗概");
+   188→  lines.push(p.synopsis);
+   189→  lines.push("");
+   190→  lines.push("");
+   191→  lines.push("## ⚡ 创作破局技与钩子设定");
+   192→  lines.push(`- **黄金前3秒抓人策略**：${p.genre.hookTactic}`);
+   193→  lines.push(`- **画面影调 Prompt**：\`${p.genre.tonePrompt}\``);
+   194→  lines.push("");
+   195→  lines.push("");
+   196→  lines.push("## 📋 三幕叙事与分镜详单");
+   197→  lines.push("");
+   198→
+   199→  for (const beat of project.storyBeats) {
+   200→    lines.push(`### 【第 ${pad2(beat.index)} 幕】${beat.actTitle}`);
+   201→    lines.push(`- **节奏要求**：${beat.pacingNote}`);
+   202→    lines.push(
+   203→      `- **运镜机位**：${cameraLabel(beat.cameraMovement)}（\`${beat.cameraMovement}\` → ${CAMERA_MOVEMENTS[beat.cameraMovement]?.prompt ?? ""}）`
+   204→    );
+   205→    lines.push(`- **情节画面**：${beat.description}`);
+   206→    lines.push(`- **核心台词金句 (字幕)**：> 💬 **${beat.dialogueSubtitle}**`);
+   207→    lines.push(`- **画面提示补充**：${beat.promptGuidance}`);
+   208→    lines.push(`- **镜头产出状态**：⏳ 待生成`);
+   209→    lines.push("");
+   210→    lines.push("");
+   211→  }
+   212→
+   213→  // —— v2：资产定妆表（一致性锚定的交付物） ——
+   214→  if (project.assets && project.assets.length > 0) {
+   215→    lines.push("");
+   216→    lines.push("---");
+   217→    lines.push("");
+   218→    lines.push(`## 🎭 资产定妆表 (${project.assets.length} 项 · 跨镜头一致性锚定)`);
+   219→    lines.push("");
+   220→    lines.push("| 类型 | 名称 | 锁定外观（中文） | 视觉锚点（英文） | 引用镜头数 | 定妆照 |");
+   221→    lines.push("| :--- | :--- | :--- | :--- | :--- | :--- |");
+   222→    const kindLabel: Record<string, string> = {
+   223→      character: "角色",
+   224→      scene: "场景",
+   225→      prop: "道具",
+   226→    };
+   227→    for (const a of project.assets) {
+   228→      lines.push(
+   229→        `| ${kindLabel[a.kind] ?? a.kind} | **${a.name}** | ${a.lockedAppearance} | \`${a.visualAnchor}\` | ${a.refCount ?? 0} | ${a.portraitUrl ? "✅ 已定妆" : "⏳ 未定妆"} |`
+   230→      );
+   231→    }
+   232→  }
+   233→
+   234→  lines.push("");
+   235→  lines.push("---");
+   236→  lines.push("");
+   237→  lines.push(`## 🎞️ 镜头轨素材排布 (${project.timelineClips.length} 个片段)`);
+   238→  lines.push("");
+   239→  const hasBreakdown = project.timelineClips.some(
+   240→    (c) => (c as ClipData).shotSize || (c as ClipData).cameraMovement
+   241→  );
+   242→  if (hasBreakdown) {
+   243→    lines.push(
+   244→      "| 镜头序号 | 镜头名称 | 关联节拍 | 景别 | 运镜机位 | 画面内容 | 台词字幕 | 计划时长 | 能量 | 音效 | 媒体格式 | 状态 |"
+   245→    );
+   246→    lines.push("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |");
+   247→    for (const clip of project.timelineClips) {
+   248→      const c = clip as Record<string, string & number>;
+   249→      const mv = c.cameraMovement
+   250→        ? `${cameraLabel(String(c.cameraMovement))}`
+   251→        : "—";
+   252→      lines.push(
+   253→        `| ${c.no ?? ""} | ${c.name ?? ""} | ${c.beatRef ?? ""} | ${c.shotSize ?? "—"} | ${mv} | ${c.visualDesc ?? "—"} | ${c.subtitle ?? ""} | ${c.plannedMs ? `${Math.round(c.plannedMs / 100) / 10}s` : "—"} | ${c.energy != null ? `${c.energy}` : "—"} | ${c.sfxHint ?? "—"} | ${c.format ?? ""} | ${c.status ?? ""} |`
+   254→      );
+   255→    }
+   256→  } else {
+   257→    lines.push(
+   258→      "| 镜头序号 | 镜头名称 | 关联节拍 / 角色 | 台词字幕 | 媒体格式 |"
+   259→    );
+   260→    lines.push("| :--- | :--- | :--- | :--- | :--- |");
+   261→    for (const clip of project.timelineClips) {
+   262→      const c = clip as Record<string, string>;
+   263→      lines.push(
+   264→        `| ${c.no ?? ""} | ${c.name ?? ""} | ${c.beatRef ?? ""} | ${c.subtitle ?? ""} | ${c.format ?? ""} |`
+   265→      );
+   266→    }
+   267→  }
+   268→  lines.push("");
+   269→  lines.push("");
+   270→
+   271→  // —— v2：三轨排布表（后期成包交付物） ——
+   272→  if (project.tracks) {
+   273→    const t = project.tracks;
+   274→    const fmtMs = (ms: number) => `${Math.round(ms / 100) / 10}s`;
+   275→    if (t.subtitle.length > 0 || t.sfx.length > 0 || t.bgm.length > 0) {
+   276→      lines.push("---");
+   277→      lines.push("");
+   278→      lines.push("## 🎼 后期三轨排布");
+   279→      lines.push("");
+   280→      lines.push("### 字幕轨（金句大字 / 关键词变色）");
+   281→      lines.push("| 入点 | 出点 | 字幕文本 | 样式 |");
+   282→      lines.push("| :--- | :--- | :--- | :--- |");
+   283→      for (const s of t.subtitle) {
+   284→        lines.push(
+   285→          `| ${fmtMs(s.startMs)} | ${fmtMs(s.endMs)} | ${s.text} | ${s.style ? JSON.stringify(s.style) : "—"} |`
+   286→        );
+   287→      }
+   288→      lines.push("");
+   289→      lines.push("### 音效轨（卡点音效）");
+   290→      lines.push("| 入点 | 出点 | 音效标签 |");
+   291→      lines.push("| :--- | :--- | :--- |");
+   292→      for (const s of t.sfx) {
+   293→        lines.push(`| ${fmtMs(s.startMs)} | ${fmtMs(s.endMs)} | ${s.text} |`);
+   294→      }
+   295→      lines.push("");
+   296→      lines.push("### 配乐轨（情绪分段）");
+   297→      lines.push("| 入点 | 出点 | 情绪标签 | 强度 |");
+   298→      lines.push("| :--- | :--- | :--- | :--- |");
+   299→      for (const s of t.bgm) {
+   300→        const intensity =
+   301→          s.style && typeof s.style === "object" && "intensity" in s.style
+   302→            ? String((s.style as { intensity: number }).intensity)
+   303→            : "—";
+   304→        lines.push(`| ${fmtMs(s.startMs)} | ${fmtMs(s.endMs)} | ${s.text} | ${intensity} |`);
+   305→      }
+   306→    }
+   307→  }
+   308→
+   309→  // —— v2：镜头级最终提示词清单（可直接投喂 AI 视频基模） ——
+   310→  const prompts = project.timelineClips.filter(
+   311→    (c) => (c as Record<string, unknown>).finalPrompt
+   312→  );
+   313→  if (prompts.length > 0) {
+   314→    lines.push("");
+   315→    lines.push("---");
+   316→    lines.push("");
+   317→    lines.push(`## 🤖 镜头级最终提示词 (${prompts.length} 条 · 锚定组装产物)`);
+   318→    lines.push("");
+   319→    for (const clip of prompts) {
+   320→      const c = clip as Record<string, string>;
+   321→      lines.push(
+   322→        `**#${c.no} ${c.name}**（${c.shotSize ?? ""} · ${cameraLabel(c.cameraMovement ?? "")}）`
+   323→      );
+   324→      lines.push("```text");
+   325→      lines.push(c.finalPrompt);
+   326→      lines.push("```");
+   327→      lines.push("");
+   328→    }
+   329→  }
+   330→
+   331→  lines.push("");
+   332→  lines.push("---");
+   333→  lines.push("*制作团队：剧集智能创编工坊 (DRAMA STUDIO) · AI 剧组流水线*");
+   334→
+   335→  return lines.join("\n");
+   336→}
+   337→
+   338→/** 触发浏览器下载 */
+   339→export function downloadFile(filename: string, content: string, mime: string) {
+   340→  const blob = new Blob([content], { type: mime });
+   341→  const url = URL.createObjectURL(blob);
+   342→  const a = document.createElement("a");
+   343→  a.href = url;
+   344→  a.download = filename;
+   345→  document.body.appendChild(a);
+   346→  a.click();
+   347→  document.body.removeChild(a);
+   348→  URL.revokeObjectURL(url);
+   349→}
+   350→
+   351→// ============================================================
+   352→// v2 ·「AI 剧组流水线」领域模型
+   353→// 产品定位：不是视频生成器，而是一条 AI 剧组流水线——
+   354→// 制片 → 编剧 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包，
+   355→// 让普通用户不慬运镜/景别/轴线，也能产出专业级制作包。
+   356→// ============================================================
+   357→
+   358→/** 剧组角色（产品语言，贯穿流水线日志与前端进度面板） */
+   359→export type CrewRoleKey =
+   360→  | "producer"
+   361→  | "screenwriter"
+   362→  | "casting"
+   363→  | "director"
+   364→  | "supervisor"
+   365→  | "post";
+   366→
+   367→export const CREW_ROLES: Record<
+   368→  CrewRoleKey,
+   369→  { name: string; duty: string; color: string }
+   370→> = {
+   371→  producer: {
+   372→    name: "制片主任",
+   373→    duty: "立项统筹 · 下发题材战术手册",
+   374→    color: "text-amber-400",
+   375→  },
+   376→  screenwriter: {
+   377→    name: "编剧",
+   378→    duty: "黄金 3 秒钩子 · 三幕剧本",
+   379→    color: "text-rose-400",
+   380→  },
+   381→  casting: {
+   382→    name: "选角定妆",
+   383→    duty: "角色/场景/道具资产锁定",
+   384→    color: "text-fuchsia-400",
+   385→  },
+   386→  director: {
+   387→    name: "导演",
+   388→    duty: "一幕拆多镜 · 正反打节奏",
+   389→    color: "text-sky-400",
+   390→  },
+   391→  supervisor: {
+   392→    name: "场记",
+   393→    duty: "锚定组装 · 一致性校验",
+   394→    color: "text-teal-400",
+   395→  },
+   396→  post: {
+   397→    name: "后期",
+   398→    duty: "三轨落轨 · 情绪能量曲线",
+   399→    color: "text-emerald-400",
+   400→  },
+   401→};
+   402→
+   403→/** 流水线阶段定义（编排顺序即数组顺序，weight 用于进度加权） */
+   404→export interface RunStageDef {
+   405→  key: string;
+   406→  name: string;
+   407→  role: CrewRoleKey;
+   408→  weight: number;
+   409→}
+   410→
+   411→export const RUN_STAGES: RunStageDef[] = [
+   412→  { key: "screenwriting", name: "剧本创作", role: "screenwriter", weight: 20 },
+   413→  { key: "casting", name: "选角定妆", role: "casting", weight: 15 },
+   414→  { key: "directing", name: "导演拆镜", role: "director", weight: 40 },
+   415→  { key: "anchoring", name: "锚定组装", role: "supervisor", weight: 10 },
+   416→  { key: "postproduction", name: "后期成包", role: "post", weight: 15 },
+   417→];
+   418→
+   419→export type RunStatus = "running" | "succeeded" | "failed";
+   420→export type StageStatus = "pending" | "running" | "succeeded" | "failed";
+   421→
+   422→export const RUN_STATUS: Record<
+   423→  RunStatus,
+   424→  { label: string; cls: string }
+   425→> = {
+   426→  running: {
+   427→    label: "拍摄中",
+   428→    cls: "border-amber-500/40 bg-amber-500/10 text-amber-400",
+   429→  },
+   430→  succeeded: {
+   431→    label: "已杀青",
+   432→    cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+   433→  },
+   434→  failed: {
+   435→    label: "中断",
+   436→    cls: "border-rose-500/40 bg-rose-500/10 text-rose-400",
+   437→  },
+   438→};
+   439→
+   440→export interface RunStageInfo {
+   441→  key: string;
+   442→  name: string;
+   443→  role: CrewRoleKey;
+   444→  status: StageStatus;
+   445→  startedAt: string | null;
+   446→  finishedAt: string | null;
+   447→  error: string | null;
+   448→}
+   449→
+   450→/** 剧组日志条目（流水线的生产观测窗口） */
+   451→export interface RunLogEntry {
+   452→  at: string;
+   453→  role: CrewRoleKey;
+   454→  message: string;
+   455→}
+   456→
+   457→export interface RunDTO {
+   458→  id: string;
+   459→  projectId: string;
+   460→  status: RunStatus;
+   461→  progress: number;
+   462→  stage: string;
+   463→  stages: RunStageInfo[];
+   464→  journal: RunLogEntry[];
+   465→  error: string | null;
+   466→  createdAt: string;
+   467→  updatedAt: string;
+   468→}
+   469→
+   470→/** —— 资产库 —— */
+   471→export type AssetKind = "character" | "scene" | "prop";
+   472→
+   473→export const ASSET_KIND_META: Record<
+   474→  AssetKind,
+   475→  { label: string; icon: string; cls: string }
+   476→> = {
+   477→  character: {
+   478→    label: "角色",
+   479→    icon: " 👤",
+   480→    cls: "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-300",
+   481→  },
+   482→  scene: {
+   483→    label: "场景",
+   484→    icon: "🏙️",
+   485→    cls: "border-sky-500/40 bg-sky-500/10 text-sky-300",
+   486→  },
+   487→  prop: {
+   488→    label: "道具",
+   489→    icon: "🎁",
+   490→    cls: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+   491→  },
+   492→};
+   493→
+   494→export interface VoiceProfile {
+   495→  voiceId: string;
+   496→  speed: number;
+   497→  style: string;
+   498→}
+   499→
+   500→export interface AssetDTO {
+   501→  id: string;
+   502→  kind: AssetKind;
+   503→  name: string;
+   504→  lockedAppearance: string;
+   505→  visualAnchor: string;
+   506→  voiceProfile: VoiceProfile | null;
+   507→  portraitUrl: string | null;
+   508→  source: "crew" | "manual";
+   509→  /** 被多少个镜头引用（服务端聚合，用于解冻风险提示） */
+   510→  refCount: number;
+   511→  createdAt: string;
+   512→  updatedAt: string;
+   513→}
+   514→
+   515→/** 镜头 ↔ 资产引用（扁平列表，前端按 clipId 分组） */
+   516→export interface ShotRefDTO {
+   517→  id: string;
+   518→  clipId: string;
+   519→  assetId: string;
+   520→  kind: AssetKind;
+   521→  assetName: string;
+   522→  stateNote: string | null;
+   523→}
+   524→
+   525→/** —— 渲染任务（外部生成通道） —— */
+   526→export type TaskKind = "portrait" | "video" | "voiceover";
+   527→export type TaskStatus =
+   528→  | "queued"
+   529→  | "running"
+   530→  | "succeeded"
+   531→  | "failed"
+   532→  | "cancelled";
+   533→
+   534→export const TASK_STATUS: Record<
+   535→  TaskStatus,
+   536→  { label: string; cls: string }
+   537→> = {
+   538→  queued: {
+   539→    label: "排队中",
+   540→    cls: "border-zinc-500/40 bg-zinc-500/10 text-zinc-400",
+   541→  },
+   542→  running: {
+   543→    label: "生成中",
+   544→    cls: "border-amber-500/40 bg-amber-500/10 text-amber-400",
+   545→  },
+   546→  succeeded: {
+   547→    label: "已完成",
+   548→    cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+   549→  },
+   550→  failed: {
+   551→    label: "失败",
+   552→    cls: "border-rose-500/40 bg-rose-500/10 text-rose-400",
+   553→  },
+   554→  cancelled: {
+   555→    label: "已取消",
+   556→    cls: "border-zinc-500/40 bg-zinc-500/10 text-zinc-500",
+   557→  },
+   558→};
+   559→
+   560→export const TASK_KIND_META: Record<
+   561→  TaskKind,
+   562→  { label: string; cls: string }
+   563→> = {
+   564→  portrait: { label: "定妆照", cls: "border-fuchsia-500/40 text-fuchsia-300" },
+   565→  video: { label: "镜头渲染", cls: "border-sky-500/40 text-sky-300" },
+   566→  voiceover: { label: "台词配音", cls: "border-teal-500/40 text-teal-300" },
+   567→};
+   568→
+   569→export interface TaskDTO {
+   570→  id: string;
+   571→  projectId: string;
+   572→  kind: TaskKind;
+   573→  status: TaskStatus;
+   574→  payload: Record<string, unknown>;
+   575→  resultUrl: string | null;
+   576→  attempts: number;
+   577→  maxAttempts: number;
+   578→  error: string | null;
+   579→  createdAt: string;
+   580→  updatedAt: string;
+   581→}
+   582→
+   583→/** —— 轨道层 —— */
+   584→export type TrackKind = "subtitle" | "sfx" | "bgm" | "voiceover";
+   585→
+   586→export const TRACK_KIND_META: Record<
+   587→  TrackKind,
+   588→  { label: string; cls: string }
+   589→> = {
+   590→  subtitle: {
+   591→    label: "字幕轨",
+   592→    cls: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+   593→  },
+   594→  sfx: {
+   595→    label: "音效轨",
+   596→    cls: "border-rose-500/40 bg-rose-500/10 text-rose-300",
+   597→  },
+   598→  bgm: {
+   599→    label: "配乐轨",
+   600→    cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+   601→  },
+   602→  voiceover: {
+   603→    label: "配音轨",
+   604→    cls: "border-sky-500/40 bg-sky-500/10 text-sky-300",
+   605→  },
+   606→};
+   607→
+   608→export interface TrackItemDTO {
+   609→  id: string;
+   610→  kind: TrackKind;
+   611→  clipId: string | null;
+   612→  startMs: number;
+   613→  endMs: number;
+   614→  text: string;
+   615→  style: Record<string, unknown> | null;
+   616→}
+   617→
+   618→/** —— 情绪能量曲线 —— */
+   619→export interface EnergyCurvePoint {
+   620→  clipId: string;
+   621→  order: number;
+   622→  beatIndex: number;
+   623→  energy: number;
+   624→}
+   625→
+   626→// ============================================================
+   627→// 工作台扩展模型（项目持久化 / 镜头轨管理）
+   628→// 状态枚举集中在此定义，新增状态只改这一处
+   629→// ============================================================
+   630→
+   631→export const CLIP_STATUS = {
+   632→  pending: { label: "待生成", cls: "border-zinc-500/40 bg-zinc-500/10 text-zinc-400" },
+   633→  generating: { label: "生成中", cls: "border-amber-500/40 bg-amber-500/10 text-amber-400" },
+   634→  ready: { label: "已生成", cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" },
+   635→  failed: { label: "生成失败", cls: "border-rose-500/40 bg-rose-500/10 text-rose-400" },
+   636→} as const;
+   637→
+   638→export type ClipStatus = keyof typeof CLIP_STATUS;
+   639→
+   640→export const PROJECT_STATUS = {
+   641→  draft: "草稿",
+   642→  beatsReady: "分镜就绪",
+   643→  inProduction: "制作中",
+   644→  archived: "已归档",
+   645→} as const;
+   646→
+   647→export type ProjectStatus = keyof typeof PROJECT_STATUS;
+   648→
+   649→/** 镜头轨片段（客户端视图） */
+   650→export interface ClipData {
+   651→  id: string;
+   652→  beatIndex: number;
+   653→  order: number;
+   654→  name: string;
+   655→  subtitle: string;
+   656→  format: string;
+   657→  status: ClipStatus;
+   658→  mediaUrl: string | null;
+   659→  durationMs: number | null;
+   660→  /** —— 分镜拆解扩展（可空：手动创建的片段无拆解信息） —— */
+   661→  /** 景别：远景/全景/中景/近景/特写/大特写 */
+   662→  shotSize: string | null;
+   663→  /** 运镜（CAMERA_MOVEMENTS 键名） */
+   664→  cameraMovement: string | null;
+   665→  /** 画面内容（拆解出的镜头描述） */
+   666→  visualDesc: string | null;
+   667→  /** 计划时长（毫秒） */
+   668→  plannedMs: number | null;
+   669→  /** —— v2：锚定与节奏 —— */
+   670→  /** 组装管线产出的最终英文视频提示词 */
+   671→  finalPrompt: string | null;
+   672→  /** 锚点指纹（"manual" = 人工微调；null = 未组装） */
+   673→  promptVersion: string | null;
+   674→  /** 情绪能量 0~100 */
+   675→  energy: number | null;
+   676→  /** 建议音效标签 */
+   677→  sfxHint: string | null;
+   678→}
+   679→
+   680→/** 分镜拆解产物：一幕 → 多个镜头（v2 协议：能量 / 音效 / 资产引用） */
+   681→export interface ShotBreakdownItem {
+   682→  name: string;
+   683→  shotSize: ShotSize | string;
+   684→  cameraMovement: string;
+   685→  visualDesc: string;
+   686→  subtitle: string;
+   687→  plannedMs: number;
+   688→  energy: number;
+   689→  sfxHint: string;
+   690→  /** 英文动作提示词（锚定组装的动作段来源） */
+   691→  visualPrompt: string | null;
+   692→  /** 出场角色名（与资产座行对齐） */
+   693→  characters: string[];
+   694→  /** 场景名 */
+   695→  scene: string;
+   696→  /** 关键道具名 */
+   697→  props: string[];
+   698→}
+   699→
+   700→/** 项目库列表项（摘要） */
+   701→export interface ProjectSummary {
+   702→  id: string;
+   703→  title: string;
+   704→  status: ProjectStatus;
+   705→  genreId: string;
+   706→  genreName: string;
+   707→  genreBadge: string;
+   708→  clipCount: number;
+   709→  beatCount: number;
+   710→  updatedAt: string;
+   711→  /** v2.3：剧集归属（可空 = 独立单集项目） */
+   712→  seriesId: string | null;
+   713→  seriesTitle: string | null;
+   714→  episodeNo: number | null;
+   715→}
+   716→
+   717→/** —— 系列（v2.3 多剧集连载容器） —— */
+   718→
+   719→export interface SeriesSummary {
+   720→  id: string;
+   721→  title: string;
+   722→  synopsis: string;
+   723→  genreName: string;
+   724→  episodeCount: number;
+   725→  updatedAt: string;
+   726→}
+   727→
+   728→/** 系列详情内的单集摘要 */
+   729→export interface SeriesEpisodeSummary {
+   730→  id: string;
+   731→  episodeNo: number;
+   732→  title: string;
+   733→  status: ProjectStatus;
+   734→  clipCount: number;
+   735→  beatCount: number;
+   736→  /** 本集镜头计划总时长（毫秒，拆镜后汇总） */
+   737→  plannedMs: number;
+   738→  updatedAt: string;
+   739→}
+   740→
+   741→export interface SeriesDetail {
+   742→  id: string;
+   743→  title: string;
+   744→  synopsis: string;
+   745→  genreId: string;
+   746→  genreName: string;
+   747→  genreBadge: string;
+   748→  hookTactic: string;
+   749→  musicMood: string;
+   750→  tonePrompt: string;
+   751→  episodes: SeriesEpisodeSummary[];
+   752→  createdAt: string;
+   753→  updatedAt: string;
+   754→}
+   755→
+   756→/** 新建剧集请求体（题材与模型参数缺省时继承系列/上一集） */
+   757→export interface CreateEpisodePayload {
+   758→  title?: string;
+   759→  synopsis: string;
+   760→  /** 从上一集克隆资产库（含定妆图引用，跨集视觉一致） */
+   761→  cloneAssets?: boolean;
+   762→  genre?: CreateProjectDraftPayload["genre"];
+   763→  modelConfig?: ModelConfig;
+   764→}
+   765→
+   766→/** 立项草稿请求体（「全组开机」第一步：先建项目，再启动流水线） */
+   767→export interface CreateProjectDraftPayload {
+   768→  title?: string;
+   769→  genre: {
+   770→    id: string;
+   771→    name: string;
+   772→    badge: string;
+   773→    hookTactic: string;
+   774→    musicMood: string;
+   775→    tonePrompt: string;
+   776→  };
+   777→  synopsis: string;
+   778→  modelConfig: ModelConfig;
+   779→}
+   780→
+   781→/** 项目详情（项目 + 分镜 + 镜头轨 + v2 制作包全量） */
+   782→export interface ProjectDetail extends ProjectSummary {
+   783→  synopsis: string;
+   784→  aspectRatio: string;
+   785→  modelConfig: ModelConfig;
+   786→  genre: {
+   787→    id: string;
+   788→    name: string;
+   789→    badge: string;
+   790→    hookTactic: string;
+   791→    musicMood: string;
+   792→    tonePrompt: string;
+   793→  };
+   794→  storyBeats: StoryBeat[];
+   795→  timelineClips: ClipData[];
+   796→  createdAt: string;
+   797→  schemaVersion: string;
+   798→  /** —— v2 制作包 —— */
+   799→  assets: AssetDTO[];
+   800→  shotRefs: ShotRefDTO[];
+   801→  tracks: TrackItemDTO[];
+   802→  /** 锚点已过期（资产改动后需重组装）的镜头 id 列表 */
+   803→  anchorStaleClipIds: string[];
+   804→  /** 进行中/最近一次流水线运行 */
+   805→  activeRun: RunDTO | null;
+   806→}
+   807→
+   808→/** 保存项目的请求体（genre 只要求持久化快照字段，与 zod 校验器对齐） */
+   809→export interface SaveProjectPayload {
+   810→  title?: string;
+   811→  genre: {
+   812→    id: string;
+   813→    name: string;
+   814→    badge: string;
+   815→    hookTactic: string;
+   816→    musicMood: string;
+   817→    tonePrompt: string;
+   818→  };
+   819→  synopsis: string;
+   820→  modelConfig: ModelConfig;
+   821→  storyBeats: StoryBeat[];
+   822→  status?: ProjectStatus;
+   823→}
+   824→
+   825→/**
+   826→ * 将项目详情转换为与原版对齐的导出工程数据。
+   827→ * timelineClips 按 order 排序填入，含状态与成片地址（原版 schema 的前向兼容超集）。
+   828→ */
+   829→export function toExportData(detail: ProjectDetail): DramaProjectData {
+   830→  const clips = [...detail.timelineClips].sort((a, b) => a.order - b.order);
+   831→  return {
+   832→    project: {
+   833→      title: detail.title,
+   834→      version: detail.schemaVersion,
+   835→      exportedAt: new Date().toISOString(),
+   836→      genre: { ...detail.genre },
+   837→      aspectRatio: detail.aspectRatio,
+   838→      synopsis: detail.synopsis,
+   839→      modelConfig: detail.modelConfig,
+   840→    },
+   841→    storyBeats: detail.storyBeats,
+   842→    timelineClips: clips.map((c, i) => ({
+   843→      no: i + 1,
+   844→      name: c.name,
+   845→      beatRef: `第 ${String(c.beatIndex).padStart(2, "0")} 幕`,
+   846→      subtitle: c.subtitle,
+   847→      format: c.format,
+   848→      status: CLIP_STATUS[c.status].label,
+   849→      mediaUrl: c.mediaUrl ?? "",
+   850→      ...(c.shotSize ? { shotSize: c.shotSize } : {}),
+   851→      ...(c.cameraMovement
+   852→        ? {
+   853→            cameraMovement: c.cameraMovement,
+   854→            cameraPrompt: CAMERA_MOVEMENTS[c.cameraMovement]?.prompt ?? "",
+   855→          }
+   856→        : {}),
+   857→      ...(c.visualDesc ? { visualDesc: c.visualDesc } : {}),
+   858→      ...(c.plannedMs != null ? { plannedMs: c.plannedMs } : {}),
+   859→      ...(c.finalPrompt ? { finalPrompt: c.finalPrompt } : {}),
+   860→      ...(c.energy != null ? { energy: c.energy } : {}),
+   861→      ...(c.sfxHint ? { sfxHint: c.sfxHint } : {}),
+   862→    })),
+   863→    statistics: {
+   864→      totalBeats: detail.storyBeats.length,
+   865→      totalClips: clips.length,
+   866→      hasSynthesizedOutput: clips.length > 0 && clips.every((c) => c.status === "ready"),
+   867→    },
+   868→    // —— v2 可选扩展段（旧消费者忽略未知字段即可） ——
+   869→    ...(detail.assets.length > 0
+   870→      ? {
+   871→          assets: detail.assets.map((a) => ({
+   872→            kind: a.kind,
+   873→            name: a.name,
+   874→            lockedAppearance: a.lockedAppearance,
+   875→            visualAnchor: a.visualAnchor,
+   876→            ...(a.portraitUrl ? { portraitUrl: a.portraitUrl } : {}),
+   877→            refCount: a.refCount,
+   878→          })),
+   879→        }
+   880→      : {}),
+   881→    ...(detail.tracks.length > 0
+   882→      ? {
+   883→          tracks: {
+   884→            subtitle: detail.tracks.filter((t) => t.kind === "subtitle"),
+   885→            sfx: detail.tracks.filter((t) => t.kind === "sfx"),
+   886→            bgm: detail.tracks.filter((t) => t.kind === "bgm"),
+   887→          },
+   888→        }
+   889→      : {}),
+   890→    ...(clips.some((c) => c.energy != null)
+   891→      ? {
+   892→          energyCurve: clips.map((c, i) => ({
+   893→            clipId: c.id,
+   894→            order: i,
+   895→            beatIndex: c.beatIndex,
+   896→            energy: c.energy ?? 50,
+   897→          })),
+   898→        }
+   899→      : {}),
+   900→  };
+   901→}
+   902→

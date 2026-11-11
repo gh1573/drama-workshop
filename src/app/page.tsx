@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BadgeCheck,
@@ -8,13 +8,23 @@ import {
   Clapperboard,
   FolderOpen,
   Gauge,
+  Layers,
+  Film,
   Loader2,
   Sparkles,
+  Users,
+  Workflow,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GenrePanel } from "@/components/workbench/genre-panel";
 import { SynopsisPanel } from "@/components/workbench/synopsis-panel";
 import { ModelConfigPanel } from "@/components/workbench/model-config-panel";
@@ -23,6 +33,7 @@ import { TimelinePanel } from "@/components/workbench/timeline-panel";
 import { RhythmPanel } from "@/components/workbench/rhythm-panel";
 import { CrewPipelinePanel } from "@/components/workbench/crew-pipeline-panel";
 import { AssetLibraryPanel } from "@/components/workbench/asset-library-panel";
+import { FinalCutPanel } from "@/components/workbench/final-cut-panel";
 import { ProjectInfoCard } from "@/components/workbench/project-info-card";
 import { ProjectLibraryDrawer } from "@/components/workbench/project-library-drawer";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +47,8 @@ const LOADING_STEPS = [
   "打磨台词金句与画面提示",
 ];
 
+type WorkbenchTab = "cut" | "script" | "assets" | "rhythm" | "pipeline";
+
 export default function Home() {
   const { toast } = useToast();
   const session = useWorkbench((s) => s.session);
@@ -44,20 +57,27 @@ export default function Home() {
   const generate = useWorkbench((s) => s.generate);
   const synopsis = useWorkbench((s) => s.synopsis);
   const setLibraryOpen = useWorkbench((s) => s.setLibraryOpen);
-  const outputNonce = useWorkbench((s) => s.outputNonce);
   // —— v2 剧组流水线 ——
   const activeRun = useWorkbench((s) => s.activeRun);
   const pipelineStarting = useWorkbench((s) => s.pipelineStarting);
   const startPipeline = useWorkbench((s) => s.startPipeline);
-  const outputRef = useRef<HTMLDivElement>(null);
+
+  // 工作台页签：流水线运行中自动切「剧组进程」，成功后自动切「成片」
+  const [tab, setTab] = useState<WorkbenchTab>("cut");
+  const runStatus = activeRun?.status ?? null;
+  useEffect(() => {
+    if (runStatus === "running") setTab("pipeline");
+    else if (runStatus === "succeeded") setTab("cut");
+  }, [runStatus]);
+
+  // 开机后左列配置自动折叠
+  const [configOpen, setConfigOpen] = useState(true);
+  const hasSession = !!session;
+  useEffect(() => {
+    if (hasSession) setConfigOpen(false);
+  }, [hasSession]);
 
   const pipelineRunning = activeRun?.status === "running";
-
-  useEffect(() => {
-    if (outputNonce > 0) {
-      outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [outputNonce]);
 
   useEffect(() => {
     if (!generating) return;
@@ -79,6 +99,7 @@ export default function Home() {
     }
     const ok = await generate();
     if (ok) {
+      setTab("script");
       toast({ title: "分镜推演完成", description: "三幕结构已生成，可保存到项目库或导出" });
     } else {
       toast({
@@ -103,9 +124,8 @@ export default function Home() {
     if (ok) {
       toast({
         title: "剧组已开机 🎬",
-        description: "编剧 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包，全程可在流水线面板观测",
+        description: "编剧 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包，进度见「剧组进程」页签",
       });
-      outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
       toast({
         title: "开机失败",
@@ -144,7 +164,7 @@ export default function Home() {
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                剧本推演 · 镜头编排 · 成片合成
+                剧本推演 · 镜头编排 · 一键成片
               </p>
             </div>
           </div>
@@ -165,77 +185,132 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
         <div className="grid gap-6 lg:grid-cols-12">
-          {/* ===== 左列：创作配置 ===== */}
-          <div className="space-y-6 lg:col-span-5">
-            <GenrePanel />
-            <SynopsisPanel />
-            <ModelConfigPanel />
-
-            <div className="space-y-3">
-              {/* 主 CTA：AI 剧组流水线 */}
-              <Button
-                size="lg"
-                disabled={pipelineRunning || pipelineStarting || synopsis.trim().length < 10}
-                onClick={handleStartPipeline}
-                className="h-14 w-full bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 text-base font-bold text-white shadow-xl shadow-red-600/25 hover:opacity-90"
+          {/* ===== 左列：创作配置（开机后自动折叠） ===== */}
+          <div className="space-y-5 lg:col-span-4">
+            {hasSession && (
+              <Collapsible
+                open={configOpen}
+                onOpenChange={setConfigOpen}
+                className="rounded-xl border bg-card"
               >
-                {pipelineRunning || pipelineStarting ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    剧组拍摄中 {activeRun ? `· ${activeRun.progress}%` : "…"}
-                  </>
-                ) : (
-                  <>
-                    <Clapperboard className="h-5 w-5" />
-                    全组开机 · AI 剧组流水线
-                  </>
-                )}
-              </Button>
-              {pipelineRunning && activeRun && (
-                <Progress value={activeRun.progress} className="h-1.5" />
-              )}
-
-              {/* 副路径：仅快速推演三幕（不立项） */}
-              <p className="text-center text-xs text-muted-foreground">
-                只想先试试剧本？
-                <button
-                  onClick={handleGenerate}
-                  disabled={generating || pipelineRunning}
-                  className="mx-1 underline underline-offset-2 transition-colors hover:text-foreground disabled:opacity-40"
-                >
-                  仅快速推演三幕剧本（不立项）
-                </button>
-              </p>
-
-              {generating && (
-                <div className="space-y-2 rounded-xl border bg-card p-4">
-                  {LOADING_STEPS.map((s, i) => (
-                    <div key={s} className="flex items-center gap-2 text-sm">
-                      {i < generatingStep ? (
-                        <Check className="h-4 w-4 text-emerald-400" />
-                      ) : i === generatingStep ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
-                      ) : (
-                        <span className="mx-1 h-2 w-2 rounded-full bg-muted-foreground/40" />
-                      )}
-                      <span
-                        className={
-                          i <= generatingStep ? "text-foreground" : "text-muted-foreground"
-                        }
-                      >
-                        {s}
-                      </span>
-                    </div>
-                  ))}
+                <div className="flex items-center gap-2 px-4 py-3">
+                  <Sparkles className="h-4 w-4 text-amber-400" />
+                  <p className="flex-1 truncate text-sm font-bold">
+                    {session!.title}
+                  </p>
+                  {pipelineRunning && activeRun && (
+                    <Badge
+                      variant="outline"
+                      className="border-amber-500/40 text-[10px] text-amber-400"
+                    >
+                      {activeRun.progress}%
+                    </Badge>
+                  )}
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                      {configOpen ? "收起配置" : "调整题材/梗概"}
+                    </Button>
+                  </CollapsibleTrigger>
                 </div>
-              )}
-            </div>
+                {pipelineRunning && activeRun && (
+                  <div className="px-4 pb-3">
+                    <Progress value={activeRun.progress} className="h-1.5" />
+                  </div>
+                )}
+                <CollapsibleContent className="space-y-5 border-t border-border/60 p-4">
+                  <GenrePanel />
+                  <SynopsisPanel />
+                  <ModelConfigPanel />
+                  <Button
+                    size="lg"
+                    disabled={pipelineRunning || pipelineStarting || synopsis.trim().length < 10}
+                    onClick={handleStartPipeline}
+                    className="h-12 w-full bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 text-sm font-bold text-white shadow-lg shadow-red-600/25 hover:opacity-90"
+                  >
+                    {pipelineRunning || pipelineStarting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        剧组拍摄中 {activeRun ? `· ${activeRun.progress}%` : "…"}
+                      </>
+                    ) : (
+                      <>
+                        <Clapperboard className="h-4 w-4" />
+                        按新配置重新开机
+                      </>
+                    )}
+                  </Button>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
+            {!hasSession && (
+              <div className="space-y-5">
+                <GenrePanel />
+                <SynopsisPanel />
+                <ModelConfigPanel />
+                <Button
+                  size="lg"
+                  disabled={pipelineRunning || pipelineStarting || synopsis.trim().length < 10}
+                  onClick={handleStartPipeline}
+                  className="h-14 w-full bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 text-base font-bold text-white shadow-xl shadow-red-600/25 hover:opacity-90"
+                >
+                  {pipelineRunning || pipelineStarting ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      剧组拍摄中 {activeRun ? `· ${activeRun.progress}%` : "…"}
+                    </>
+                  ) : (
+                    <>
+                      <Clapperboard className="h-5 w-5" />
+                      全组开机 · AI 剧组流水线
+                    </>
+                  )}
+                </Button>
+
+                {/* 副路径：仅快速推演三幕（不立项） */}
+                <p className="text-center text-xs text-muted-foreground">
+                  只想先试试剧本？
+                  <button
+                    onClick={handleGenerate}
+                    disabled={generating || pipelineRunning}
+                    className="mx-1 underline underline-offset-2 transition-colors hover:text-foreground disabled:opacity-40"
+                  >
+                    仅快速推演三幕剧本（不立项）
+                  </button>
+                </p>
+
+                {generating && (
+                  <div className="space-y-2 rounded-xl border bg-card p-4">
+                    {LOADING_STEPS.map((s, i) => (
+                      <div key={s} className="flex items-center gap-2 text-sm">
+                        {i < generatingStep ? (
+                          <Check className="h-4 w-4 text-emerald-400" />
+                        ) : i === generatingStep ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                        ) : (
+                          <span className="mx-1 h-2 w-2 rounded-full bg-muted-foreground/40" />
+                        )}
+                        <span
+                          className={
+                            i <= generatingStep ? "text-foreground" : "text-muted-foreground"
+                          }
+                        >
+                          {s}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {hasSession && <ProjectInfoCard />}
           </div>
 
-          {/* ===== 右列：分镜产出与镜头轨 ===== */}
-          <div ref={outputRef} className="scroll-mt-20 space-y-6 lg:col-span-7">
+          {/* ===== 右列：工作台页签（一次聚焦一个环节） ===== */}
+          <div className="lg:col-span-8">
             {generating && (
               <div className="space-y-4">
                 <Skeleton className="h-40 w-full rounded-xl" />
@@ -265,25 +340,70 @@ export default function Home() {
 
             {!generating && session && (
               <motion.div
-                key={outputNonce}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="space-y-6"
               >
-                <ProjectInfoCard />
-                <CrewPipelinePanel />
-                {session.beats.map((beat, idx) => (
-                  <ActCard key={beat.index} beat={beat} delay={idx * 0.1} />
-                ))}
-                <AssetLibraryPanel />
-                <TimelinePanel />
-                <RhythmPanel />
+                <Tabs
+                  value={tab}
+                  onValueChange={(v) => setTab(v as WorkbenchTab)}
+                  className="space-y-4"
+                >
+                  <TabsList className="h-10 w-full justify-start gap-1 overflow-x-auto rounded-xl bg-secondary/40 p-1">
+                    <TabsTrigger value="cut" className="gap-1.5 px-3 text-xs">
+                      <Film className="h-3.5 w-3.5" />
+                      成片
+                      {session.finalVideoUrl && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="script" className="gap-1.5 px-3 text-xs">
+                      <Layers className="h-3.5 w-3.5" />
+                      分镜剧本
+                    </TabsTrigger>
+                    <TabsTrigger value="assets" className="gap-1.5 px-3 text-xs">
+                      <Users className="h-3.5 w-3.5" />
+                      资产定妆
+                    </TabsTrigger>
+                    <TabsTrigger value="rhythm" className="gap-1.5 px-3 text-xs">
+                      <Gauge className="h-3.5 w-3.5" />
+                      节奏轨道
+                    </TabsTrigger>
+                    <TabsTrigger value="pipeline" className="gap-1.5 px-3 text-xs">
+                      <Workflow className="h-3.5 w-3.5" />
+                      剧组进程
+                      {pipelineRunning && (
+                        <Loader2 className="h-3 w-3 animate-spin text-amber-400" />
+                      )}
+                    </TabsTrigger>
+                  </TabsList>
 
-                <p className="flex items-center justify-center gap-1.5 pb-2 text-center text-xs text-muted-foreground">
-                  <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" />
-                  满意就保存或导出，不满意改梗概再点一次「重新开机」
-                  <Gauge className="h-3.5 w-3.5 text-amber-400" />
-                </p>
+                  <TabsContent value="cut" className="mt-0 space-y-4">
+                    <FinalCutPanel />
+                    <p className="flex items-center justify-center gap-1.5 pb-2 text-center text-xs text-muted-foreground">
+                      <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" />
+                      渲染 → 合成 → 看片，一条流水线直达成片
+                    </p>
+                  </TabsContent>
+
+                  <TabsContent value="script" className="mt-0 space-y-5">
+                    {session.beats.map((beat, idx) => (
+                      <ActCard key={beat.index} beat={beat} delay={idx * 0.08} />
+                    ))}
+                    <TimelinePanel />
+                  </TabsContent>
+
+                  <TabsContent value="assets" className="mt-0">
+                    <AssetLibraryPanel />
+                  </TabsContent>
+
+                  <TabsContent value="rhythm" className="mt-0">
+                    <RhythmPanel />
+                  </TabsContent>
+
+                  <TabsContent value="pipeline" className="mt-0">
+                    <CrewPipelinePanel />
+                  </TabsContent>
+                </Tabs>
               </motion.div>
             )}
           </div>

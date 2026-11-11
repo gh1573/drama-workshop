@@ -15,6 +15,7 @@ import {
 import {
   PORTRAIT_SPECS,
   PORTRAIT_PROMPT_TAIL,
+  PORTRAIT_CHARACTER_TAIL,
 } from "@/config/templates";
 
 /**
@@ -405,6 +406,8 @@ const handlers: Partial<Record<TaskKind, Handler>> = {
       spec.promptPrefix,
       asset.visualAnchor,
       project.tonePrompt,
+      // 角色资产叠加面孔统一尾缀（v2.4，与选角 CASTING_FACE_RULE 呼应）
+      ...(asset.kind === "character" ? [PORTRAIT_CHARACTER_TAIL] : []),
       PORTRAIT_PROMPT_TAIL,
     ].join(", ");
 

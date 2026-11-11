@@ -92,28 +92,28 @@ export function ProjectInfoCard() {
         ))}
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="flex-1 border border-emerald-500/40 bg-emerald-500/10 font-semibold text-emerald-400 hover:bg-emerald-500/20"
+          className="h-auto border border-emerald-500/40 bg-emerald-500/10 px-2 py-2 text-xs font-semibold leading-snug text-emerald-400 hover:bg-emerald-500/20"
         >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {session.dbId ? "更新项目" : "保存到项目库"}
+          {saving ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <Save className="h-4 w-4 shrink-0" />}
+          <span className="whitespace-normal">{session.dbId ? "更新项目" : "保存到项目库"}</span>
         </Button>
         <Button
           onClick={exportJson}
-          className="flex-1 border border-amber-500/40 bg-amber-500/10 font-semibold text-amber-400 hover:bg-amber-500/20"
+          className="h-auto border border-amber-500/40 bg-amber-500/10 px-2 py-2 text-xs font-semibold leading-snug text-amber-400 hover:bg-amber-500/20"
         >
-          <FileJson className="h-4 w-4" />
-          导出 JSON 工程
+          <FileJson className="h-4 w-4 shrink-0" />
+          <span className="whitespace-normal">导出 JSON 工程</span>
         </Button>
         <Button
           onClick={exportMd}
-          className="flex-1 border border-rose-500/40 bg-rose-500/10 font-semibold text-rose-400 hover:bg-rose-500/20"
+          className="h-auto border border-rose-500/40 bg-rose-500/10 px-2 py-2 text-xs font-semibold leading-snug text-rose-400 hover:bg-rose-500/20"
         >
-          <FileText className="h-4 w-4" />
-          导出 Markdown 清单
+          <FileText className="h-4 w-4 shrink-0" />
+          <span className="whitespace-normal">导出 MD 清单</span>
         </Button>
       </div>
     </div>

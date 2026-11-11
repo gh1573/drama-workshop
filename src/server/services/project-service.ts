@@ -200,6 +200,7 @@ async function assembleDetail(p: ProjectWithRelations): Promise<ProjectDetail> {
     tracks,
     anchorStaleClipIds: staleClipIds,
     activeRun,
+    finalVideoUrl: p.finalVideoUrl,
   };
 }
 

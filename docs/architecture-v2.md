@@ -1,9 +1,10 @@
 # 剧集智能创编工坊 · v2 底层架构设计
 
-> 版本：v2.2 ｜ 日期：2026-11-10 ｜ 状态：**v2.0～v2.3 已实施（3 集系列 E2E 实测）**
+> 版本：v2.4 ｜ 日期：2026-11-11 ｜ 状态：**v2.0～v2.4 已实施（一键成片链路）**
 > 本文档是 v2 全部扩容的唯一设计依据。实施时新建代码必须与本文的模型、接口、目录、阶段划分一致；如需偏离，先改文档再改代码。
 >
 > **变更记录**
+> - v2.4：一键成片链路（渲染全片 render-all + 成片合成 compose，ffmpeg 片头卡/字幕烧录/配音混音，产物回写 Project.finalVideoUrl）；拆镜精简档位（每幕 3~4 镜 × 4~5s，整集约 40~60 秒，标准档保留可配）；选角面孔统一规则（CASTING_FACE_RULE，全部角色华人面孔，配置化）；前端工作台 Tab 化信息架构（成片/分镜剧本/资产定妆/节奏轨道/剧组进程，左列开机后自动折叠）。修复拆镜 plannedMs 钳制与档位不一致的问题。
 > - v2.2：完成 v2.3 全部能力（Series 表/系列 API/资产克隆/批量提交/export 路由/tasks 列表路由）+ 3 集 60 秒系列 E2E 实测；拆镜档位 BREAKDOWN_SPEC 配置化（60 秒集档位）；文本通道 429 指数退避（20s/40s/80s，可环境变量覆盖）。
 > - v2.1：新增 §1.4「产品定位：AI 剧组流水线」（产品叙事与术语映射）；§3 增补第 7 条「零硬编码」；新增 §7.8「配置中心」；§9 目录、§10 路线图同步（v2.2.5 配置化整改）。运行参数与模板文案收敛至 `src/config/`，业务代码禁止魔法数字与内嵌文案。
 > - v2.0-draft1：初稿（领域模型 / 分层架构 / 任务管线 / API 契约 / 路线图）。
@@ -405,6 +406,7 @@ export interface EnergyCurvePoint { clipId: string; order: number; energy: numbe
 2. **视觉锚点（visualAnchor）**：英文视觉描述串，是组装管线资产段的唯一来源。派生自 lockedAppearance，由 LLM 翻译定稿，人工可改。
 3. **锚点指纹（promptVersion）**：`sha256(所有引用资产的 visualAnchor + tonePrompt).slice(0,12)`。镜头完成渲染后记录指纹；资产锚点变动 → 指纹失配 → 该镜头在故事板上标「锚点过期」，提示重渲。这让「改了角色长相 → 哪些镜头受影响」变成可计算的。
 4. **参考图注入**：资产定妆图（portraitUrl）作为图生视频的参考输入（平台视频通道支持参考图时传入；不支持时锚点串兜底）。数据结构已预留，不阻塞文本锚点先行。
+5. **选角面孔统一（v2.4）**：题材库全部为国内短剧题材，选角阶段提示词强制注入 CASTING_FACE_RULE（`src/config/templates.ts`）——全部角色为华人面孔、锚点串必须含 ethnicity 描述，角色定妆提示词尾缀同步约束，确保资产库头像与视频画面是同一批「演员」。
 
 ### 7.2 提示词组装管线（C3）
 
@@ -512,7 +514,7 @@ export interface Provider<TIn, TOut> {
 | --- | --- | --- | --- |
 | L1 创作预设 | `src/lib/genres.ts`、`src/lib/drama.ts`（GENRES / CAMERA_MOVEMENTS / RUN_STAGES / CREW_ROLES / NARRATIVE_META） | 创作方法论的数据化：题材策略、运镜库、流水线阶段、剧组角色、叙事结构 | 随产品迭代演进（版本管理） |
 | L2 运行时参数 | `src/config/runtime.ts` | 调度器各通道并发上限、调度 tick 间隔、孤儿任务回收窗口、默认重试上限、列表分页、限流退避（429 指数退避 20s/40s/80s） | 环境变量覆盖（`DISPATCH_*` / `RATE_LIMIT_*`），带类型化默认值 |
-| L3 模板文案 | `src/config/templates.ts` | 定妆图尺寸表与提示词模板、提示词分段标签、技术段尾缀文案、拆镜档位（BREAKDOWN_SPEC：每幕镜头数/单镜时长/整集目标时长，当前 60 秒集档位） | 版本管理；后续可扩展为每项目覆盖 |
+| L3 模板文案 | `src/config/templates.ts` | 定妆图尺寸表与提示词模板（含角色专用尾缀）、提示词分段标签、技术段尾缀文案、选角面孔统一规则（CASTING_FACE_RULE）、拆镜档位（BREAKDOWN_SPEC：每幕镜头数/单镜时长/整集目标时长；当前精简档 3~4 镜/幕 × 4~5s，约 40~60 秒集） | 版本管理；后续可扩展为每项目覆盖 |
 | L4 用户配置 | （预留，v2.3+）项目级/全局配置表 | 终端用户对默认参数的覆盖 | 落库，服务层读取 |
 
 **规则（review 阻断项）**：
@@ -521,6 +523,33 @@ export interface Provider<TIn, TOut> {
 2. `process.env` 只允许三处出现：`src/config/`、Provider 工厂（通道选择）、Prisma 单例样板（`NODE_ENV` 热重载判断）；业务参数读取一律经 `src/config/`；
 3. 配置项必须带 TypeScript 类型与注释（含义、单位、默认值、覆盖变量名）；
 4. 配置层只做「读取 + 类型化」，不含业务逻辑；禁止依赖服务层实现（仅允许对 Provider 契约类型的 type-only 导入，如 `ImageSize`）。
+
+---
+
+### 7.9 一键成片链路（v2.4）
+
+> 产品语义：流水线产出制作包后，用户不应逐镜手点渲染再自行找工具拼接。
+> 「一键成片」把 **批量渲染 → 自动合成 → 播放器看片** 收敛为两个动作。
+
+**链路**：
+
+1. **渲染全片** `POST /api/projects/[id]/render-all`（幂等）：
+   - 为全部非 `ready` 镜头提交 `video` 任务；为有台词字幕的镜头提交 `voiceover` 任务；
+   - 已有 queued/running 同类任务的镜头跳过（幂等去重），返回 `{ submitted, skipped }`；
+   - 后续进度由任务中心轮询观测，前端以「镜头 ready 数 / 总数」展示渲染进度条。
+2. **成片合成** `POST /api/projects/[id]/compose`：
+   - 前置校验：全部镜头 `ready`（缺片则 409 并返回缺失清单，不产半成品）；
+   - 执行体：`scripts/assemble-episode.py`（ffmpeg）——片头卡（剧名+集号，PIL 绘制 + 缓推）→
+     逐镜按 plannedMs 裁剪拼接 → 字幕轨烧录（ASS，金句大字样式）→ 配音 WAV 按轨起止混音；
+   - 产物落 `public/assets/final_{projectId}.mp4`（自包含，不受外链过期影响），
+     并回写 `Project.finalVideoUrl`；响应返回 `{ finalVideoUrl, clipCount, durationSec }`；
+   - 重跑即重合成（覆盖旧成片），镜头轨变更后可重复执行。
+3. **前端成片页签**：流水线成功后默认展示「成片」——播放器（9:16）+ 渲染进度 + 一键渲染/合成/下载；
+   渲染进行中自动轮询，全部就绪自动触发合成。
+
+**约束**：
+- compose 同步执行（ffmpeg 数十秒量级），请求方需等待；超时/失败返回可读错误，不写入 finalVideoUrl；
+- 配音轨为空时成片为无声视频（能力不回退）；字幕轨由流水线后期阶段确定性生成，无需人工对轴。
 
 ---
 
@@ -548,6 +577,8 @@ export interface Provider<TIn, TOut> {
 | GET/POST/PATCH/DELETE `/api/projects/[id]/tracks` | 轨道项 CRUD（按 kind 过滤） | **新增 v2.2** |
 | GET `/api/projects/[id]/export` | 导出 JSON（tracks 可选段追加） | 扩展 |
 | POST `/api/series` + GET `/api/series/[id]` | 系列创建 / 详情（含剧集列表） | **新增 v2.3** |
+| POST `/api/projects/[id]/render-all` | 一键渲染全片：批量提交 video + voiceover 任务（幂等去重） | **新增 v2.4** |
+| POST `/api/projects/[id]/compose` | 成片合成：ffmpeg 片头卡/字幕烧录/配音混音，回写 finalVideoUrl | **新增 v2.4** |
 
 ---
 
@@ -634,6 +665,13 @@ src/
 3. 系列级批量提交（portrait 补定妆 / video 渲染待拍镜头，单任务幂等去重）；
 4. 附带补齐：GET /api/tasks 列表路由、GET /api/projects/[id]/export、文本通道 429 指数退避、拆镜档位配置化（60 秒集档位 BREAKDOWN_SPEC）。
 **验收**：一个系列 3 集、共享视觉基调，资产一键继承，批量提交后任务中心统一观测。✅ 已按此验收实测（见 scripts/e2e-series.sh）
+
+### v2.4 —— 精简档位与一键成片 ✅ 已实施
+1. 拆镜精简档位：BREAKDOWN_SPEC 调整为每幕 3~4 镜 × 4~5s（整集约 40~60 秒），修复 plannedMs 钳制与档位不一致的缺陷；
+2. 选角面孔统一：CASTING_FACE_RULE 写入选角阶段提示词，全部角色锚点强制华人面孔（国内题材一致性）；
+3. 渲染全片 `render-all` API（幂等去重）+ 成片合成 `compose` API（ffmpeg）+ `Project.finalVideoUrl` 持久化；
+4. 前端 Tab 化信息架构：成片（播放器优先）/ 分镜剧本 / 资产定妆 / 节奏轨道 / 剧组进程，左列配置开机后自动折叠，消除超长滚动。
+**验收**：流水线成功 → 一键渲染全片 → 自动合成 → 播放器直出 9:16 成片；人物形象全程华人面孔。
 
 ---
 

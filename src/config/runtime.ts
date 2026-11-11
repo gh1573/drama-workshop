@@ -82,3 +82,10 @@ export const RATE_LIMIT_MAX_BACKOFF_ATTEMPTS = envInt(
   "RATE_LIMIT_MAX_BACKOFF_ATTEMPTS",
   3
 );
+
+/**
+ * 成片合成超时（毫秒）：compose 调用 ffmpeg 合成整集的等待上限。
+ * 十余镜头的整集合成通常数十秒完成；超时按失败处理（不写 finalVideoUrl）。
+ * 覆盖变量：COMPOSE_TIMEOUT_MS
+ */
+export const COMPOSE_TIMEOUT_MS = envInt("COMPOSE_TIMEOUT_MS", 4 * 60_000);

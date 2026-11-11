@@ -163,3 +163,97 @@ export async function cancelTask(taskId: string): Promise<TaskDTO> {
   });
   return mapTask(updated);
 }
+
+export interface RenderAllResult {
+  /** 本次新提交的任务数（video + voiceover 合计） */
+  submitted: number;
+  /** 跳过数：镜头已出片 / 已有活跃任务 / 未锚定 */
+  skipped: number;
+  /** 镜头轨总数 */
+  totalClips: number;
+}
+
+/**
+ * 一键渲染全片（docs/architecture-v2.md §7.9 v2.4，幂等）：
+ * - 全部非 ready 镜头提交 video 任务（未锚定镜头跳过并计数）；
+ * - 有台词字幕的镜头提交 voiceover 任务（配音供成片混音）；
+ * - 已有 queued/running 同类任务的目标自动去重跳过，不 409 中断批量。
+ */
+export async function renderAllTasks(projectId: string): Promise<RenderAllResult> {
+  await requireProject(projectId);
+
+  const clips = await db.timelineClip.findMany({
+    where: { projectId },
+    orderBy: { order: "asc" },
+  });
+  if (clips.length === 0) {
+    throw new RouteError("镜头轨为空：请先完成剧组流水线拆镜", 409);
+  }
+
+  // 活跃任务索引（幂等去重：同一目标不重复提交）
+  const activeTasks = await db.renderTask.findMany({
+    where: {
+      projectId,
+      kind: { in: ["video", "voiceover"] },
+      status: { in: ["queued", "running"] },
+    },
+    select: { kind: true, payload: true },
+  });
+  const activeClipIds = (kind: string) => {
+    const set = new Set<string>();
+    for (const t of activeTasks) {
+      if (t.kind !== kind) continue;
+      try {
+        const clipId = (JSON.parse(t.payload) as { clipId?: string }).clipId;
+        if (clipId) set.add(clipId);
+      } catch {
+        /* payload 异常视为无活跃 */
+      }
+    }
+    return set;
+  };
+  const activeVideo = activeClipIds("video");
+  const activeVoice = activeClipIds("voiceover");
+
+  let submitted = 0;
+  let skipped = 0;
+  const enqueue: Array<{ id: string; kind: TaskKind }> = [];
+
+  for (const clip of clips) {
+    // 视频渲染：未出片的镜头全部提交（成片保护：ready 镜头不重拍）
+    if (clip.status !== "ready") {
+      if (!clip.finalPrompt || activeVideo.has(clip.id)) {
+        skipped++;
+      } else {
+        const row = await db.renderTask.create({
+          data: {
+            projectId,
+            kind: "video",
+            payload: JSON.stringify({ clipId: clip.id }),
+            status: "queued",
+          },
+        });
+        enqueue.push({ id: row.id, kind: "video" });
+        submitted++;
+      }
+    }
+
+    // 配音：有台词的镜头提交（无台词镜头配音任务会被通道拒绝，直接跳过）
+    if (clip.subtitle?.trim() && !activeVoice.has(clip.id)) {
+      const row = await db.renderTask.create({
+        data: {
+          projectId,
+          kind: "voiceover",
+          payload: JSON.stringify({ clipId: clip.id }),
+          status: "queued",
+        },
+      });
+      enqueue.push({ id: row.id, kind: "voiceover" });
+      submitted++;
+    }
+  }
+
+  for (const t of enqueue) enqueueTask(t.id, t.kind);
+
+  return { submitted, skipped, totalClips: clips.length };
+}

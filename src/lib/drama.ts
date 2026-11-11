@@ -803,6 +803,8 @@ export interface ProjectDetail extends ProjectSummary {
   anchorStaleClipIds: string[];
   /** 进行中/最近一次流水线运行 */
   activeRun: RunDTO | null;
+  /** v2.4：成片合成产物地址（null = 尚未合成） */
+  finalVideoUrl: string | null;
 }
 
 /** 保存项目的请求体（genre 只要求持久化快照字段，与 zod 校验器对齐） */

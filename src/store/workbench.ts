@@ -40,6 +40,8 @@ export interface WorkbenchSession {
   shotRefs: ShotRefDTO[];
   tracks: TrackItemDTO[];
   anchorStaleClipIds: string[];
+  /** v2.4：成片产物地址（null = 尚未合成） */
+  finalVideoUrl: string | null;
 }
 
 interface WorkbenchState {
@@ -105,6 +107,14 @@ interface WorkbenchState {
   /** 重新锚定：对全部非人工微调镜头重跑组装管线（解冻后的恢复入口） */
   reanchor: () => Promise<boolean>;
 
+  /** —— v2.4 一键成片 —— */
+  /** 一键渲染全片：批量提交 video + voiceover 任务（幂等去重） */
+  renderAll: () => Promise<boolean>;
+  /** 成片合成：ffmpeg 产出整集视频，回写 finalVideoUrl；返回错误信息或 null */
+  composeEpisode: () => Promise<string | null>;
+  /** 合成进行中 */
+  composing: boolean;
+
   addClip: (beatIndex: number) => Promise<boolean>;
   patchClip: (clipId: string, patch: Partial<ClipData>) => Promise<boolean>;
   removeClip: (clipId: string) => Promise<boolean>;
@@ -167,6 +177,7 @@ function detailToSession(detail: ProjectDetail): WorkbenchSession {
     shotRefs: detail.shotRefs,
     tracks: detail.tracks,
     anchorStaleClipIds: detail.anchorStaleClipIds,
+    finalVideoUrl: detail.finalVideoUrl,
   };
 }
 
@@ -205,6 +216,7 @@ export function sessionToDetail(s: WorkbenchSession): ProjectDetail {
     tracks: s.tracks,
     anchorStaleClipIds: s.anchorStaleClipIds,
     activeRun: null,
+    finalVideoUrl: s.finalVideoUrl,
   };
 }
 
@@ -312,6 +324,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
         shotRefs: session?.shotRefs ?? [],
         tracks: session?.tracks ?? [],
         anchorStaleClipIds: session?.anchorStaleClipIds ?? [],
+        finalVideoUrl: session?.finalVideoUrl ?? null,
       },
       outputNonce: get().outputNonce + 1,
     });
@@ -745,6 +758,45 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       return true;
     } catch {
       return false;
+    }
+  },
+
+  // ============================================================
+  // v2.4 · 一键成片（docs/architecture-v2.md §7.9）
+  // ============================================================
+
+  composing: false,
+
+  renderAll: async () => {
+    const dbId = get().session?.dbId;
+    if (!dbId) return false;
+    try {
+      await api<{ submitted: number; skipped: number; totalClips: number }>(
+        `/api/projects/${dbId}/render-all`,
+        { method: "POST" }
+      );
+      void get().fetchTasks();
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  composeEpisode: async () => {
+    const dbId = get().session?.dbId;
+    if (!dbId) return "请先立项再合成成片";
+    set({ composing: true });
+    try {
+      const res = await api<{ finalVideoUrl: string; durationSec: number }>(
+        `/api/projects/${dbId}/compose`,
+        { method: "POST" }
+      );
+      await get().refreshProject();
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "成片合成失败";
+    } finally {
+      set({ composing: false });
     }
   },
 }));

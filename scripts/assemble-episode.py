@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """
-成片合成器 —— 后期成包的 CLI 版本（对应流水线第五阶段 postproduction 的成片出口）。
+成片合成器 —— 「一键成片」的执行体（docs/architecture-v2.md §7.9）。
 
-输入（全部来自服务端产物）：
-  - 镜头成片 public/assets/clip_{clipId}.mp4（每镜 5s 竖版，按 plannedMs 截取）
-  - 配音轨 public/assets/voice_{clipId}.wav（金句镜头，按轨起止混音）
-  - 字幕轨（track_items subtitle / 镜头 subtitle 字段，烧录 ASS）
-  - 片头卡：剧名 + 集号（PIL 绘制 → 缓推动态）
+由 compose API（src/server/services/compose-service.ts）调用：
+  python3 scripts/assemble-episode.py <projectId> [--allow-missing]
 
-输出：download/series/{seriesTitle}_EP{N}.mp4（H.264 + AAC 竖版）
+输入（全部来自服务端产物，直读 SQLite）：
+  - 镜头成片 public/assets/clip_{clipId}.mp4（按 plannedMs 截取）
+  - 配音轨 public/assets/voice_{clipId}.wav（按轨起止混音）
+  - 字幕轨 track_items(kind='subtitle')（烧录 ASS，金句大字样式）
+  - 片头卡：剧名 + 集号（PIL 绘制 → 缓推动态；集号缺省时仅剧名）
 
-用法：python3 scripts/assemble-episode.py <projectId> [--allow-missing]
+输出：public/assets/final_{projectId}.mp4（H.264 + AAC 竖版，自包含）
+最后 stdout 行打印 JSON 结果：{"ok":true,"url":…,"clips":…,"durationSec":…}
+失败打印 {"ok":false,"error":…} 并以非零码退出。
 """
 import json
 import sqlite3
@@ -20,7 +23,6 @@ from pathlib import Path
 
 PROJ = Path("/home/z/my-project")
 ASSETS = PROJ / "public" / "assets"
-OUT_DIR = PROJ / "download" / "series"
 FONT = Path("/usr/share/fonts/truetype/chinese/NotoSansSC-Bold.ttf")
 ASS_HEADER = """[Script Info]
 ScriptType: v4.00+
@@ -37,6 +39,8 @@ Style: Card,Noto Sans SC,64,&H00FFFFFF,&H00FFFFFF,&H00101010,&H88000000,-1,0,0,0
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
+TITLE_CARD_SECONDS = 3.0  # 片头卡时长（秒）
+
 
 def fmt_ass_ts(seconds: float) -> str:
     h = int(seconds // 3600)
@@ -45,36 +49,35 @@ def fmt_ass_ts(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:05.2f}"
 
 
+def fail(msg: str) -> None:
+    print(json.dumps({"ok": False, "error": msg}, ensure_ascii=False))
+    sys.exit(1)
+
+
 def main() -> None:
+    if len(sys.argv) < 2:
+        fail("缺少参数：projectId")
     project_id = sys.argv[1]
     allow_missing = "--allow-missing" in sys.argv
+
     con = sqlite3.connect(PROJ / "db/custom.db")
     cur = con.cursor()
 
     project = cur.execute(
-        "SELECT title, seriesId, episodeNo FROM projects WHERE id=?",
+        "SELECT title, episodeNo FROM projects WHERE id=?",
         (project_id,),
     ).fetchone()
     if not project:
-        sys.exit(f"项目不存在: {project_id}")
-    title, series_id, episode_no = project
-    series_title = (
-        cur.execute("SELECT title FROM series WHERE id=?", (series_id,)).fetchone()
-        if series_id
-        else None
-    )
-    series_title = series_title[0] if series_title else title
+        fail(f"项目不存在: {project_id}")
+    title, episode_no = project
 
     clips = cur.execute(
         '''SELECT id, "order", name, subtitle, plannedMs, mediaUrl, status
            FROM timeline_clips WHERE projectId=? ORDER BY "order"''',
         (project_id,),
     ).fetchall()
-    voice_items = cur.execute(
-        '''SELECT clipId, startMs, endMs, style FROM track_items
-           WHERE projectId=? AND kind='voiceover' ''',
-        (project_id,),
-    ).fetchall()
+    if not clips:
+        fail("镜头轨为空，请先完成流水线拆镜")
     subtitle_items = cur.execute(
         '''SELECT startMs, endMs, text FROM track_items
            WHERE projectId=? AND kind='subtitle' ORDER BY startMs''',
@@ -85,36 +88,37 @@ def main() -> None:
     ready = [c for c in clips if c[5] and c[6] == "ready"]
     if len(ready) < len(clips) and not allow_missing:
         missing = len(clips) - len(ready)
-        sys.exit(f"尚有 {missing} 个镜头未出片，加 --allow-missing 可先出测试版")
-    usable = ready if allow_missing else clips
+        names = "、".join(c[2] for c in clips if not (c[5] and c[6] == "ready"))[:80]
+        fail(f"尚有 {missing} 个镜头未出片：{names}")
 
     # —— 时间轴（可用镜头顺排，plannedMs 为节奏依据）——
     planned = {c[0]: (c[4] or 3000) for c in clips}
     timeline = []  # (clipId, startSec, durSec)
     cursor = 0.0
-    for c in usable:
+    for c in ready:
         dur = planned[c[0]] / 1000
         timeline.append((c[0], cursor, dur))
         cursor += dur
     body_seconds = cursor
 
-    # —— 片头卡（剧名 + 集号，3s）——
-    card_seconds = 3.0
-    total = card_seconds + body_seconds
+    total = TITLE_CARD_SECONDS + body_seconds
 
     # —— ASS 字幕 ——
+    card_label = (
+        f"{title}\\N第 {episode_no} 集" if episode_no is not None else title
+    )
     events = [
-        f"Dialogue: 0,{fmt_ass_ts(0.4)},{fmt_ass_ts(2.9)},Card,,0,0,0,,"
-        f"{{\\fad(300,300)}}{series_title}\\N第 {episode_no} 集"
+        f"Dialogue: 0,{fmt_ass_ts(0.4)},{fmt_ass_ts(TITLE_CARD_SECONDS - 0.1)},Card,,0,0,0,,"
+        f"{{\\fad(300,300)}}{card_label}"
     ]
     for start_ms, end_ms, text in subtitle_items:
         # 字幕轨时间基于镜头时间轴（无片头卡），整体后移卡长
         events.append(
-            f"Dialogue: 0,{fmt_ass_ts(card_seconds + start_ms/1000)},"
-            f"{fmt_ass_ts(card_seconds + end_ms/1000)},Jinju,,0,0,0,,"
+            f"Dialogue: 0,{fmt_ass_ts(TITLE_CARD_SECONDS + start_ms/1000)},"
+            f"{fmt_ass_ts(TITLE_CARD_SECONDS + end_ms/1000)},Jinju,,0,0,0,,"
             f"{{\\fad(150,150)}}{text}"
         )
-    ass_file = PROJ / "scripts" / f"ep_{episode_no}.ass"
+    ass_file = PROJ / "scripts" / f"final_{project_id}.ass"
     ass_file.write_text(ASS_HEADER + "\n".join(events) + "\n", encoding="utf-8")
 
     # —— 分段裁剪（统一 720x1280 / 30fps / h264）——
@@ -122,14 +126,16 @@ def main() -> None:
     tmp = Path("/tmp/assemble")
     tmp.mkdir(exist_ok=True)
 
-    # 片头卡：剧名大字 + 底部剧名水印由 ASS 承担，画面用纯色渐变 + 缓推
+    # 片头卡：剧名大字 + 缓推
+    # 注意：zoompan 的 d 是「每输入帧生成的输出帧数」，必须单帧输入
+    # （-loop 1 -t 3 会产生 90 帧输入 → 8100 帧输出的帧数爆炸，进程假死）
     card_png = tmp / "card.png"
-    draw_card(str(card_png), series_title, episode_no)
+    draw_card(str(card_png), title, episode_no)
     card_seg = tmp / "card.mp4"
     run([
-        "ffmpeg", "-y", "-loop", "1", "-t", str(card_seconds),
-        "-i", str(card_png),
+        "ffmpeg", "-y", "-i", str(card_png),
         "-vf", "scale=720:1280,zoompan=z='1+0.0015*on':d=90:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=720x1280:fps=30",
+        "-frames:v", "90",
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast",
         "-an", str(card_seg),
     ])
@@ -165,7 +171,7 @@ def main() -> None:
         if not wav.exists():
             continue
         voice_inputs += ["-i", str(wav)]
-        delay_ms = int((card_seconds + start_sec) * 1000)
+        delay_ms = int((TITLE_CARD_SECONDS + start_sec) * 1000)
         idx = 1 + len(filters)  # 输入 0 是 body 视频
         filters.append(f"[{idx}:a]adelay={delay_ms}|{delay_ms}[v{idx}]")
 
@@ -180,9 +186,9 @@ def main() -> None:
     else:
         audio_args = ["-an"]
 
-    # —— 烧录字幕 + 成片 ——
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out = OUT_DIR / f"{series_title}_EP{episode_no}.mp4"
+    # —— 烧录字幕 + 成片（产物自包含：public/assets/final_{projectId}.mp4）——
+    ASSETS.mkdir(parents=True, exist_ok=True)
+    out = ASSETS / f"final_{project_id}.mp4"
     run([
         "ffmpeg", "-y", "-i", str(body),
         *audio_args,
@@ -191,18 +197,28 @@ def main() -> None:
         "-crf", "21", "-movflags", "+faststart",
         str(out),
     ])
+    if not out.exists() or out.stat().st_size < 10_000:
+        fail("合成产物异常（文件缺失或过小）")
+
+    result = {
+        "ok": True,
+        "url": f"/assets/{out.name}",
+        "clips": len(timeline),
+        "durationSec": round(total, 1),
+        "withVoice": len(voice_inputs) > 0,
+    }
     print(f"成片就绪: {out}")
     print(f"  镜头 {len(timeline)}/{len(clips)} · 配音 {len(voice_inputs)//2} 段 · 总长 {total:.1f}s")
+    print(json.dumps(result, ensure_ascii=False))
 
 
 def run(cmd: list[str]) -> None:
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
-        print(r.stderr[-1500:])
-        sys.exit(f"命令失败: {' '.join(cmd[:4])}...")
+        fail(f"ffmpeg 命令失败: {' '.join(cmd[:4])}... {r.stderr[-400:]}")
 
 
-def draw_card(path: str, series_title: str, episode_no: int) -> None:
+def draw_card(path: str, series_title: str, episode_no: int | None) -> None:
     from PIL import Image, ImageDraw, ImageFilter
 
     W, H = 1440, 2560  # 2x 超采样 → 缩到 720
@@ -217,18 +233,24 @@ def draw_card(path: str, series_title: str, episode_no: int) -> None:
         )
     draw = ImageDraw.Draw(img)
     # 中央金色剧名
-    big = ImageFont.truetype(str(FONT), 260)
+    big = ImageFontFor(300)
     tw = draw.textlength(series_title, font=big)
-    draw.text(((W - tw) / 2, H * 0.38), series_title, font=big, fill=(224, 182, 106))
-    # 集号
-    small = ImageFont.truetype(str(FONT), 120)
-    label = f"第 {episode_no} 集"
-    sw = draw.textlength(label, font=small)
-    draw.text(((W - sw) / 2, H * 0.38 + 380), label, font=small, fill=(210, 210, 216))
+    draw.text(((W - tw) / 2, H * 0.40), series_title, font=big, fill=(224, 182, 106))
+    if episode_no is not None:
+        small = ImageFontFor(120)
+        label = f"第 {episode_no} 集"
+        sw = draw.textlength(label, font=small)
+        draw.text(((W - sw) / 2, H * 0.40 + 380), label, font=small, fill=(210, 210, 216))
     # 装饰线
-    draw.rectangle([(W - 520) / 2, H * 0.38 - 80, (W + 520) / 2, H * 0.38 - 70], fill=(224, 182, 106))
+    draw.rectangle([(W - 520) / 2, H * 0.40 - 80, (W + 520) / 2, H * 0.40 - 70], fill=(224, 182, 106))
     img = img.resize((720, 1280), Image.LANCZOS).filter(ImageFilter.GaussianBlur(0.6))
     img.save(path)
+
+
+def ImageFontFor(size: int):
+    from PIL import ImageFont
+
+    return ImageFont.truetype(str(FONT), size)
 
 
 if __name__ == "__main__":

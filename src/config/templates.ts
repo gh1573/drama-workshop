@@ -38,6 +38,19 @@ export const PORTRAIT_SPECS: Record<AssetKind, PortraitSpec> = {
 export const PORTRAIT_PROMPT_TAIL =
   "dramatic lighting, highly detailed, consistent visual identity";
 
+/**
+ * 角色定妆专用尾缀（v2.4）：在公共尾缀之外叠加演员面孔约束，
+ * 与选角阶段 CASTING_FACE_RULE 呼应，保证头像库不出欧美面孔。
+ */
+export const PORTRAIT_CHARACTER_TAIL =
+  "chinese actor face, natural east asian features";
+
+/**
+ * 选角面孔统一规则（v2.4，docs §7.1 第 5 条）：写入选角阶段提示词，
+ * 要求全部角色锚点为华人面孔（题材库全部为国内短剧题材）。
+ */
+export const CASTING_FACE_RULE = `【面孔统一铁律】全部角色一律为华人面孔（Chinese actors, east asian features）；每个角色的 visualAnchor 必须含 ethnicity 描述（如 "Chinese male" / "Chinese woman"），严禁输出欧美或混血面孔描述；中文定妆描述同步体现国人特征。`;
+
 /** 视频提示词分段标签（组装顺序固定，标签文案可调） */
 export const PROMPT_SEGMENT_LABELS = {
   characters: "Characters",
@@ -54,17 +67,17 @@ export const PROMPT_TECHNICAL_TAIL = "cinematic quality";
 
 /**
  * 拆镜规格（导演阶段提示词参数，决定单集总时长档位）。
- * 每幕镜头数 × 单镜时长 × 3 幕 ≈ 单集时长：
- * 当前档位 5~6 镜/幕 × 3.5~4.5s ≈ 52~68s（典型一集 60 秒左右）。
+ * 精简档（v2.4 默认）：每幕 3~4 镜 × 4~5s ≈ 整集约 40~60s（含片头卡），
+ * 镜头量约 9~12 个，单集真实生成可在分钟级跑通。
  * 调整档位只改这里，提示词与解析上限自动跟随。
  */
 export const BREAKDOWN_SPEC = {
   /** 每幕镜头数下限/上限 */
-  shotsPerActMin: 5,
-  shotsPerActMax: 6,
+  shotsPerActMin: 3,
+  shotsPerActMax: 4,
   /** 单镜时长（毫秒）下限/上限 */
-  shotMsMin: 3500,
-  shotMsMax: 4500,
+  shotMsMin: 4000,
+  shotMsMax: 5000,
   /** 单集目标总时长提示（写入拆镜提示词的目标语境，秒） */
   targetEpisodeSeconds: 60,
 } as const;

@@ -130,8 +130,8 @@ function parseShots(raw: string): ShotBreakdownItem[] | null {
       visualPrompt: str(o.visualPrompt) || null,
       subtitle: str(o.subtitle).slice(0, 120),
       plannedMs: Number.isFinite(ms)
-        ? Math.min(3000, Math.max(1000, Math.round(ms)))
-        : 2000,
+        ? Math.min(BREAKDOWN_SPEC.shotMsMax, Math.max(BREAKDOWN_SPEC.shotMsMin, Math.round(ms)))
+        : Math.round((BREAKDOWN_SPEC.shotMsMin + BREAKDOWN_SPEC.shotMsMax) / 2),
       energy: clampInt(o.energy, 0, 100, 60),
       sfxHint: str(o.sfxHint).slice(0, 12),
       characters: strArray(o.characters, 4),

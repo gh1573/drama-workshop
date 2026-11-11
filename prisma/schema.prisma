@@ -76,6 +76,9 @@ model Project {
   series    Series?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   episodeNo Int?
 
+  // —— v2.4：一键成片产物（compose 回写；null = 尚未合成） ——
+  finalVideoUrl String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

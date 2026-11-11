@@ -17,6 +17,7 @@ import {
 import { getTextProvider, parseJsonLoose } from "@/server/providers";
 import { composeVideoPrompt } from "@/server/engines/prompt-engine";
 import { ORPHAN_RECOVERY_WINDOW_MS } from "@/config/runtime";
+import { CASTING_FACE_RULE } from "@/config/templates";
 import { breakdownAct } from "./breakdown-service";
 import {
   replaceActClips,
@@ -359,6 +360,8 @@ function buildCastingMessages(beats: DbBeat[], project: Project): string {
   return `你是微短剧剧组的选角导演兼美术指导。任务：通读三幕剧本，建立全剧资产库（角色 / 场景 / 道具），供后续所有镜头做「一致性锚定」——每个镜头的提示词都将引用这里的定妆描述，保证跨镜头不换脸、不穿帮。
 
 【题材调性】${project.genreName}（${project.genreBadge}）；英文影调锚点：${project.tonePrompt}
+
+${CASTING_FACE_RULE}
 
 【三幕剧本】
 ${script}
