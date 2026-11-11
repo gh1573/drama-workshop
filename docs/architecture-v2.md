@@ -1,9 +1,10 @@
 # 剧集智能创编工坊 · v2 底层架构设计
 
-> 版本：v2.4.2 ｜ 日期：2026-11-11 ｜ 状态：**v2.0～v2.4 已实施（一键成片链路）**
+> 版本：v2.4.4 ｜ 日期：2026-11-11 ｜ 状态：**v2.0～v2.4 已实施（一键成片链路）**
 > 本文档是 v2 全部扩容的唯一设计依据。实施时新建代码必须与本文的模型、接口、目录、阶段划分一致；如需偏离，先改文档再改代码。
 >
 > **变更记录**
+> - v2.4.4：成片音频专业化（P1）：合成链末级新增 EBU R128 响度归一（loudnorm **两遍法：第一遍仅音频测量，第二遍按实测值线性归一**，精准命中 -16 LUFS / TP -1.5dB / LRA 11，L2 可配；工程保障：第二遍 TP 参数按增益预估抬高防内部回撤、目标 LRA 取 max(配置，实测) 保线性、后置 alimiter 强制真峰值——实测单遍 -17.6 / 直接两遍 -18.8 → 修正后命中 ±0.5LU）；补齐三轨合成的 BGM 轨——用户上传 `POST/GET/DELETE /api/projects/[id]/bgm`（大小/MIME 校验，落 `public/assets/bgm_{projectId}.*`），合成时循环铺满全片 + 对白侧链自动闪避（sidechaincompress），BGM 基础增益与闪避强度 L2 可配；成片面板新增 BGM 管理行。全部纯 ffmpeg 本地处理，零外部通道/零配额消耗。
 > - v2.4.2：参考图注入接线（§7.1.4 升级为已实施）：视频通道提交时自动携带镜头主要角色的定妆图作为首帧参考（image_url），新增 L2 运行参数 `PUBLIC_ASSETS_BASE_URL`（公网回源基址，默认空 = 不注入，文本锚点兜底）；通道对 image_url 不接受时 provider 自动去参重提一次（优雅降级，任务不失败，降级事实进服务端日志）。设计原则：**一致性优先靠参考图、锚点串兜底；能力协商在通道层自动完成，不依赖人工开关**。
 > - v2.4：一键成片链路（渲染全片 render-all + 成片合成 compose，ffmpeg 片头卡/字幕烧录/配音混音，产物回写 Project.finalVideoUrl）；拆镜精简档位（每幕 3~4 镜 × 4~5s，整集约 40~60 秒，标准档保留可配）；选角面孔统一规则（CASTING_FACE_RULE，全部角色华人面孔，配置化）；前端工作台 Tab 化信息架构（成片/分镜剧本/资产定妆/节奏轨道/剧组进程，左列开机后自动折叠）。修复拆镜 plannedMs 钳制与档位不一致的问题。
 > - v2.2：完成 v2.3 全部能力（Series 表/系列 API/资产克隆/批量提交/export 路由/tasks 列表路由）+ 3 集 60 秒系列 E2E 实测；拆镜档位 BREAKDOWN_SPEC 配置化（60 秒集档位）；文本通道 429 指数退避（20s/40s/80s，可环境变量覆盖）。
@@ -528,7 +529,7 @@ export interface Provider<TIn, TOut> {
 | 层 | 位置 | 内容 | 覆盖方式 |
 | --- | --- | --- | --- |
 | L1 创作预设 | `src/lib/genres.ts`、`src/lib/drama.ts`（GENRES / CAMERA_MOVEMENTS / RUN_STAGES / CREW_ROLES / NARRATIVE_META） | 创作方法论的数据化：题材策略、运镜库、流水线阶段、剧组角色、叙事结构 | 随产品迭代演进（版本管理） |
-| L2 运行时参数 | `src/config/runtime.ts` | 调度器各通道并发上限、调度 tick 间隔、孤儿任务回收窗口、默认重试上限、列表分页、限流退避（429 指数退避 20s/40s/80s）、参考图公网回源基址（PUBLIC_ASSETS_BASE_URL，空 = 不注入首帧参考，文本锚点兜底） | 环境变量覆盖（`DISPATCH_*` / `RATE_LIMIT_*` / `PUBLIC_ASSETS_BASE_URL`），带类型化默认值 |
+| L2 运行时参数 | `src/config/runtime.ts` | 调度器各通道并发上限、调度 tick 间隔、孤儿任务回收窗口、默认重试上限、列表分页、限流退避（429 指数退避 20s/40s/80s）、参考图公网回源基址（PUBLIC_ASSETS_BASE_URL，空 = 不注入首帧参考，文本锚点兜底）、成片音频参数（响度归一 LOUDNORM_I/-TP/-LRA；BGM 基础增益 BGM_VOLUME、侧链闪避强度 BGM_DUCK_AMOUNT、上传大小上限 BGM_MAX_BYTES） | 环境变量覆盖（`DISPATCH_*` / `RATE_LIMIT_*` / `PUBLIC_ASSETS_BASE_URL` / `LOUDNORM_*` / `BGM_*`），带类型化默认值 |
 | L3 模板文案 | `src/config/templates.ts` | 定妆图尺寸表与提示词模板（含角色专用尾缀）、提示词分段标签、技术段尾缀文案、选角面孔统一规则（CASTING_FACE_RULE）、拆镜档位（BREAKDOWN_SPEC：每幕镜头数/单镜时长/整集目标时长；当前精简档 3~4 镜/幕 × 4~5s，约 40~60 秒集） | 版本管理；后续可扩展为每项目覆盖 |
 | L4 用户配置 | （预留，v2.3+）项目级/全局配置表 | 终端用户对默认参数的覆盖 | 落库，服务层读取 |
 
@@ -555,16 +556,24 @@ export interface Provider<TIn, TOut> {
 2. **成片合成** `POST /api/projects/[id]/compose`：
    - 前置校验：全部镜头 `ready`（缺片则 409 并返回缺失清单，不产半成品）；
    - 执行体：`scripts/assemble-episode.py`（ffmpeg）——片头卡（剧名+集号，PIL 绘制 + 缓推）→
-     逐镜按 plannedMs 裁剪拼接 → 字幕轨烧录（ASS，金句大字样式）→ 配音 WAV 按轨起止混音；
+     逐镜按 plannedMs 裁剪拼接 → 字幕轨烧录（ASS，金句大字样式）→ 配音 WAV 按轨起止混音 →
+     **BGM 循环铺底 + 对白侧链自动闪避（v2.4.4）→ 末级 EBU R128 响度归一（loudnorm 两遍法：
+     测量遍仅解码音频秒级完成，线性模式增益恒定不抽泵）**；
+     合成参数由 `compose-service.ts` 从 L2 读取后经 CLI 参数传入脚本（脚本自身零硬编码）；
    - 产物落 `public/assets/final_{projectId}.mp4`（自包含，不受外链过期影响），
-     并回写 `Project.finalVideoUrl`；响应返回 `{ finalVideoUrl, clipCount, durationSec }`；
+     并回写 `Project.finalVideoUrl`；响应返回 `{ finalVideoUrl, clipCount, durationSec, withVoice, withBgm }`；
    - 重跑即重合成（覆盖旧成片），镜头轨变更后可重复执行。
-3. **前端成片页签**：流水线成功后默认展示「成片」——播放器（9:16）+ 渲染进度 + 一键渲染/合成/下载；
+3. **BGM 素材管理** `POST/GET/DELETE /api/projects/[id]/bgm`（v2.4.4）：
+   - 上传音频文件（multipart），校验大小（BGM_MAX_BYTES）与 MIME 白名单，落 `public/assets/bgm_{projectId}.{ext}` + 同名 `.json` 元数据（原始文件名/大小/时间）；
+   - GET 返回 `{ exists, name, sizeBytes }`（面板加载时回显状态）；DELETE 清除音频与元数据；
+   - 合成时若存在 BGM 文件则自动混入：循环铺满全片 → 基础增益（BGM_VOLUME）→ 以配音轨为侧链源自动闪避（对白出现时压低，静默时抬起）；无 BGM 时行为与 v2.4.3 完全一致（回归无差）。
+4. **前端成片页签**：流水线成功后默认展示「成片」——播放器（9:16）+ 渲染进度 + 一键渲染/合成/下载 + BGM 管理行（上传/回显/清除，v2.4.4）；
    渲染进行中自动轮询，全部就绪自动触发合成。
 
 **约束**：
 - compose 同步执行（ffmpeg 数十秒量级），请求方需等待；超时/失败返回可读错误，不写入 finalVideoUrl；
-- 配音轨为空时成片为无声视频（能力不回退）；字幕轨由流水线后期阶段确定性生成，无需人工对轴。
+- 配音轨为空且无 BGM 时成片为无声视频（能力不回退）；仅 BGM 时归一后输出；字幕轨由流水线后期阶段确定性生成，无需人工对轴；
+- BGM 素材由用户自行提供并对版权负责（产品不内置任何音乐素材，见 §11 风险表）。
 
 ---
 
@@ -615,6 +624,7 @@ export interface Provider<TIn, TOut> {
 | POST `/api/series` + GET `/api/series/[id]` | 系列创建 / 详情（含剧集列表） | **新增 v2.3** |
 | POST `/api/projects/[id]/render-all` | 一键渲染全片：批量提交 video + voiceover 任务（幂等去重） | **新增 v2.4** |
 | POST `/api/projects/[id]/compose` | 成片合成：ffmpeg 片头卡/字幕烧录/配音混音，回写 finalVideoUrl | **新增 v2.4** |
+| POST/GET/DELETE `/api/projects/[id]/bgm` | BGM 上传（大小/MIME 校验）/ 状态回显 / 清除；合成时循环混入+侧链闪避 | **新增 v2.4.4** |
 
 ---
 
@@ -724,6 +734,13 @@ src/
 4. E2E：公网回源基址可用时验证「同角色跨镜头面孔一致」的参考图增益（抽帧对比定妆图）。
 **验收**：阶段A回归已通过（全新项目全流水线 + 6/6 定妆照华人面孔 PASS，`scripts/e2e-fresh-pipeline.sh`）；阶段B（参考图实拍验证，`scripts/e2e-refimg-drive.sh`）就绪待通道配额；不配置基址时行为与上一版本完全一致（回归无差，阶段A已证）。
 
+### v2.4.4 —— 成片音频专业化：响度归一 + BGM 轨 ✅ 已实施
+1. **末级响度归一（P1-1）**：合成链混音后统一过 `loudnorm`（EBU R128 流媒体标准）——**两遍法**：第一遍仅对混音轨解码测量（input_i/TP/LRA/thresh，秒级），第二遍以 `measured_* + linear=true` 精确归一到 -16 LUFS / TP -1.5dB / LRA 11；三处工程保障（均为实测踩坑后修正）：① 目标 LRA 取 `max(配置值, 实测 LRA)` 保证线性模式生效；② 第二遍 loudnorm 的 TP 参数按预估增益抬高（上限 0dBFS）——**loudnorm 线性模式内部仍会按自身 TP 参数回撤增益，后置限幅器无法弥补，实测 -18.8 LUFS**；③ 真峰值限制由后置 `alimiter`（阈值=TP 目标）强制执行，实测最终命中 -16±0.5 LUFS；参数 L2 可配（LOUDNORM_I/-TP/-LRA）；
+2. **BGM 音乐轨（P1-2，三轨合成的第三轨补齐）**：`POST/GET/DELETE /api/projects/[id]/bgm` 上传管理；合成时 `-stream_loop` 循环铺满全片、基础增益 BGM_VOLUME（默认 0.14 ≈ -17dB）、以配音混音轨为侧链源 `sidechaincompress` 自动闪避（对白出现压低、静默抬起，强度 BGM_DUCK_AMOUNT）；
+3. **成片面板 BGM 管理行**：上传/文件名回显/清除，与一键合成同页；
+4. **零配额纪律**：本阶段全部为本地 ffmpeg 处理，零外部通道调用；合成参数经 CLI 传入 Python 脚本，脚本自身零硬编码（§3 第 7 条）。
+**验收**：以第一集既有资产本地重合成（零配额）：无 BGM 时 loudnorm 后响度达标（±1 LU）；有 BGM 时对白可懂度不降（闪避生效）、BGM 全片连续；eslint / tsc 零错误；不传参时脚本行为与 v2.4.3 一致（回归无差）。
+
 ### v2.4.3 —— 配额墙根除 + 工作台视觉精修 ✅ 已实施
 1. **通道缺省策略翻转（§7.4）**：视频通道缺省改为 noop 占位，真实通道显式 `VIDEO_PROVIDER=zai` opt-in——批量流水线/一键渲染永不消耗视频配额，创作流与可复制性优先于真机出片；
 2. **工作台视觉精修**：emoji 主视觉换统一图标体系（lucide）、题材卡选中态强化、开场双栏空态重排（消除右侧空白失衡）、行高与中英混排密度修正、按钮风格统一、深底灰字对比度提升至可读档；
@@ -747,6 +764,7 @@ src/
 | 内存队列进程重启丢任务 | 任务卡 running | 启动恢复逻辑强制回置 queued（§7.3）；v3 若多实例部署再引入持久化队列 |
 | 导出兼容 | 旧消费者解析失败 | 新字段全部可选、顶层结构不变；导出前跑 schema 兼容断言 |
 | 内容合规 | 平台风控驳回 | 生成前沿用题材库正向约束；对外部模型接入保持「合规渠道优先」原则 |
+| BGM 素材版权 | 成片投稿侵权 | 产品不内置任何音乐素材，仅支持用户上传并对版权自负（§7.9 约束）；MIME/大小白名单防滥用 |
 
 ---
 

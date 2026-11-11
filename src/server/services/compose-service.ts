@@ -3,7 +3,14 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { db } from "@/lib/db";
 import { RouteError } from "@/lib/api-utils";
-import { COMPOSE_TIMEOUT_MS } from "@/config/runtime";
+import {
+  BGM_DUCK_AMOUNT,
+  BGM_VOLUME,
+  COMPOSE_TIMEOUT_MS,
+  LOUDNORM_I,
+  LOUDNORM_LRA,
+  LOUDNORM_TP,
+} from "@/config/runtime";
 
 /**
  * 成片合成服务（docs/architecture-v2.md §7.9 v2.4）。
@@ -23,6 +30,7 @@ export interface ComposeResult {
   clipCount: number;
   durationSec: number;
   withVoice: boolean;
+  withBgm: boolean;
 }
 
 interface AssembleOutput {
@@ -31,6 +39,7 @@ interface AssembleOutput {
   clips?: number;
   durationSec?: number;
   withVoice?: boolean;
+  withBgm?: boolean;
   error?: string;
 }
 
@@ -55,10 +64,18 @@ export async function composeEpisode(projectId: string): Promise<ComposeResult> 
   }
 
   const script = path.join(process.cwd(), "scripts", "assemble-episode.py");
+  // L2 音频参数经 CLI 传入（§7.9 v2.4.4：Python 脚本自身零硬编码）
+  const audioArgs = [
+    "--loudnorm-i", String(LOUDNORM_I),
+    "--loudnorm-tp", String(LOUDNORM_TP),
+    "--loudnorm-lra", String(LOUDNORM_LRA),
+    "--bgm-volume", String(BGM_VOLUME),
+    "--bgm-duck-amount", String(BGM_DUCK_AMOUNT),
+  ];
   const stdout = await new Promise<string>((resolve, reject) => {
     execFile(
       "python3",
-      [script, projectId],
+      [script, projectId, ...audioArgs],
       { timeout: COMPOSE_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 },
       (err, out, stderr) => {
         if (err) {
@@ -106,5 +123,6 @@ export async function composeEpisode(projectId: string): Promise<ComposeResult> 
     clipCount: parsed.clips ?? clips.length,
     durationSec: parsed.durationSec ?? 0,
     withVoice: parsed.withVoice ?? false,
+    withBgm: parsed.withBgm ?? false,
   };
 }

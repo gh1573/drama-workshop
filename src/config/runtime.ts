@@ -98,3 +98,61 @@ export const COMPOSE_TIMEOUT_MS = envInt("COMPOSE_TIMEOUT_MS", 4 * 60_000);
  * 覆盖变量：PUBLIC_ASSETS_BASE_URL（无默认值 —— 显式配置才启用）
  */
 export const PUBLIC_ASSETS_BASE_URL = process.env.PUBLIC_ASSETS_BASE_URL?.trim() ?? "";
+
+/* ============================================================
+ * 成片音频专业化参数（§7.9 v2.4.4）
+ * compose-service 读取后经 CLI 参数传入 assemble-episode.py，
+ * Python 脚本自身不读环境变量、不含默认值（零硬编码）。
+ * ============================================================ */
+
+/** 环境变量小数读取：缺失/非法时回退默认值（允许负数） */
+function envFloat(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/**
+ * 成片响度归一目标积分响度（EBU R128，§7.9 v2.4.4）：
+ * 短剧/流媒体平台惯例 -16 LUFS（广播档 -24、流媒体高响度档 -14 之间取中）。
+ * 单位 LUFS。覆盖变量：LOUDNORM_I
+ */
+export const LOUDNORM_I = envFloat("LOUDNORM_I", -16);
+
+/** 响度归一真峰值上限（单位 dBTP，防削波）。覆盖变量：LOUDNORM_TP */
+export const LOUDNORM_TP = envFloat("LOUDNORM_TP", -1.5);
+
+/** 响度归一响度范围（LRA，单位 LU，越大动态保留越多）。覆盖变量：LOUDNORM_LRA */
+export const LOUDNORM_LRA = envFloat("LOUDNORM_LRA", 11);
+
+/**
+ * BGM 混音基础增益（线性系数 0~1，§7.9 v2.4.4）：
+ * 0.14 ≈ -17 dB，铺底不抢对白；对白处另有侧链闪避再压一档。
+ * 覆盖变量：BGM_VOLUME
+ */
+export const BGM_VOLUME = envFloat("BGM_VOLUME", 0.14);
+
+/**
+ * BGM 对白侧链闪避强度（0~1，§7.9 v2.4.4）：
+ * 0 = 不闪避；1 = 对白出现时 BGM 完全压到底。默认 0.7（压约 10dB）。
+ * 覆盖变量：BGM_DUCK_AMOUNT
+ */
+export const BGM_DUCK_AMOUNT = envFloat("BGM_DUCK_AMOUNT", 0.7);
+
+/** BGM 上传文件大小上限（字节，默认 10MB）。覆盖变量：BGM_MAX_BYTES */
+export const BGM_MAX_BYTES = envInt("BGM_MAX_BYTES", 10 * 1024 * 1024);
+
+/**
+ * BGM 上传 MIME 白名单（§7.9 v2.4.4）：音频容器防滥用；
+ * 扩展名映射仅用于落盘文件后缀，ffmpeg 按真实内容探测。
+ */
+export const BGM_MIME_EXT: Record<string, string> = {
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/mp4": "m4a",
+  "audio/aac": "aac",
+  "audio/x-wav": "wav",
+  "audio/wav": "wav",
+  "audio/ogg": "ogg",
+};

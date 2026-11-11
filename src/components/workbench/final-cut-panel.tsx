@@ -8,8 +8,11 @@ import {
   Film,
   Info,
   Loader2,
+  Music,
   Play,
   RefreshCw,
+  Trash2,
+  Upload,
   Video,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -19,14 +22,16 @@ import { useToast } from "@/hooks/use-toast";
 import { useWorkbench } from "@/store/workbench";
 
 /**
- * 成片面板（v2.4 §7.9 / v2.4.3 §7.4）—— 「一键成片」的结果出口。
+ * 成片面板（v2.4 §7.9 / v2.4.3 §7.4 / v2.4.4 BGM）—— 「一键成片」的结果出口。
  * 三态：待渲染（一键渲染全片）→ 渲染中（进度 + 自动合成）→ 成片（播放器 + 下载/重合成）。
  * 全部镜头就绪且尚未合成时自动触发合成（失败需手动重试，避免死循环）。
  * 占位模式（noop 视频）下透出通道状态与贴片指引，创作流不阻塞。
+ * BGM 管理行：上传/回显/清除，合成时循环铺底 + 对白自动闪避（版权用户自负）。
  */
 export function FinalCutPanel() {
   const { toast } = useToast();
   const clips = useWorkbench((s) => s.session?.clips ?? []);
+  const dbId = useWorkbench((s) => s.session?.dbId ?? null);
   const finalVideoUrl = useWorkbench((s) => s.session?.finalVideoUrl ?? null);
   const tasks = useWorkbench((s) => s.tasks);
   const composing = useWorkbench((s) => s.composing);
@@ -37,6 +42,10 @@ export function FinalCutPanel() {
   const [composeError, setComposeError] = useState<string | null>(null);
   /** 视频通道是否真机（null = 未探明，按真机口径展示不误导） */
   const [realVideo, setRealVideo] = useState<boolean | null>(null);
+  /** BGM 状态（null = 未设置；上传后需重新合成才入片） */
+  const [bgm, setBgm] = useState<{ name: string; sizeBytes: number } | null>(null);
+  const [bgmUploading, setBgmUploading] = useState(false);
+  const bgmInputRef = useRef<HTMLInputElement>(null);
   const composingRef = useRef(false);
   // ref 同步放 effect：避免渲染期写 ref（react-hooks/refs），提交后更新不误自动合成 guard
   useEffect(() => {
@@ -76,6 +85,22 @@ export function FinalCutPanel() {
   useEffect(() => {
     if (activeVideoTasks > 0) void fetchTasks();
   }, [activeVideoTasks, fetchTasks]);
+
+  // BGM 状态回显（面板加载时还原已上传素材）
+  useEffect(() => {
+    if (!dbId) return;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/projects/${dbId}/bgm`);
+        const json = await res.json();
+        if (json?.ok && json.data?.exists) {
+          setBgm({ name: json.data.name, sizeBytes: json.data.sizeBytes });
+        }
+      } catch {
+        /* 回显失败不影响主流程 */
+      }
+    })();
+  }, [dbId]);
 
   // 自动合成：全部就绪 + 未合成 + 非合成中 + 上次自动合成没有失败
   useEffect(() => {
@@ -122,6 +147,58 @@ export function FinalCutPanel() {
       toast({ title: "合成失败", description: err, variant: "destructive" });
     } else {
       toast({ title: "成片已就绪", description: "可在下方播放器直接看片" });
+    }
+  }
+
+  async function handleBgmFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // 允许重复选择同一文件
+    if (!file || !dbId) return;
+    setBgmUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/projects/${dbId}/bgm`, {
+        method: "POST",
+        body: fd,
+      });
+      const json = await res.json();
+      if (json?.ok) {
+        setBgm({ name: json.data.name, sizeBytes: json.data.sizeBytes });
+        toast({
+          title: "BGM 已上传",
+          description: "重新合成后生效（循环铺底 · 对白自动闪避）",
+        });
+      } else {
+        toast({
+          title: "BGM 上传失败",
+          description: json?.error ?? "请重试",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({ title: "BGM 上传失败", description: "网络异常，请重试", variant: "destructive" });
+    } finally {
+      setBgmUploading(false);
+    }
+  }
+
+  async function handleBgmDelete() {
+    if (!dbId) return;
+    setBgmUploading(true);
+    try {
+      const res = await fetch(`/api/projects/${dbId}/bgm`, { method: "DELETE" });
+      const json = await res.json();
+      if (json?.ok) {
+        setBgm(null);
+        toast({ title: "BGM 已清除", description: "重新合成后回落为纯配音成片" });
+      } else {
+        toast({ title: "清除失败", description: json?.error ?? "请重试", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "清除失败", description: "网络异常，请重试", variant: "destructive" });
+    } finally {
+      setBgmUploading(false);
     }
   }
 
@@ -234,6 +311,73 @@ export function FinalCutPanel() {
         )}
       </div>
 
+      {/* —— BGM 管理行（v2.4.4）：上传/回显/清除，合成时循环铺底 + 对白自动闪避 —— */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
+        <Music className="h-3.5 w-3.5 shrink-0 text-violet-400" />
+        <span className="text-xs font-semibold">背景音乐</span>
+        {bgm ? (
+          <>
+            <span className="min-w-0 max-w-[220px] truncate text-xs text-muted-foreground">
+              {bgm.name}（{(bgm.sizeBytes / 1024 / 1024).toFixed(1)}MB）
+            </span>
+            <div className="ml-auto flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bgmUploading}
+                onClick={() => bgmInputRef.current?.click()}
+                className="h-7 border-border/60 px-2.5 text-xs"
+              >
+                <Upload className="h-3 w-3" />
+                更换
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bgmUploading}
+                onClick={handleBgmDelete}
+                className="h-7 border-border/60 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <Trash2 className="h-3 w-3" />
+                清除
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <span className="text-xs text-muted-foreground">
+              未设置 · 上传后合成时循环铺底并自动闪避对白
+            </span>
+            <div className="ml-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bgmUploading}
+                onClick={() => bgmInputRef.current?.click()}
+                className="h-7 border-violet-500/40 bg-violet-500/10 px-2.5 text-xs font-semibold text-violet-400 hover:bg-violet-500/20"
+              >
+                {bgmUploading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Upload className="h-3 w-3" />
+                )}
+                上传 BGM
+              </Button>
+            </div>
+          </>
+        )}
+        <input
+          ref={bgmInputRef}
+          type="file"
+          accept="audio/mpeg,audio/mp3,audio/mp4,audio/aac,audio/x-wav,audio/wav,audio/ogg,.mp3,.m4a,.aac,.wav,.ogg"
+          className="hidden"
+          onChange={handleBgmFile}
+        />
+        <p className="w-full text-[10px] leading-relaxed text-muted-foreground/70">
+          素材版权请自行确认；支持 mp3 / m4a / aac / wav / ogg，10MB 以内，同一项目保留一份
+        </p>
+      </div>
+
       {/* —— 操作区（CTA 居中 + 流程说明紧随） —— */}
       <div className="flex flex-col items-center gap-2 border-t border-border/60 pt-3">
         {!finalVideoUrl && !allReady && activeVideoTasks === 0 && (
@@ -305,7 +449,7 @@ export function FinalCutPanel() {
             </Button>
             <p className="flex items-center gap-1 text-xs text-emerald-400">
               <BadgeCheck className="h-3.5 w-3.5" />
-              片头卡 + 字幕烧录 + 配音混音 已合入成片
+              片头卡 + 字幕烧录 + 配音混音{bgm ? " + BGM" : ""} 已合入成片
             </p>
           </div>
         )}
