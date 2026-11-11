@@ -54,6 +54,23 @@ export interface ImageProvider {
   generate(req: ImageRequest): Promise<ImageResult>;
 }
 
+export interface VoiceRequest {
+  /** 台词文本（镜头字幕 / 旁白） */
+  text: string;
+  /** 角色声音画像（音色/语速偏好）；缺省用通道默认音色 */
+  voiceProfile?: string | null;
+}
+
+export interface VoiceResult {
+  base64: string;
+  format: string;
+}
+
+export interface VoiceProvider {
+  readonly name: string;
+  synthesize(req: VoiceRequest): Promise<VoiceResult>;
+}
+
 export interface VideoRenderRequest {
   /** 组装管线产出的最终提示词（锚定段 + 动作 + 运镜 + 影调 + 技术） */
   finalPrompt: string;
@@ -61,19 +78,39 @@ export interface VideoRenderRequest {
   durationSeconds: number;
   resolution: string;
   aspectRatio: string;
+  /**
+   * 首帧参考图（公网可达 URL）——图生视频锚定的视觉载体。
+   * 本地定妆照无法被外部通道访问时由调用方省略，锚点串兜底（§7.1）。
+   */
+  firstFrameUrl?: string;
 }
 
-export interface VideoRenderResult {
-  status: "ready" | "failed";
+/** 同步结果：渲染终态（ready/failed）或轮询中间态（processing） */
+export interface VideoSyncResult {
+  mode: "sync";
+  status: "processing" | "ready" | "failed";
   mediaUrl?: string;
   durationMs?: number;
   reason?: string;
 }
 
+/** 异步句柄：通道已受理，调用方须持 remoteTaskId 轮询直至终态 */
+export interface VideoAsyncResult {
+  mode: "async";
+  remoteTaskId: string;
+}
+
+export type VideoRenderResult = VideoSyncResult | VideoAsyncResult;
+
 export interface VideoProvider {
   readonly name: string;
-  /** 同步渲染；未来异步通道由 dispatcher 持句柄轮询，接口不变 */
+  /**
+   * 提交渲染：同步通道直接返回终态；异步通道返回任务句柄，
+   * 由 dispatcher 持句柄轮询 poll()（§7.4，接口对业务层不变）。
+   */
   render(req: VideoRenderRequest): Promise<VideoRenderResult>;
+  /** 轮询异步任务状态；仅异步通道需要实现 */
+  poll(remoteTaskId: string): Promise<VideoSyncResult>;
 }
 
 /**

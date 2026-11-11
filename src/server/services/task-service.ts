@@ -56,7 +56,14 @@ export async function createTask(
   await requireProject(projectId);
 
   if (input.kind === "voiceover") {
-    throw new RouteError("配音通道将在后续版本接入（voiceProfile 已就绪），当前不可提交", 400);
+    if (!input.clipId) throw new RouteError("配音任务必须指定镜头 clipId", 422);
+    const clip = await db.timelineClip.findUnique({ where: { id: input.clipId } });
+    if (!clip || clip.projectId !== projectId) {
+      throw new RouteError("镜头不存在或不属于该项目", 404);
+    }
+    if (!clip.subtitle?.trim()) {
+      throw new RouteError("该镜头无台词字幕，无需配音", 422);
+    }
   }
   if (input.kind === "portrait") {
     if (!input.assetId) throw new RouteError("定妆照任务必须指定资产 assetId", 422);

@@ -228,7 +228,7 @@ export async function addEpisode(
  */
 export async function batchRenderSeries(
   seriesId: string,
-  kind: "video" | "portrait"
+  kind: "video" | "portrait" | "voiceover"
 ) {
   const series = await requireSeries(seriesId);
   const projects = await db.project.findMany({
@@ -250,7 +250,20 @@ export async function batchRenderSeries(
     let epSubmitted = 0;
     let epSkipped = 0;
 
-    if (kind === "video") {
+    if (kind === "voiceover") {
+      const clips = await db.timelineClip.findMany({
+        where: { projectId: p.id },
+        select: { id: true },
+      });
+      for (const c of clips) {
+        try {
+          await createTask(p.id, { kind: "voiceover", clipId: c.id });
+          epSubmitted++;
+        } catch {
+          epSkipped++;
+        }
+      }
+    } else if (kind === "video") {
       const clips = await db.timelineClip.findMany({
         where: {
           projectId: p.id,

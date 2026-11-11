@@ -10,7 +10,7 @@ import type { EnergyCurvePoint, TrackItemDTO, TrackKind } from "@/lib/drama";
  * 人工仍可增删改（三轨是数据，不是只读视图）。
  */
 
-const KINDS: TrackKind[] = ["subtitle", "sfx", "bgm"];
+const KINDS: TrackKind[] = ["subtitle", "sfx", "bgm", "voiceover"];
 
 interface ClipRow {
   id: string;
@@ -79,7 +79,7 @@ export async function createTrack(
   }
 ): Promise<TrackItemDTO> {
   if (!KINDS.includes(input.kind)) {
-    throw new RouteError("轨道类型必须是 subtitle / sfx / bgm", 422);
+    throw new RouteError("轨道类型必须是 subtitle / sfx / bgm / voiceover", 422);
   }
   if (input.endMs <= input.startMs) {
     throw new RouteError("轨道项出点必须晚于入点", 422);
@@ -164,7 +164,8 @@ export async function rebuildTracks(projectId: string): Promise<TrackItemDTO[]> 
   );
 
   await db.$transaction([
-    db.trackItem.deleteMany({ where: { projectId } }),
+    // 配音轨（voiceover）是渲染任务产物，不参与三轨自动重建
+    db.trackItem.deleteMany({ where: { projectId, kind: { in: ["subtitle", "sfx", "bgm"] } } }),
   ]);
 
   // —— 时间轴推算 ——

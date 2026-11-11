@@ -581,7 +581,7 @@ export interface TaskDTO {
 }
 
 /** —— 轨道层 —— */
-export type TrackKind = "subtitle" | "sfx" | "bgm";
+export type TrackKind = "subtitle" | "sfx" | "bgm" | "voiceover";
 
 export const TRACK_KIND_META: Record<
   TrackKind,
@@ -598,6 +598,10 @@ export const TRACK_KIND_META: Record<
   bgm: {
     label: "配乐轨",
     cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+  },
+  voiceover: {
+    label: "配音轨",
+    cls: "border-sky-500/40 bg-sky-500/10 text-sky-300",
   },
 };
 

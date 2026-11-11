@@ -127,7 +127,7 @@ export const createTaskSchema = z.discriminatedUnion("kind", [
 /** —— 轨道契约 —— */
 
 export const createTrackSchema = z.object({
-  kind: z.enum(["subtitle", "sfx", "bgm"]),
+  kind: z.enum(["subtitle", "sfx", "bgm", "voiceover"]),
   clipId: z.string().nullable().optional(),
   startMs: z.number().int().min(0).max(600000),
   endMs: z.number().int().min(1).max(600000),
@@ -168,7 +168,7 @@ export const createEpisodeSchema = z.object({
   modelConfig: modelConfigSchema.optional(),
 });
 
-/** 系列级批量提交：video = 逐集渲染待拍镜头；portrait = 补全缺失定妆图 */
+/** 系列级批量提交：video = 逐集渲染待拍镜头；portrait = 补全缺失定妆图；voiceover = 逐集补台词配音 */
 export const batchRenderSchema = z.object({
-  kind: z.enum(["video", "portrait"]).default("video"),
+  kind: z.enum(["video", "portrait", "voiceover"]).default("video"),
 });

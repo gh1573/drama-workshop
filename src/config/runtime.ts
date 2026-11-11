@@ -47,6 +47,31 @@ export const ORPHAN_RECOVERY_WINDOW_MS = envInt(
 export const TASK_LIST_LIMIT = envInt("TASK_LIST_LIMIT", 50);
 
 /**
+ * 视频异步任务轮询间隔（毫秒）：dispatcher 对每个在途任务至少间隔该时长查询一次。
+ * 实测单镜成片约 60~90s，轮询粒度无需过密，避免撞通道限流。
+ * 覆盖变量：VIDEO_POLL_INTERVAL_MS
+ */
+export const VIDEO_POLL_INTERVAL_MS = envInt("VIDEO_POLL_INTERVAL_MS", 8_000);
+
+/** 视频异步任务轮询超时（毫秒）：超时按失败处理（可重试回队）。覆盖变量：VIDEO_POLL_TIMEOUT_MS */
+export const VIDEO_POLL_TIMEOUT_MS = envInt("VIDEO_POLL_TIMEOUT_MS", 5 * 60_000);
+
+/**
+ * 视频通道在途上限：同时处于「生成中」的任务数（已提交未出片）。
+ * 提交（create）与轮询（query）均为轻量调用，真正受限的是通道侧并行生成数。
+ * 覆盖变量：VIDEO_INFLIGHT_LIMIT
+ */
+export const VIDEO_INFLIGHT_LIMIT = envInt("VIDEO_INFLIGHT_LIMIT", 3);
+
+/**
+ * 视频通道提交节流（毫秒）：两次 create 之间的全局最小间隔。
+ * 实测通道对 create 频率敏感（批量瞬时提交触发 429），节流是第一道闸；
+ * 第二道闸是 provider 内的 429 指数退避（含随机抖动防雪崩）。
+ * 覆盖变量：VIDEO_SUBMIT_INTERVAL_MS
+ */
+export const VIDEO_SUBMIT_INTERVAL_MS = envInt("VIDEO_SUBMIT_INTERVAL_MS", 12_000);
+
+/**
  * 上游限流（429）指数退避基数（毫秒）：20s → 40s → 80s。
  * 覆盖变量：RATE_LIMIT_BACKOFF_MS
  */
