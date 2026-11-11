@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -54,3 +55,8 @@ server.log
 /skills/
 # 仓库备份打包文件（体积大，禁止入库，防自动提交误收）
 *.bundle
+# 运行时环境与数据库（本机状态，不入库；模板见 .env.example）
+.env
+db/*.db
+# 工具调用过程产物（平台自动抓取的中间结果，非源码）
+tool-results/
