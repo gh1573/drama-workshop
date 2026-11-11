@@ -6,23 +6,30 @@ import { RouteError } from "@/lib/api-utils";
 import {
   BGM_DUCK_AMOUNT,
   BGM_VOLUME,
+  COMPOSE_FPS,
   COMPOSE_TIMEOUT_MS,
   LOUDNORM_I,
   LOUDNORM_LRA,
   LOUDNORM_TP,
+  TRANSITION_SECONDS,
+  composeDimensions,
 } from "@/config/runtime";
+import { GRADE_PRESETS } from "@/config/templates";
 
 /**
- * 成片合成服务（docs/architecture-v2.md §7.9 v2.4）。
+ * 成片合成服务（docs/architecture-v2.md §7.9 v2.4 → v2.5）。
  *
  * 「一键成片」的第二步：全部镜头出片后，调用 scripts/assemble-episode.py
- * （ffmpeg）完成 片头卡 → 逐镜裁剪拼接 → 字幕烧录（ASS）→ 配音混音，
+ * （ffmpeg）完成 片头卡 → 逐镜裁剪拼接 → 转场矩阵（§7.11）→ 全片调色（§7.11）→
+ * 字幕烧录（ASS）→ 配音混音，
  * 产物落 public/assets/final_{projectId}.mp4 并回写 Project.finalVideoUrl。
  *
  * 语义：
  * - 前置校验全部镜头 ready（缺片 409，不产半成品）；
  * - 同步执行（数十秒量级），超时不写 finalVideoUrl；
- * - 重跑即重合成（覆盖旧成片），镜头轨变更后可重复执行。
+ * - 重跑即重合成（覆盖旧成片），镜头轨变更后可重复执行；
+ * - v2.5：画幅由项目 aspectRatio × resolution 映射（composeDimensions，L2），
+ *   转场策略/调色预设取项目级 L4 字段（transitionMode/gradePreset）。
  */
 
 export interface ComposeResult {
@@ -40,7 +47,23 @@ interface AssembleOutput {
   durationSec?: number;
   withVoice?: boolean;
   withBgm?: boolean;
+  transitions?: number;
+  width?: number;
+  height?: number;
+  graded?: boolean;
   error?: string;
+}
+
+/**
+ * 调色预设解析（§7.11 v2.5）：L4 用户覆写优先，空则跟随题材（L3 按 genreId 映射）。
+ * 仅返回 L3 白名单命中项，拒绝任意字符串注入。
+ */
+function resolveGradeFilter(
+  gradePreset: string | null,
+  genreId: string
+): string {
+  const key = gradePreset?.trim() || genreId;
+  return GRADE_PRESETS[key]?.filter ?? GRADE_PRESETS.neutral.filter;
 }
 
 export async function composeEpisode(projectId: string): Promise<ComposeResult> {
@@ -64,8 +87,18 @@ export async function composeEpisode(projectId: string): Promise<ComposeResult> 
   }
 
   const script = path.join(process.cwd(), "scripts", "assemble-episode.py");
-  // L2 音频参数经 CLI 传入（§7.9 v2.4.4：Python 脚本自身零硬编码）
-  const audioArgs = [
+  // L2 音频/画幅/转场参数 + L3 调色滤镜 + L4 用户覆写，经 CLI 传入（§7.9 v2.5：脚本自身零硬编码）
+  const { width, height } = composeDimensions(
+    project.aspectRatio,
+    project.resolution
+  );
+  const args = [
+    "--width", String(width),
+    "--height", String(height),
+    "--fps", String(COMPOSE_FPS),
+    "--transitions", project.transitionMode || "auto",
+    "--transition-duration", String(TRANSITION_SECONDS),
+    "--grade-filter", resolveGradeFilter(project.gradePreset, project.genreId),
     "--loudnorm-i", String(LOUDNORM_I),
     "--loudnorm-tp", String(LOUDNORM_TP),
     "--loudnorm-lra", String(LOUDNORM_LRA),
@@ -75,7 +108,7 @@ export async function composeEpisode(projectId: string): Promise<ComposeResult> 
   const stdout = await new Promise<string>((resolve, reject) => {
     execFile(
       "python3",
-      [script, projectId, ...audioArgs],
+      [script, projectId, ...args],
       { timeout: COMPOSE_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 },
       (err, out, stderr) => {
         if (err) {

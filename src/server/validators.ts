@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GRADE_PRESETS, TRANSITION_MODES } from "@/config/templates";
 
 /**
  * API 入参校验（zod）—— 所有写操作路由统一使用
@@ -49,6 +50,17 @@ export const updateProjectSchema = z.object({
   status: z.enum(["draft", "beatsReady", "inProduction", "archived"]).optional(),
   modelConfig: modelConfigSchema.optional(),
   storyBeats: z.array(storyBeatSchema).length(3).optional(),
+  // v2.5 成片视觉专业化（§7.11）：转场策略与调色预设（L3 白名单校验，非空时）
+  transitionMode: z
+    .enum(TRANSITION_MODES.map((m) => m.value) as [string, ...string[]])
+    .optional(),
+  gradePreset: z
+    .string()
+    .refine((v) => v === "" || v in GRADE_PRESETS, {
+      message: "调色预设不在 GRADE_PRESETS 白名单内",
+    })
+    .nullable()
+    .optional(),
 });
 
 export const createClipSchema = z.object({

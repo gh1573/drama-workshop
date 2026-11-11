@@ -223,7 +223,7 @@ export default function Home() {
                   variant="outline"
                   className="hidden border-amber-500/40 text-amber-400 sm:inline-flex"
                 >
-                  DRAMA STUDIO v1.2.0
+                  DRAMA STUDIO v2.5.0
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">

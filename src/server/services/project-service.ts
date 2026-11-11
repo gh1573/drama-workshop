@@ -201,6 +201,8 @@ async function assembleDetail(p: ProjectWithRelations): Promise<ProjectDetail> {
     anchorStaleClipIds: staleClipIds,
     activeRun,
     finalVideoUrl: p.finalVideoUrl,
+    transitionMode: p.transitionMode,
+    gradePreset: p.gradePreset,
   };
 }
 
@@ -212,6 +214,10 @@ export async function updateProject(
     status?: ProjectStatus;
     modelConfig?: ModelConfig;
     storyBeats?: StoryBeat[];
+    /** v2.5 §7.11：转场策略（cut/fade/auto） */
+    transitionMode?: string;
+    /** v2.5 §7.11：调色预设键；空串 = 跟随题材（落库为 null） */
+    gradePreset?: string | null;
   }
 ): Promise<ProjectDetail> {
   await requireProjectRow(id);
@@ -225,6 +231,14 @@ export async function updateProject(
     data.resolution = patch.modelConfig.resolution;
     data.thinkingLevel = patch.modelConfig.scriptThinkingLevel;
     data.promptEnhance = patch.modelConfig.enablePromptEnhance;
+  }
+  if (patch.transitionMode !== undefined) {
+    data.transitionMode = patch.transitionMode;
+  }
+  if (patch.gradePreset !== undefined) {
+    // 空串统一为 null（跟随题材影调），白名单校验已在 zod 层完成
+    const key = patch.gradePreset?.trim();
+    data.gradePreset = key ? key : null;
   }
 
   // 分镜整体替换（事务保证原子性）；既有镜头轨的 beatIndex 引用可能失效，

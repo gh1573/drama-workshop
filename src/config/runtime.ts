@@ -156,3 +156,48 @@ export const BGM_MIME_EXT: Record<string, string> = {
   "audio/wav": "wav",
   "audio/ogg": "ogg",
 };
+
+/* ============================================================
+ * 成片画幅与转场参数（§7.9 / §7.11 v2.5）
+ * compose-service 读取后经 CLI 参数传入 assemble-episode.py，
+ * Python 脚本自身不读环境变量、不含默认值（零硬编码）。
+ * ============================================================ */
+
+/** 成片帧率（fps，与视频生成通道 fps 对齐）。覆盖变量：COMPOSE_FPS */
+export const COMPOSE_FPS = envInt("COMPOSE_FPS", 30);
+
+/**
+ * 转场时长（秒，§7.11 v2.5）：xfade 交叉溶解 / 压黑的重叠时长。
+ * 短剧节奏以快为主，0.5s 是「有转场感但不拖节奏」的经验档。
+ * 覆盖变量：TRANSITION_SECONDS
+ */
+export const TRANSITION_SECONDS = envFloat("TRANSITION_SECONDS", 0.5);
+
+/** 分辨率档位 → 短边像素（与 genres.ts RESOLUTIONS 对齐，映射中心在此） */
+const RESOLUTION_SHORT_EDGE: Record<string, number> = {
+  "540p": 540,
+  "720p": 720,
+  "1080p": 1080,
+};
+
+/**
+ * 画幅像素映射（§7.9 v2.5）：项目 aspectRatio × resolution → 成片 width/height。
+ * 9:16 竖版以「宽 = 档位像素」为准（720p → 720x1280），16:9 横版以「高 = 档位像素」为准，
+ * 1:1 方版边长相等；未登记档位/画幅回落 720x1280（与 v2.4 行为一致）。
+ */
+export function composeDimensions(
+  aspectRatio: string,
+  resolution: string
+): { width: number; height: number } {
+  const short = RESOLUTION_SHORT_EDGE[resolution] ?? 720;
+  switch (aspectRatio) {
+    case "9:16":
+      return { width: short, height: Math.round((short * 16) / 9) };
+    case "16:9":
+      return { width: Math.round((short * 16) / 9), height: short };
+    case "1:1":
+      return { width: short, height: short };
+    default:
+      return { width: 720, height: 1280 };
+  }
+}

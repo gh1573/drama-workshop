@@ -14,19 +14,28 @@ import {
   Trash2,
   Upload,
   Video,
+  Wand2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkbench } from "@/store/workbench";
+import { GRADE_PRESETS, TRANSITION_MODES } from "@/config/templates";
 
 /**
- * 成片面板（v2.4 §7.9 / v2.4.3 §7.4 / v2.4.4 BGM）—— 「一键成片」的结果出口。
+ * 成片面板（v2.4 §7.9 / v2.4.3 §7.4 / v2.4.4 BGM / v2.5 §7.11 后期风格）——「一键成片」的结果出口。
  * 三态：待渲染（一键渲染全片）→ 渲染中（进度 + 自动合成）→ 成片（播放器 + 下载/重合成）。
  * 全部镜头就绪且尚未合成时自动触发合成（失败需手动重试，避免死循环）。
  * 占位模式（noop 视频）下透出通道状态与贴片指引，创作流不阻塞。
- * BGM 管理行：上传/回显/清除，合成时循环铺底 + 对白自动闪避（版权用户自负）。
+ * 后期风格行：转场策略 + 调色预设（L4 落库，重合成后生效）；BGM 管理行：上传/回显/清除。
  */
 export function FinalCutPanel() {
   const { toast } = useToast();
@@ -46,6 +55,18 @@ export function FinalCutPanel() {
   const [bgm, setBgm] = useState<{ name: string; sizeBytes: number } | null>(null);
   const [bgmUploading, setBgmUploading] = useState(false);
   const bgmInputRef = useRef<HTMLInputElement>(null);
+  // —— v2.5 后期风格：转场策略 + 调色预设（L4 落库，重合成后生效；"follow" 哨兵 = 跟随题材） ——
+  const genreName = useWorkbench((s) => s.session?.genre.name ?? "");
+  const sessionTransition = useWorkbench((s) => s.session?.transitionMode ?? "auto");
+  const sessionGrade = useWorkbench((s) => s.session?.gradePreset ?? "");
+  const [transitionMode, setTransitionMode] = useState(sessionTransition);
+  const [gradeKey, setGradeKey] = useState(sessionGrade || "follow");
+  const [styleSaving, setStyleSaving] = useState(false);
+  // 会话切换（载入/重命名项目）时同步本地选择
+  useEffect(() => {
+    setTransitionMode(sessionTransition);
+    setGradeKey(sessionGrade || "follow");
+  }, [sessionTransition, sessionGrade, dbId]);
   const composingRef = useRef(false);
   // ref 同步放 effect：避免渲染期写 ref（react-hooks/refs），提交后更新不误自动合成 guard
   useEffect(() => {
@@ -202,6 +223,63 @@ export function FinalCutPanel() {
     }
   }
 
+  /** 后期风格持久化（PATCH 项目，compose 时服务端读取）；value 由调用方预判更新 */
+  async function patchPostStyle(patch: {
+    transitionMode?: string;
+    gradePreset?: string | null;
+  }): Promise<boolean> {
+    if (!dbId) {
+      toast({
+        title: "尚未入库",
+        description: "请先「保存到项目库」后再设置后期风格",
+        variant: "destructive",
+      });
+      return false;
+    }
+    setStyleSaving(true);
+    try {
+      const res = await fetch(`/api/projects/${dbId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const json = await res.json();
+      if (json?.ok) return true;
+      toast({ title: "设置失败", description: json?.error ?? "请重试", variant: "destructive" });
+      return false;
+    } catch {
+      toast({ title: "设置失败", description: "网络异常，请重试", variant: "destructive" });
+      return false;
+    } finally {
+      setStyleSaving(false);
+    }
+  }
+
+  async function handleTransitionChange(value: string) {
+    const prev = transitionMode;
+    setTransitionMode(value); // 预判更新，失败回滚
+    if (!(await patchPostStyle({ transitionMode: value }))) {
+      setTransitionMode(prev);
+      return;
+    }
+    toast({ title: "转场策略已更新", description: "重新合成后生效" });
+  }
+
+  async function handleGradeChange(value: string) {
+    const prev = gradeKey;
+    setGradeKey(value);
+    // "follow" 哨兵 = 跟随题材（落库 null）；其余为 GRADE_PRESETS 键
+    if (!(await patchPostStyle({ gradePreset: value === "follow" ? null : value }))) {
+      setGradeKey(prev);
+      return;
+    }
+    toast({
+      title: "调色预设已更新",
+      description:
+        value === "follow" ? "跟随题材影调 · 重新合成后生效" : "重新合成后生效",
+    });
+  }
+
   if (total === 0) return null;
 
   return (
@@ -309,6 +387,52 @@ export function FinalCutPanel() {
             )}
           </div>
         )}
+      </div>
+
+      {/* —— 后期风格（v2.5 §7.11）：转场策略 + 调色预设，重合成后生效 —— */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
+        <Wand2 className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+        <span className="text-xs font-semibold">后期风格</span>
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          <Select
+            value={transitionMode}
+            onValueChange={handleTransitionChange}
+            disabled={styleSaving}
+          >
+            <SelectTrigger className="h-7 w-[230px] border-border/60 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TRANSITION_MODES.map((m) => (
+                <SelectItem key={m.value} value={m.value} className="text-xs">
+                  {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={gradeKey}
+            onValueChange={handleGradeChange}
+            disabled={styleSaving}
+          >
+            <SelectTrigger className="h-7 w-[200px] border-border/60 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="follow" className="text-xs">
+                跟随题材影调{genreName ? `（${genreName}）` : ""}
+              </SelectItem>
+              {Object.entries(GRADE_PRESETS).map(([key, preset]) => (
+                <SelectItem key={key} value={key} className="text-xs">
+                  {preset.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <p className="w-full text-[10px] leading-relaxed text-muted-foreground/70">
+          智能矩阵：片头卡溶解入戏 · 同幕硬切保节奏 · 悬念幕压黑收束（§7.11）；调色在字幕烧录前作用，白字不偏色
+        </p>
       </div>
 
       {/* —— BGM 管理行（v2.4.4）：上传/回显/清除，合成时循环铺底 + 对白自动闪避 —— */}
@@ -449,7 +573,7 @@ export function FinalCutPanel() {
             </Button>
             <p className="flex items-center gap-1 text-xs text-emerald-400">
               <BadgeCheck className="h-3.5 w-3.5" />
-              片头卡 + 字幕烧录 + 配音混音{bgm ? " + BGM" : ""} 已合入成片
+              片头卡 + 转场 + 调色 + 字幕烧录 + 配音混音{bgm ? " + BGM" : ""} 已合入成片
             </p>
           </div>
         )}

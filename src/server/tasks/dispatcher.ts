@@ -377,10 +377,13 @@ async function persistVideoFile(
 }
 
 /**
- * 首帧参考图解析（§7.1.4 参考图注入，v2.4.2）。
+ * 首帧参考图解析（§7.1.4 参考图注入，v2.4.2 → v2.5 §7.12）。
  *
- * 规则：
- * - 取镜头绑定的第一张已定妆（portraitUrl 非空）的 character 资产；
+ * 规则（优先级递减）：
+ * - 取镜头绑定的第一张已定妆（portraitUrl 非空）的 character 资产
+ *   （人物面孔优先——脸穿帮比背景穿帮更刺眼）；
+ * - 未命中时回退 scene 资产（v2.5 §7.12）：空镜/转场镜头获得场景首帧锚定，
+ *   压制镜间背景跳变；prop 不参与（道具锚点由提示词串承载）；
  * - portraitUrl 已是绝对 http(s) 地址 → 直接使用（外部贴片场景）；
  * - 相对路径 → 仅当 PUBLIC_ASSETS_BASE_URL 非空时拼接为公网绝对地址
  *   （外部视频通道无法回源本地路径）；
@@ -394,15 +397,17 @@ async function resolveFirstFrameUrl(
     select: { assetId: true },
   });
   if (refs.length === 0) return undefined;
-  const character = await db.asset.findFirst({
+  const assetIds = refs.map((r) => r.assetId);
+  const hit = await db.asset.findFirst({
     where: {
-      id: { in: refs.map((r) => r.assetId) },
-      kind: "character",
+      id: { in: assetIds },
+      kind: { in: ["character", "scene"] },
       portraitUrl: { not: null },
     },
-    select: { portraitUrl: true },
+    orderBy: [{ kind: "asc" }], // character 优先于 scene（字典序 c < s）
+    select: { kind: true, portraitUrl: true },
   });
-  const portrait = character?.portraitUrl;
+  const portrait = hit?.portraitUrl;
   if (!portrait) return undefined;
   if (/^https?:\/\//.test(portrait)) return portrait;
   if (!PUBLIC_ASSETS_BASE_URL) return undefined;

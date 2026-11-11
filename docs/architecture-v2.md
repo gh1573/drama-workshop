@@ -529,9 +529,9 @@ export interface Provider<TIn, TOut> {
 | 层 | 位置 | 内容 | 覆盖方式 |
 | --- | --- | --- | --- |
 | L1 创作预设 | `src/lib/genres.ts`、`src/lib/drama.ts`（GENRES / CAMERA_MOVEMENTS / RUN_STAGES / CREW_ROLES / NARRATIVE_META） | 创作方法论的数据化：题材策略、运镜库、流水线阶段、剧组角色、叙事结构 | 随产品迭代演进（版本管理） |
-| L2 运行时参数 | `src/config/runtime.ts` | 调度器各通道并发上限、调度 tick 间隔、孤儿任务回收窗口、默认重试上限、列表分页、限流退避（429 指数退避 20s/40s/80s）、参考图公网回源基址（PUBLIC_ASSETS_BASE_URL，空 = 不注入首帧参考，文本锚点兜底）、成片音频参数（响度归一 LOUDNORM_I/-TP/-LRA；BGM 基础增益 BGM_VOLUME、侧链闪避强度 BGM_DUCK_AMOUNT、上传大小上限 BGM_MAX_BYTES） | 环境变量覆盖（`DISPATCH_*` / `RATE_LIMIT_*` / `PUBLIC_ASSETS_BASE_URL` / `LOUDNORM_*` / `BGM_*`），带类型化默认值 |
-| L3 模板文案 | `src/config/templates.ts` | 定妆图尺寸表与提示词模板（含角色专用尾缀）、提示词分段标签、技术段尾缀文案、选角面孔统一规则（CASTING_FACE_RULE）、拆镜档位（BREAKDOWN_SPEC：每幕镜头数/单镜时长/整集目标时长；当前精简档 3~4 镜/幕 × 4~5s，约 40~60 秒集） | 版本管理；后续可扩展为每项目覆盖 |
-| L4 用户配置 | （预留，v2.3+）项目级/全局配置表 | 终端用户对默认参数的覆盖 | 落库，服务层读取 |
+| L2 运行时参数 | `src/config/runtime.ts` | 调度器各通道并发上限、调度 tick 间隔、孤儿任务回收窗口、默认重试上限、列表分页、限流退避（429 指数退避 20s/40s/80s）、参考图公网回源基址（PUBLIC_ASSETS_BASE_URL，空 = 不注入首帧参考，文本锚点兜底）、成片音频参数（响度归一 LOUDNORM_I/-TP/-LRA；BGM 基础增益 BGM_VOLUME、侧链闪避强度 BGM_DUCK_AMOUNT、上传大小上限 BGM_MAX_BYTES）、成片画幅参数（v2.5：COMPOSE_FPS、分辨率档位→像素映射 composeDimensions）、转场时长（TRANSITION_SECONDS） | 环境变量覆盖（`DISPATCH_*` / `RATE_LIMIT_*` / `PUBLIC_ASSETS_BASE_URL` / `LOUDNORM_*` / `BGM_*` / `COMPOSE_FPS` / `TRANSITION_SECONDS`），带类型化默认值 |
+| L3 模板文案 | `src/config/templates.ts` | 定妆图尺寸表与提示词模板（含角色专用尾缀）、提示词分段标签、技术段尾缀文案、选角面孔统一规则（CASTING_FACE_RULE）、拆镜档位（BREAKDOWN_SPEC：每幕镜头数/单镜时长/整集目标时长；当前精简档 3~4 镜/幕 × 4~5s，约 40~60 秒集）、全片调色预设表（v2.5 GRADE_PRESETS：题材 id → ffmpeg 滤镜串 + 中文说明，neutral 兜底） | 版本管理；后续可扩展为每项目覆盖 |
+| L4 用户配置 | 项目级字段（v2.5 起步：Project.transitionMode / Project.gradePreset） | 终端用户对默认参数的覆盖：转场策略（cut/fade/auto）、全片调色预设（空 = 跟随题材影调） | 落库，PATCH /api/projects/[id] 写入，compose 时服务层读取 |
 
 **规则（review 阻断项）**：
 
@@ -556,10 +556,14 @@ export interface Provider<TIn, TOut> {
 2. **成片合成** `POST /api/projects/[id]/compose`：
    - 前置校验：全部镜头 `ready`（缺片则 409 并返回缺失清单，不产半成品）；
    - 执行体：`scripts/assemble-episode.py`（ffmpeg）——片头卡（剧名+集号，PIL 绘制 + 缓推）→
-     逐镜按 plannedMs 裁剪拼接 → 字幕轨烧录（ASS，金句大字样式）→ 配音 WAV 按轨起止混音 →
+     逐镜按 plannedMs 裁剪拼接 → **转场矩阵（v2.5 §7.11，按叙事功能选型）→ 全片调色（v2.5，题材影调预设，字幕烧录前作用）→**
+     字幕轨烧录（ASS，金句大字样式）→ 配音 WAV 按轨起止混音 →
      **BGM 循环铺底 + 对白侧链自动闪避（v2.4.4）→ 末级 EBU R128 响度归一（loudnorm 两遍法：
      测量遍仅解码音频秒级完成，线性模式增益恒定不抽泵）**；
-     合成参数由 `compose-service.ts` 从 L2 读取后经 CLI 参数传入脚本（脚本自身零硬编码）；
+     合成参数由 `compose-service.ts` 从 L2/L3/L4 读取后经 CLI 参数传入脚本（脚本自身零硬编码）：
+     音频参数（v2.4.4）+ 画幅参数 `--width/--height/--fps`（v2.5，由项目 aspectRatio × resolution 映射，
+     消除「UI 可选 1080p 而成片写死 720p」的选项造假）+ 转场 `--transitions/--transition-duration`（v2.5）
+     + 调色 `--grade-filter`（v2.5）；
    - 产物落 `public/assets/final_{projectId}.mp4`（自包含，不受外链过期影响），
      并回写 `Project.finalVideoUrl`；响应返回 `{ finalVideoUrl, clipCount, durationSec, withVoice, withBgm }`；
    - 重跑即重合成（覆盖旧成片），镜头轨变更后可重复执行。
@@ -567,7 +571,7 @@ export interface Provider<TIn, TOut> {
    - 上传音频文件（multipart），校验大小（BGM_MAX_BYTES）与 MIME 白名单，落 `public/assets/bgm_{projectId}.{ext}` + 同名 `.json` 元数据（原始文件名/大小/时间）；
    - GET 返回 `{ exists, name, sizeBytes }`（面板加载时回显状态）；DELETE 清除音频与元数据；
    - 合成时若存在 BGM 文件则自动混入：循环铺满全片 → 基础增益（BGM_VOLUME）→ 以配音轨为侧链源自动闪避（对白出现时压低，静默时抬起）；无 BGM 时行为与 v2.4.3 完全一致（回归无差）。
-4. **前端成片页签**：流水线成功后默认展示「成片」——播放器（9:16）+ 渲染进度 + 一键渲染/合成/下载 + BGM 管理行（上传/回显/清除，v2.4.4）；
+4. **前端成片页签**：流水线成功后默认展示「成片」——播放器（9:16）+ 渲染进度 + 一键渲染/合成/下载 + 后期风格行（转场策略 + 调色预设两个下拉，v2.5）+ BGM 管理行（上传/回显/清除，v2.4.4）；
    渲染进行中自动轮询，全部就绪自动触发合成。
 
 **约束**：
@@ -598,6 +602,70 @@ export interface Provider<TIn, TOut> {
 
 ---
 
+### 7.11 成片视觉专业化：转场矩阵与全片调色（v2.5）
+
+> v2.4.x 成片为**硬切拼接 + 原始直出**：镜头间无转场语义、全片无色彩管理，
+> 与「专业交付」的产品定位不符。v2.5 在合成链补齐两件事，均为纯 ffmpeg 本地处理（零配额消耗）。
+
+**① 转场矩阵（Project.transitionMode，默认 `auto`）**：
+
+| 策略 | 值 | 语义 |
+| --- | --- | --- |
+| 硬切 | `cut` | 与 v2.4 行为一致（concat 直拼，零重编码回归无差） |
+| 全片溶解 | `fade` | 全部相邻片段间交叉溶解（xfade=fade） |
+| 智能矩阵 | `auto` | 按叙事功能选型（下表），转场时长 TRANSITION_SECONDS（默认 0.5s） |
+
+智能矩阵（`auto`）选型依据——转场是叙事语言，不是随机特效：
+
+| 剪辑点 | 转场 | 叙事理由 |
+| --- | --- | --- |
+| 片头卡 → 第一镜 | 交叉溶解 fade | 入戏缓冲，剧名淡出画面淡入 |
+| 同幕内镜头间 | 硬切 | 短剧节奏主语言，动作连续性优先 |
+| 幕界 → 进入 hook | 硬切 | 开场冲突直接砸脸，溶解会泄劲 |
+| 幕界 → 进入 climax | 硬切 | 高潮点硬切本身就是剪辑冲击 |
+| 幕界 → 进入 cliffhanger | 压黑 fadeblack | 章节收束感，留悬念呼吸 |
+
+工程实现：`cut` 走 concat -c copy（零重编码）；`fade`/`auto` 改走 filter_complex
+xfade 链（逐段叠加 offset，全部片段统一编码规格后溶解），仅重编码一次；
+叙事功能从 timeline_clips.beatIndex → story_beats.narrativeFunction 连表取得。
+
+**② 全片调色（Project.gradePreset，空 = 跟随题材影调）**：
+
+- L3 层登记 `GRADE_PRESETS`：题材 id → ffmpeg 滤镜串（eq 基础对比/饱和/亮度 + colorbalance
+  冷暖偏移）+ 中文说明，另含 `neutral`（无滤镜）兜底；题材快照的英文 tonePrompt 只进生成提示词，
+  **成片调色是独立维度**，由预设表显式映射，避免用提示词做 fragile 的关键词匹配；
+- 用户可在成片页签「后期风格」下拉覆写为任一预设（L4 落库）；选「跟随题材」时按项目 genreId 取预设；
+- 滤镜串经 CLI `--grade-filter` 传入脚本（脚本零硬编码，§7.8 规则）；作用点在**字幕烧录之前**
+  （`vf = "<grade>,ass=…"`），保证字幕白字不受调色污染。
+
+**约束**：
+
+- 全片统一一个预设，不做镜头级分级（镜头级调色属 AIGC 出片波动补偿，需逐镜审片，超出当前档位）；
+- 调色滤镜串来自 L3 白名单，不接受任意字符串注入（compose-service 只传预设命中项）；
+- 转场/调色均不改变响度归一与字幕轨语义；不传新参数时与 v2.4.4 行为一致（回归无差）。
+
+---
+
+### 7.12 镜间背景一致性：首帧参考源优先级（v2.5）
+
+> v2.4.2 参考图注入只取 character 定妆图：人物跨镜一致，但**空镜/转场镜头（无角色出场）
+> 无首帧参考**，场景背景完全依赖提示词锚点——这是跨镜背景跳变的主因。
+> scene 资产的定妆图规格（1344x768）自 v2.0 就存在，只是从未参与注入。
+
+**规则（resolveFirstFrameUrl 优先级）**：
+
+1. 镜头绑定的第一张已定妆 `character` 资产（v2.4.2 行为，人物面孔优先——脸穿帮比背景穿帮更刺眼）；
+2. 未命中时回退：镜头绑定的第一张已定妆 `scene` 资产（空镜/转场镜头的场景锚定）；
+3. 仍未命中 → undefined，提示词锚点串兜底（既有行为）。
+
+**边界**：
+
+- scene 定妆图为 16:9 横幅而视频为 9:16 竖幅：首帧参考是**语义参考**而非逐像素贴片，
+  通道侧自行构图；文档明确此差异，不做横转竖裁切（裁切会破坏场景完整性）；
+- prop 资产不参与首帧注入（道具锚点由提示词串承载，避免抢主体）。
+
+---
+
 ## 8. API 契约清单
 
 统一封套 `{ ok: true, data } / { ok: false, error, detail? }`（已有）。
@@ -623,8 +691,9 @@ export interface Provider<TIn, TOut> {
 | GET `/api/projects/[id]/export` | 导出 JSON（tracks 可选段追加） | 扩展 |
 | POST `/api/series` + GET `/api/series/[id]` | 系列创建 / 详情（含剧集列表） | **新增 v2.3** |
 | POST `/api/projects/[id]/render-all` | 一键渲染全片：批量提交 video + voiceover 任务（幂等去重） | **新增 v2.4** |
-| POST `/api/projects/[id]/compose` | 成片合成：ffmpeg 片头卡/字幕烧录/配音混音，回写 finalVideoUrl | **新增 v2.4** |
+| POST `/api/projects/[id]/compose` | 成片合成：ffmpeg 片头卡/转场矩阵/调色/字幕烧录/配音混音，回写 finalVideoUrl | **新增 v2.4，v2.5 扩展** |
 | POST/GET/DELETE `/api/projects/[id]/bgm` | BGM 上传（大小/MIME 校验）/ 状态回显 / 清除；合成时循环混入+侧链闪避 | **新增 v2.4.4** |
+| PATCH `/api/projects/[id]`（扩展字段） | `transitionMode`（cut/fade/auto）与 `gradePreset`（GRADE_PRESETS 键或 null=跟随题材）写入项目，compose 时生效 | **扩展 v2.5** |
 
 ---
 
@@ -740,6 +809,17 @@ src/
 3. **成片面板 BGM 管理行**：上传/文件名回显/清除，与一键合成同页；
 4. **零配额纪律**：本阶段全部为本地 ffmpeg 处理，零外部通道调用；合成参数经 CLI 传入 Python 脚本，脚本自身零硬编码（§3 第 7 条）。
 **验收**：以第一集既有资产本地重合成（零配额）：无 BGM 时 loudnorm 后响度达标（±1 LU）；有 BGM 时对白可懂度不降（闪避生效）、BGM 全片连续；eslint / tsc 零错误；不传参时脚本行为与 v2.4.3 一致（回归无差）。
+
+### v2.5 —— 成片视觉专业化：转场矩阵 + 全片调色 + 画幅贯通 + 背景一致性 ✅ 已实施
+1. **转场矩阵（P0-3）**：Project.transitionMode（cut/fade/auto，默认 auto）；智能矩阵按叙事功能选型（片头卡溶解入戏、同幕硬切、cliffhanger 压黑收束）；cut 走 concat 零重编码回归无差，fade/auto 走 xfade 链；转场时长 L2 可配（TRANSITION_SECONDS）；
+2. **全片调色（P0-4）**：L3 登记 GRADE_PRESETS（8 题材预设 + neutral 兜底，eq+colorbalance 滤镜串）；Project.gradePreset 空 = 跟随题材、非空 = 用户覆写；滤镜串 CLI 传入脚本零硬编码；调色在字幕烧录前，字幕白字不受污染；
+3. **画幅档位贯通（P0-2）**：成片分辨率由项目 aspectRatio × resolution 映射（composeDimensions），CLI --width/--height/--fps 传入脚本，消除「UI 可选 1080p 而成片写死 720x1280」的选项造假；ASS 字幕字号随画幅等比缩放；COMPOSE_FPS L2 可配；
+4. **镜间背景一致性（P0-5）**：resolveFirstFrameUrl 增加场景定妆图回退（character 优先，无角色镜头回退 scene），空镜/转场镜头获得场景首帧锚定（§7.12）；
+5. **工作台状态真实化（P0-6）**：幕卡「镜头产出状态」徽标由硬编码「待生成」改为按镜头轨聚合真实状态（就绪 M/N）；成片页签新增「后期风格」行（转场策略 + 调色预设，PATCH 落库）；顶栏版本号与文档版本同步（v2.5.0）；
+6. **资产对账工具（P0-7）**：scripts/asset-audit.py 比对 DB 引用与 public/assets 文件，报告孤儿资产（--gc 清理）；
+7. **零配额纪律**：全部为本地 ffmpeg/本地代码工作，零外部通道调用；验收用既有 clip 素材本地重合成。
+
+**验收**：既有素材本地重合成（零配额）：1080p 档成片 ffprobe 实测 1080x1920；auto 转场在幕界/片头卡处可见 fadeblack/fade；调色后字幕区白色不偏色；cut 模式与 v2.4.4 行为一致（回归无差）；eslint / tsc 零错误。
 
 ### v2.4.3 —— 配额墙根除 + 工作台视觉精修 ✅ 已实施
 1. **通道缺省策略翻转（§7.4）**：视频通道缺省改为 noop 占位，真实通道显式 `VIDEO_PROVIDER=zai` opt-in——批量流水线/一键渲染永不消耗视频配额，创作流与可复制性优先于真机出片；

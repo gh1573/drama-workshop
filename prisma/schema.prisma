@@ -79,6 +79,10 @@ model Project {
   // —— v2.4：一键成片产物（compose 回写；null = 尚未合成） ——
   finalVideoUrl String?
 
+  // —— v2.5：成片视觉专业化（§7.11，用户可覆写；gradePreset 空 = 跟随题材影调） ——
+  transitionMode String  @default("auto") // cut | fade | auto（智能矩阵）
+  gradePreset    String? // GRADE_PRESETS 键；null = 按 genreId 取题材预设
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

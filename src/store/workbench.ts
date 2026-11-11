@@ -42,6 +42,10 @@ export interface WorkbenchSession {
   anchorStaleClipIds: string[];
   /** v2.4：成片产物地址（null = 尚未合成） */
   finalVideoUrl: string | null;
+  /** v2.5 §7.11：转场策略（cut/fade/auto） */
+  transitionMode: string;
+  /** v2.5 §7.11：调色预设键（null = 跟随题材影调） */
+  gradePreset: string | null;
 }
 
 interface WorkbenchState {
@@ -178,6 +182,8 @@ function detailToSession(detail: ProjectDetail): WorkbenchSession {
     tracks: detail.tracks,
     anchorStaleClipIds: detail.anchorStaleClipIds,
     finalVideoUrl: detail.finalVideoUrl,
+    transitionMode: detail.transitionMode,
+    gradePreset: detail.gradePreset,
   };
 }
 
@@ -217,6 +223,8 @@ export function sessionToDetail(s: WorkbenchSession): ProjectDetail {
     anchorStaleClipIds: s.anchorStaleClipIds,
     activeRun: null,
     finalVideoUrl: s.finalVideoUrl,
+    transitionMode: s.transitionMode,
+    gradePreset: s.gradePreset,
   };
 }
 
@@ -325,6 +333,8 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
         tracks: session?.tracks ?? [],
         anchorStaleClipIds: session?.anchorStaleClipIds ?? [],
         finalVideoUrl: session?.finalVideoUrl ?? null,
+        transitionMode: session?.transitionMode ?? "auto",
+        gradePreset: session?.gradePreset ?? null,
       },
       outputNonce: get().outputNonce + 1,
     });

@@ -48,6 +48,13 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
   const actClipCount = useWorkbench(
     (s) => s.session?.clips.filter((c) => c.beatIndex === beat.index).length ?? 0
   );
+  // v2.5 状态真实化：就绪数按镜头轨聚合（替换硬编码「待生成」误导徽标）
+  const actReadyCount = useWorkbench(
+    (s) =>
+      s.session?.clips.filter(
+        (c) => c.beatIndex === beat.index && c.status === "ready"
+      ).length ?? 0
+  );
   const busy = breakingDown === beat.index;
 
   async function handleAdd() {
@@ -137,14 +144,22 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
           />
           <Badge variant="outline" className="border-border/70 text-xs">
             <Timer className="mr-1 h-3 w-3" />
-            镜头产出状态：⏳ 待生成
+            {actClipCount > 0
+              ? `镜头产出：${actReadyCount}/${actClipCount} 就绪`
+              : "镜头轨未拆解"}
           </Badge>
           {actClipCount > 0 && (
             <Badge
               variant="outline"
-              className="border-emerald-500/40 bg-emerald-500/10 text-emerald-400 text-xs"
+              className={`text-xs ${
+                actReadyCount === actClipCount
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                  : "border-amber-500/40 bg-amber-500/10 text-amber-400"
+              }`}
             >
-              已拆解 {actClipCount} 镜头
+              {actReadyCount === actClipCount
+                ? "全部就绪 · 可合成"
+                : `待出片 ${actClipCount - actReadyCount} 镜`}
             </Badge>
           )}
           <button

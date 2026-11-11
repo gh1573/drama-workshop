@@ -805,6 +805,10 @@ export interface ProjectDetail extends ProjectSummary {
   activeRun: RunDTO | null;
   /** v2.4：成片合成产物地址（null = 尚未合成） */
   finalVideoUrl: string | null;
+  /** v2.5 §7.11：转场策略（cut/fade/auto） */
+  transitionMode: string;
+  /** v2.5 §7.11：调色预设键（null = 跟随题材影调） */
+  gradePreset: string | null;
 }
 
 /** 保存项目的请求体（genre 只要求持久化快照字段，与 zod 校验器对齐） */

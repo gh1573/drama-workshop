@@ -102,3 +102,75 @@ export const BREAKDOWN_SPEC = {
   /** 单集目标总时长提示（写入拆镜提示词的目标语境，秒） */
   targetEpisodeSeconds: 60,
 } as const;
+
+/* ============================================================
+ * 成片视觉专业化（v2.5 §7.11）
+ * 调色预设表与转场策略选项集中于此；滤镜串经 compose-service
+ * 白名单校验后经 CLI 传入 assemble-episode.py（脚本零硬编码）。
+ * ============================================================ */
+
+/** 全片调色预设：ffmpeg 滤镜串（eq 基础校正 + colorbalance 冷暖偏移） */
+export interface GradePreset {
+  /** 中文说明（UI 下拉展示） */
+  label: string;
+  /** ffmpeg 视频滤镜串（无滤镜 = neutral，空串） */
+  filter: string;
+}
+
+/**
+ * 全片调色预设表（键 = 题材 id，另含 neutral 兜底）。
+ * 题材 tonePrompt 只进生成提示词；成片调色是独立维度，由本表显式映射。
+ * 参数均为轻推档（对比 ±10%、饱和 ±20% 内），避免过度风格化损伤画质。
+ */
+export const GRADE_PRESETS: Record<string, GradePreset> = {
+  neutral: { label: "中性 · 保持原始色彩", filter: "" },
+  shuangwen: {
+    label: "战神逆袭 · 高对比金黑",
+    filter:
+      "eq=contrast=1.10:saturation=1.08:brightness=-0.010,colorbalance=rs=0.03:bs=-0.02",
+  },
+  tianchong: {
+    label: "赘婿甜宠 · 暖金柔光",
+    filter:
+      "eq=contrast=1.03:saturation=1.10:brightness=0.020,colorbalance=rm=0.03:gm=0.01",
+  },
+  chongsheng: {
+    label: "重生复仇 · 冷调 Crimson",
+    filter:
+      "eq=contrast=1.08:saturation=0.82,colorbalance=bs=0.05:rs=-0.01",
+  },
+  xuanyi: {
+    label: "悬疑反转 · 青灰 Noir",
+    filter:
+      "eq=contrast=1.10:saturation=0.78:brightness=-0.020,colorbalance=gm=-0.02:bs=0.04",
+  },
+  chuanyue: {
+    label: "穿越古代 · 暖金古风",
+    filter:
+      "eq=contrast=1.05:saturation=1.06,colorbalance=rm=0.03:bm=-0.02",
+  },
+  shenhao: {
+    label: "都市神豪 · 霓虹鎏金",
+    filter:
+      "eq=contrast=1.07:saturation=1.12,colorbalance=rm=0.02:bm=-0.01",
+  },
+  zongcai: {
+    label: "霸道总裁 · 冷峻商务",
+    filter:
+      "eq=contrast=1.06:saturation=0.92,colorbalance=bs=0.03:rs=0.01",
+  },
+  majia: {
+    label: "马甲大佬 · 高能紫粉",
+    filter:
+      "eq=contrast=1.08:saturation=1.10,colorbalance=rm=0.02:bm=0.02",
+  },
+};
+
+/** 转场策略选项（Project.transitionMode 取值域，UI 下拉与服务端校验共用） */
+export const TRANSITION_MODES = [
+  { value: "auto", label: "智能矩阵 · 按叙事功能选型（推荐）" },
+  { value: "cut", label: "硬切 · 短剧节奏（v2.4 行为）" },
+  { value: "fade", label: "全片溶解 · 柔和段落感" },
+] as const;
+
+export type TransitionMode = (typeof TRANSITION_MODES)[number]["value"];
