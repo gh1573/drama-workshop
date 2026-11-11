@@ -89,3 +89,12 @@ export const RATE_LIMIT_MAX_BACKOFF_ATTEMPTS = envInt(
  * 覆盖变量：COMPOSE_TIMEOUT_MS
  */
 export const COMPOSE_TIMEOUT_MS = envInt("COMPOSE_TIMEOUT_MS", 4 * 60_000);
+
+/**
+ * 参考图公网回源基址（§7.1.4 参考图注入）：
+ * 外部视频通道无法访问本地相对路径（/assets/asset_xxx.png），
+ * 非空时视频任务以 `${base}${portraitUrl}` 构造镜头主要角色定妆图的首帧参考地址（image_url）；
+ * 为空 = 不注入首帧参考，提示词内的视觉锚点串兜底（与 v2.4.1 行为一致）。
+ * 覆盖变量：PUBLIC_ASSETS_BASE_URL（无默认值 —— 显式配置才启用）
+ */
+export const PUBLIC_ASSETS_BASE_URL = process.env.PUBLIC_ASSETS_BASE_URL?.trim() ?? "";

@@ -7,6 +7,7 @@ import {
   DISPATCH_CONCURRENCY,
   DISPATCH_TICK_INTERVAL_MS,
   ORPHAN_RECOVERY_WINDOW_MS,
+  PUBLIC_ASSETS_BASE_URL,
   VIDEO_INFLIGHT_LIMIT,
   VIDEO_POLL_INTERVAL_MS,
   VIDEO_POLL_TIMEOUT_MS,
@@ -375,6 +376,40 @@ async function persistVideoFile(
   }
 }
 
+/**
+ * 首帧参考图解析（§7.1.4 参考图注入，v2.4.2）。
+ *
+ * 规则：
+ * - 取镜头绑定的第一张已定妆（portraitUrl 非空）的 character 资产；
+ * - portraitUrl 已是绝对 http(s) 地址 → 直接使用（外部贴片场景）；
+ * - 相对路径 → 仅当 PUBLIC_ASSETS_BASE_URL 非空时拼接为公网绝对地址
+ *   （外部视频通道无法回源本地路径）；
+ * - 未命中任何分支 → 返回 undefined，提示词锚点串兜底（既有行为）。
+ */
+async function resolveFirstFrameUrl(
+  clipId: string
+): Promise<string | undefined> {
+  const refs = await db.shotRef.findMany({
+    where: { shotId: clipId },
+    select: { assetId: true },
+  });
+  if (refs.length === 0) return undefined;
+  const character = await db.asset.findFirst({
+    where: {
+      id: { in: refs.map((r) => r.assetId) },
+      kind: "character",
+      portraitUrl: { not: null },
+    },
+    select: { portraitUrl: true },
+  });
+  const portrait = character?.portraitUrl;
+  if (!portrait) return undefined;
+  if (/^https?:\/\//.test(portrait)) return portrait;
+  if (!PUBLIC_ASSETS_BASE_URL) return undefined;
+  const base = PUBLIC_ASSETS_BASE_URL.replace(/\/+$/, "");
+  return portrait.startsWith("/") ? `${base}${portrait}` : `${base}/${portrait}`;
+}
+
 // ============================================================
 // 通道处理器
 // 成功 = 产物回写业务表并返回产物地址（string）；
@@ -465,6 +500,11 @@ const handlers: Partial<Record<TaskKind, Handler>> = {
       });
     }
 
+    // 首帧参考图解析（§7.1.4 参考图注入）：
+    // 镜头绑定的第一张已定妆 character 资产 + 公网回源基址 → image_url；
+    // 基址未配置 / 资产未定妆 → 不注入，提示词锚点串兜底（与 voiceover 音色解析同源）
+    const firstFrameUrl = await resolveFirstFrameUrl(clip.id);
+
     // 全局提交节流：批量任务下 create 间隔不小于 VIDEO_SUBMIT_INTERVAL_MS
     await throttleVideoSubmit();
 
@@ -474,6 +514,7 @@ const handlers: Partial<Record<TaskKind, Handler>> = {
       durationSeconds: project.durationSeconds,
       resolution: project.resolution,
       aspectRatio: project.aspectRatio,
+      firstFrameUrl,
     });
 
     if (result.mode === "async") {

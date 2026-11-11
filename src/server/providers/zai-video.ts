@@ -57,12 +57,21 @@ function extractMediaUrl(res: {
   );
 }
 
+/** 提交视频生成任务（每次独立建连，避免长生命周期句柄） */
+async function zaiCreate(
+  body: Record<string, unknown>
+): Promise<{ id?: string } | null> {
+  const zai = await ZAI.create();
+  return zai.video.generations.create(
+    body as Parameters<typeof zai.video.generations.create>[0]
+  );
+}
+
 export class ZaiVideoProvider implements VideoProvider {
   readonly name = "zai-video";
 
   async render(req: VideoRenderRequest): Promise<VideoRenderResult> {
-    const zai = await ZAI.create();
-    const body = {
+    let body = {
       prompt: req.finalPrompt,
       size: SIZE_MAP[`${req.aspectRatio}|${req.resolution}`] ?? "720x1280",
       duration: nearestDurationStep(req.durationSeconds),
@@ -73,13 +82,20 @@ export class ZaiVideoProvider implements VideoProvider {
       ...(req.firstFrameUrl ? { image_url: req.firstFrameUrl } : {}),
     };
 
-    // 429 指数退避 + 随机抖动（0~50%）：批量提交撞限流时错峰重试
+    // 429 指数退避 + 随机抖动（0~50%）：批量提交撞限流时错峰重试；
+    // image_url 被通道拒绝（4xx 非 429）时优雅降级：去参重提一次，本镜退回文本锚点（§7.1.4）
     let backoff = 0;
+    let degradedFromRef = false;
     while (true) {
       try {
-        const created = await zai.video.generations.create(body);
+        const created = await zaiCreate(body);
         if (!created?.id) {
           throw new Error("视频通道未返回任务句柄");
+        }
+        if (degradedFromRef) {
+          console.warn(
+            `[zai-video] 首帧参考图被通道拒绝，已降级为文本锚点提交（任务继续，一致性依赖锚点串）`
+          );
         }
         return { mode: "async", remoteTaskId: created.id };
       } catch (err) {
@@ -90,6 +106,19 @@ export class ZaiVideoProvider implements VideoProvider {
           const delay = RATE_LIMIT_BACKOFF_MS * 2 ** backoff * (1 + jitter);
           await new Promise((r) => setTimeout(r, delay));
           backoff += 1;
+          continue;
+        }
+        // 优雅降级：携带参考图且被拒（请求格式族 4xx，非 429）→ 去参重提一次（仅一次）
+        const isReject =
+          !isRateLimit &&
+          !degradedFromRef &&
+          "image_url" in body &&
+          /status (400|406|413|415)/.test(message);
+        if (isReject) {
+          const { image_url: _drop, ...rest } = body;
+          void _drop;
+          body = rest as typeof body;
+          degradedFromRef = true;
           continue;
         }
         throw err;

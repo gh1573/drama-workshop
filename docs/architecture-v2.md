@@ -1,9 +1,10 @@
 # 剧集智能创编工坊 · v2 底层架构设计
 
-> 版本：v2.4 ｜ 日期：2026-11-11 ｜ 状态：**v2.0～v2.4 已实施（一键成片链路）**
+> 版本：v2.4.2 ｜ 日期：2026-11-11 ｜ 状态：**v2.0～v2.4 已实施（一键成片链路）**
 > 本文档是 v2 全部扩容的唯一设计依据。实施时新建代码必须与本文的模型、接口、目录、阶段划分一致；如需偏离，先改文档再改代码。
 >
 > **变更记录**
+> - v2.4.2：参考图注入接线（§7.1.4 升级为已实施）：视频通道提交时自动携带镜头主要角色的定妆图作为首帧参考（image_url），新增 L2 运行参数 `PUBLIC_ASSETS_BASE_URL`（公网回源基址，默认空 = 不注入，文本锚点兜底）；通道对 image_url 不接受时 provider 自动去参重提一次（优雅降级，任务不失败，降级事实进服务端日志）。设计原则：**一致性优先靠参考图、锚点串兜底；能力协商在通道层自动完成，不依赖人工开关**。
 > - v2.4：一键成片链路（渲染全片 render-all + 成片合成 compose，ffmpeg 片头卡/字幕烧录/配音混音，产物回写 Project.finalVideoUrl）；拆镜精简档位（每幕 3~4 镜 × 4~5s，整集约 40~60 秒，标准档保留可配）；选角面孔统一规则（CASTING_FACE_RULE，全部角色华人面孔，配置化）；前端工作台 Tab 化信息架构（成片/分镜剧本/资产定妆/节奏轨道/剧组进程，左列开机后自动折叠）。修复拆镜 plannedMs 钳制与档位不一致的问题。
 > - v2.2：完成 v2.3 全部能力（Series 表/系列 API/资产克隆/批量提交/export 路由/tasks 列表路由）+ 3 集 60 秒系列 E2E 实测；拆镜档位 BREAKDOWN_SPEC 配置化（60 秒集档位）；文本通道 429 指数退避（20s/40s/80s，可环境变量覆盖）。
 > - v2.1：新增 §1.4「产品定位：AI 剧组流水线」（产品叙事与术语映射）；§3 增补第 7 条「零硬编码」；新增 §7.8「配置中心」；§9 目录、§10 路线图同步（v2.2.5 配置化整改）。运行参数与模板文案收敛至 `src/config/`，业务代码禁止魔法数字与内嵌文案。
@@ -405,7 +406,11 @@ export interface EnergyCurvePoint { clipId: string; order: number; energy: numbe
    - 指纹取值约定：`null` = 从未组装；`"stale"` = 曾组装但锚点已解冻；`"manual"` = 人工微调（锚定跳过、过期判定豁免）；12 位哈希 = 与当前锚点一致。
 2. **视觉锚点（visualAnchor）**：英文视觉描述串，是组装管线资产段的唯一来源。派生自 lockedAppearance，由 LLM 翻译定稿，人工可改。
 3. **锚点指纹（promptVersion）**：`sha256(所有引用资产的 visualAnchor + tonePrompt).slice(0,12)`。镜头完成渲染后记录指纹；资产锚点变动 → 指纹失配 → 该镜头在故事板上标「锚点过期」，提示重渲。这让「改了角色长相 → 哪些镜头受影响」变成可计算的。
-4. **参考图注入**：资产定妆图（portraitUrl）作为图生视频的参考输入（平台视频通道支持参考图时传入；不支持时锚点串兜底）。数据结构已预留，不阻塞文本锚点先行。
+4. **参考图注入（v2.4.2 接线）**：资产定妆图（portraitUrl）作为图生视频的首帧参考输入（image_url）。规则：
+   - **主要角色选取**：dispatcher 在提交 video 任务前，解析镜头绑定的 character 资产（与 voiceover 的音色解析同源逻辑），取第一张已定妆（portraitUrl 非空）的角色；
+   - **公网可达**：外部通道无法回源本地相对路径，首帧地址 = `PUBLIC_ASSETS_BASE_URL + portraitUrl`（L2 运行参数，默认空 = 不注入，文本锚点兜底）；portraitUrl 本身已是绝对 http(s) 地址时直接使用；
+   - **优雅降级**：通道对 image_url 不接受（4xx 非 429）时，provider 自动去参重提一次，本镜退回纯文本锚点，任务不失败；降级事实 console.warn 留痕（运维观测项），不污染任务状态语义；
+   - **不注入 ≠ 不一致**：未配置回源基址或资产未定妆时，提示词内的视觉锚点串兜底（与既有行为完全一致）。
 5. **角色文化一致性（v2.4 → v2.4.1 强化）**：题材库全部为国内短剧题材，全链路强制单一文化面孔，不允许模型自由发挥。约束分三道防线，全部集中在 L3 模板层（`src/config/templates.ts`）：
    - **防线一（选角提示词）**：选角阶段提示词注入 CASTING_FACE_RULE——全部角色为华人面孔、锚点串必须含 ethnicity 描述，严禁欧美/混血面孔；
    - **防线二（解析兜底，v2.4.1 新增）**：`parseCasting` 落库前对每个 character 的 visualAnchor 做 ethnicity 关键词校验（ETHNICITY_KEYWORDS，大小写不敏感），缺失时自动在描述末尾追加 ETHNICITY_FALLBACK——不信任 LLM 遵守提示词，兜底是确定性的；
@@ -456,7 +461,7 @@ queued ──dispatch──▶ running ──▶ succeeded（resultUrl 回写 + 
 - 并发上限：视频通道并发 2、图像 4、LLM 4、TTS 8（可配置，防打爆通道）；
 - 轮询句柄：视频通道为异步任务（返回 remoteTaskId），dispatcher 持有 `async.result.query` 轮询（间隔 3s，超时 5min）；
 - 业务回写：任务成功后由 dispatcher 回调各 kind 的 handler——
-  - `video` → `updateClip(clipId, { status: "ready", mediaUrl, durationMs })`
+- `video` → `updateClip(clipId, { status: "ready", mediaUrl, durationMs })`；提交前解析镜头主要角色定妆图为首帧参考（§7.1.4：`PUBLIC_ASSETS_BASE_URL` 非空时注入，通道拒绝时自动降级）
   - `portrait` → `asset.portraitUrl / turnaroundUrl`
   - `voiceover` → TrackItem（audio 段）落库
   - `breakdown` → `replaceActClips(...)`（已有）
@@ -517,7 +522,7 @@ export interface Provider<TIn, TOut> {
 | 层 | 位置 | 内容 | 覆盖方式 |
 | --- | --- | --- | --- |
 | L1 创作预设 | `src/lib/genres.ts`、`src/lib/drama.ts`（GENRES / CAMERA_MOVEMENTS / RUN_STAGES / CREW_ROLES / NARRATIVE_META） | 创作方法论的数据化：题材策略、运镜库、流水线阶段、剧组角色、叙事结构 | 随产品迭代演进（版本管理） |
-| L2 运行时参数 | `src/config/runtime.ts` | 调度器各通道并发上限、调度 tick 间隔、孤儿任务回收窗口、默认重试上限、列表分页、限流退避（429 指数退避 20s/40s/80s） | 环境变量覆盖（`DISPATCH_*` / `RATE_LIMIT_*`），带类型化默认值 |
+| L2 运行时参数 | `src/config/runtime.ts` | 调度器各通道并发上限、调度 tick 间隔、孤儿任务回收窗口、默认重试上限、列表分页、限流退避（429 指数退避 20s/40s/80s）、参考图公网回源基址（PUBLIC_ASSETS_BASE_URL，空 = 不注入首帧参考，文本锚点兜底） | 环境变量覆盖（`DISPATCH_*` / `RATE_LIMIT_*` / `PUBLIC_ASSETS_BASE_URL`），带类型化默认值 |
 | L3 模板文案 | `src/config/templates.ts` | 定妆图尺寸表与提示词模板（含角色专用尾缀）、提示词分段标签、技术段尾缀文案、选角面孔统一规则（CASTING_FACE_RULE）、拆镜档位（BREAKDOWN_SPEC：每幕镜头数/单镜时长/整集目标时长；当前精简档 3~4 镜/幕 × 4~5s，约 40~60 秒集） | 版本管理；后续可扩展为每项目覆盖 |
 | L4 用户配置 | （预留，v2.3+）项目级/全局配置表 | 终端用户对默认参数的覆盖 | 落库，服务层读取 |
 
@@ -698,13 +703,20 @@ src/
 4. 前端 Tab 化信息架构：成片（播放器优先）/ 分镜剧本 / 资产定妆 / 节奏轨道 / 剧组进程，左列配置开机后自动折叠，消除超长滚动。
 **验收**：流水线成功 → 一键渲染全片 → 自动合成 → 播放器直出 9:16 成片；人物形象全程华人面孔。
 
-### v2.4.1 —— 角色文化一致性兜底与工作台交互收敛（进行中）
+### v2.4.1 —— 角色文化一致性兜底与工作台交互收敛 ✅ 已实施
 1. 模板层新增 CHARACTER_ETHNICITY_POSITIVE / NEGATIVE / ETHNICITY_FALLBACK / ETHNICITY_KEYWORDS，PORTRAIT_CHARACTER_TAIL 改为正负约束组合；
 2. parseCasting 兜底校验：character 视觉锚点缺 ethnicity 关键词时自动注入 ETHNICITY_FALLBACK（防线二）；
 3. 工作台交互规范落地：桌面端视口内滚动（双列各自内滚）、分镜表按幕默认折叠、行内「渲染此镜」入口、渲染中状态徽标；
 4. 后期成包阶段自动补定妆：开机成功后缺 portraitUrl 的资产自动提交 portrait 任务（复用 task-service 幂等去重），消除「资产页签全占位」的交互断层；
 5. 端到端复验第一集：选角→定妆→渲染→合成全链路跑通，截图核对人物面孔统一、页面无超长滚动；配额受限场景验证流水线与交互而非量产。
 **验收**：新立项项目开机后无需手动点击，定妆图自动陆续出片；全角色锚点含 ethnicity；分镜表默认折叠后 script 页签无内层长滚动；单镜可独立提交渲染并联动进度。
+
+### v2.4.2 —— 参考图注入接线 ✅ 已实施（E2E 阶段B 待视频通道配额窗口恢复）
+1. dispatcher video handler：解析镜头主要角色定妆图，`PUBLIC_ASSETS_BASE_URL` 非空时构造公网首帧地址注入 provider（§7.1.4）；
+2. ZaiVideoProvider：image_url 遭通道拒绝（4xx 非 429）时自动去参重提一次，降级留痕不失败；
+3. L2 配置登记 PUBLIC_ASSETS_BASE_URL（默认空 = 关闭，行为与 v2.4.1 完全一致，零风险合入）；
+4. E2E：公网回源基址可用时验证「同角色跨镜头面孔一致」的参考图增益（抽帧对比定妆图）。
+**验收**：阶段A回归已通过（全新项目全流水线 + 6/6 定妆照华人面孔 PASS，`scripts/e2e-fresh-pipeline.sh`）；阶段B（参考图实拍验证，`scripts/e2e-refimg-drive.sh`）就绪待通道配额；不配置基址时行为与上一版本完全一致（回归无差，阶段A已证）。
 
 ---
 
@@ -714,6 +726,7 @@ src/
 | --- | --- | --- |
 | 上游通道限流（429） | 流水线阶段失败、任务积压 | 文本通道指数退避（20s/40s/80s，可配）；流水线阶段幂等断点重试，不浪费已完成阶段；图像/视频通道并发上限独立可配 |
 | 视频通道配额/速率限制 | 任务积压 | 并发上限可配；失败重试退避；noop 降级允许手动贴片不阻塞创作 |
+| 通道参考图能力不确定（image_url 被拒） | 首帧一致性增益丢失 | 优雅降级：provider 检测拒绝后自动去参重提，任务不失败；文本锚点串兜底（§7.1.4） |
 | LLM 拆镜输出不稳定 | 镜头数据非法 | 沿用现有「围栏剥离 + 截取 JSON」解析；zod 校验失败自动重试 1 次；人工编辑兜底 |
 | dev 多 worker / 热重载误触发重启恢复 | 运行中的流水线被误标 failed | 恢复逻辑只回收「过期」记录（updatedAt 落后 3 分钟），运行记录具备事实心跳；生产多实例沿用同一判据 |
 | 锚点漂移（改资产引发连锁重渲） | 成本失控 | 锚点指纹只标记不自动重渲；重渲由用户显式触发 |
