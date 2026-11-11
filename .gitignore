@@ -52,3 +52,5 @@ prompt
 server.log
 # Skills directory
 /skills/
+# 仓库备份打包文件（体积大，禁止入库，防自动提交误收）
+*.bundle
