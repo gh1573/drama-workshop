@@ -26,7 +26,14 @@ const genreSnapshotSchema = z.object({
 export const storyBeatSchema = z.object({
   index: z.number().int().min(1).max(99),
   actTitle: z.string().min(1).max(120),
-  narrativeFunction: z.enum(["hook", "climax", "cliffhanger"]),
+  /** v2.7 场次化剧本：功能枚举从固定三幕扩展为 5 类（含旧数据兼容的 climax） */
+  narrativeFunction: z.enum([
+    "hook",
+    "buildup",
+    "twist",
+    "climax",
+    "cliffhanger",
+  ]),
   pacingNote: z.string().min(1).max(200),
   description: z.string().min(1).max(600),
   dialogueSubtitle: z.string().min(1).max(120),
@@ -49,7 +56,8 @@ export const updateProjectSchema = z.object({
   synopsis: z.string().min(10).max(500).optional(),
   status: z.enum(["draft", "beatsReady", "inProduction", "archived"]).optional(),
   modelConfig: modelConfigSchema.optional(),
-  storyBeats: z.array(storyBeatSchema).length(3).optional(),
+  /** v2.7 场次化剧本：场次数弹性 3~6（与 screenplay.ts SCENE_COUNT_* 同步） */
+  storyBeats: z.array(storyBeatSchema).min(3).max(6).optional(),
   // v2.5 成片视觉专业化（§7.11）：转场策略与调色预设（L3 白名单校验，非空时）
   transitionMode: z
     .enum(TRANSITION_MODES.map((m) => m.value) as [string, ...string[]])

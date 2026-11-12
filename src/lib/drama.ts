@@ -3,7 +3,20 @@
  * Schema 与原版导出的 drama_project_*.json 结构对齐 (v1.2.0)
  */
 
-export type NarrativeFunction = "hook" | "climax" | "cliffhanger";
+/**
+ * 场次叙事功能（v2.7「场次化剧本」：取代固定三幕节拍）：
+ * - hook 开场钩子（首场硬性要求，黄金 3 秒）
+ * - buildup 冲突升级（中段可选）
+ * - twist 身份反转（中段可选）
+ * - climax 情绪顶点（中段可选；旧数据兼存）
+ * - cliffhanger 卡点留钩（末场硬性要求，连载钩子）
+ */
+export type NarrativeFunction =
+  | "hook"
+  | "buildup"
+  | "twist"
+  | "climax"
+  | "cliffhanger";
 
 export interface GenrePreset {
   id: string;
@@ -42,6 +55,7 @@ export interface ModelConfig {
 
 export interface StoryBeat {
   index: number;
+  /** 场次标题（编剧自拟，如「婚书碎地」；旧数据为「第 N 幕：…」格式，兼容渲染） */
   actTitle: string;
   narrativeFunction: NarrativeFunction;
   pacingNote: string;
@@ -49,7 +63,7 @@ export interface StoryBeat {
   dialogueSubtitle: string;
   cameraMovement: string;
   promptGuidance: string;
-  /** —— v2：幕级情绪能量（拆镜阶段产出，可人工修正） —— */
+  /** —— v2：场次级情绪能量（拆镜阶段产出，可人工修正） —— */
   energyStart?: number | null;
   energyEnd?: number | null;
 }
@@ -123,22 +137,20 @@ export function cameraLabel(movement: string): string {
 }
 
 /**
- * 三幕情绪梯级运镜池 —— 按叙事功能结构性分配机位调度，
- * 防止生成器落入同质化（如三幕全是 push）：
+ * 场次功能运镜池（v2.7：按叙事功能结构性分配机位调度，防止同质化）：
  * - hook：锁定/冲击类，3 秒内抓住眼球
- * - climax：排场/压迫类，展现反转的震撞力
+ * - buildup：跟拍/压迫类，把冲突逐层推高
+ * - twist：揭示/颠覆类，配合身份反转的尺度变化
+ * - climax：排场/压迫类，展现顶点的震撞力
  * - cliffhanger：炫技/悬念类，制造意犹未尽的离场感
  */
 export const ACT_MOVEMENT_POOLS: Record<NarrativeFunction, string[]> = {
   hook: ["push", "whip_pan", "dutch_tilt", "static_close", "handheld"],
+  buildup: ["handheld", "push", "pan_horizontal", "low_angle_tracking"],
+  twist: ["pull", "top_down", "dutch_tilt", "whip_pan"],
   climax: ["low_angle_tracking", "pull", "top_down", "pan_horizontal", "orbit"],
   cliffhanger: ["dolly_zoom", "crane_up", "orbit", "top_down"],
 };
-
-/** 运镜是否属于指定幕的推荐池 */
-export function isInActPool(fn: NarrativeFunction, movement: string): boolean {
-  return ACT_MOVEMENT_POOLS[fn]?.includes(movement) ?? false;
-}
 
 /** 景别库（分镜拆解用） */
 export const SHOT_SIZES = [
@@ -151,13 +163,17 @@ export const SHOT_SIZES = [
 ] as const;
 export type ShotSize = (typeof SHOT_SIZES)[number];
 
+/** 场次叙事功能 → 产品语言（tag 徽标 / label 短名；v2.7 不再持有 actNo——
+ *  场次号由 index 动态生成，同一功能可出现在任意中段位置） */
 export const NARRATIVE_META: Record<
   NarrativeFunction,
-  { actNo: string; tag: string; label: string }
+  { tag: string; label: string }
 > = {
-  hook: { actNo: "第一幕", tag: "黄金开头 Hook", label: "极致冲突" },
-  climax: { actNo: "第二幕", tag: "绝地反转 Clash", label: "身份揭晓" },
-  cliffhanger: { actNo: "第三幕", tag: "卡点留钩 Cliffhanger", label: "致命悬念" },
+  hook: { tag: "开场钩子 Hook", label: "钩子" },
+  buildup: { tag: "冲突升级 Buildup", label: "升级" },
+  twist: { tag: "身份反转 Twist", label: "反转" },
+  climax: { tag: "情绪顶点 Climax", label: "顶点" },
+  cliffhanger: { tag: "卡点留钩 Cliffhanger", label: "留钩" },
 };
 
 /** 本地时间戳，格式 2026/11/10 13:58:19 */
@@ -198,11 +214,11 @@ export function buildMarkdown(project: DramaProjectData): string {
   lines.push(`- **画面影调 Prompt**：\`${p.genre.tonePrompt}\``);
   lines.push("");
   lines.push("");
-  lines.push("## 📋 三幕叙事与分镜详单");
+  lines.push("## 📋 场次叙事与分镜详单");
   lines.push("");
 
   for (const beat of project.storyBeats) {
-    lines.push(`### 【第 ${pad2(beat.index)} 幕】${beat.actTitle}`);
+    lines.push(`### 【场 ${pad2(beat.index)}】${beat.actTitle}（${NARRATIVE_META[beat.narrativeFunction]?.tag ?? beat.narrativeFunction}）`);
     lines.push(`- **节奏要求**：${beat.pacingNote}`);
     lines.push(
       `- **运镜机位**：${cameraLabel(beat.cameraMovement)}（\`${beat.cameraMovement}\` → ${CAMERA_MOVEMENTS[beat.cameraMovement]?.prompt ?? ""}）`
@@ -246,7 +262,7 @@ export function buildMarkdown(project: DramaProjectData): string {
   );
   if (hasBreakdown) {
     lines.push(
-      "| 镜头序号 | 镜头名称 | 关联节拍 | 景别 | 运镜机位 | 画面内容 | 台词字幕 | 计划时长 | 能量 | 音效 | 媒体格式 | 状态 |"
+      "| 镜头序号 | 镜头名称 | 关联场次 | 景别 | 运镜机位 | 画面内容 | 台词字幕 | 计划时长 | 能量 | 音效 | 媒体格式 | 状态 |"
     );
     lines.push("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |");
     for (const clip of project.timelineClips) {
@@ -260,7 +276,7 @@ export function buildMarkdown(project: DramaProjectData): string {
     }
   } else {
     lines.push(
-      "| 镜头序号 | 镜头名称 | 关联节拍 / 角色 | 台词字幕 | 媒体格式 |"
+      "| 镜头序号 | 镜头名称 | 关联场次 / 角色 | 台词字幕 | 媒体格式 |"
     );
     lines.push("| :--- | :--- | :--- | :--- | :--- |");
     for (const clip of project.timelineClips) {
@@ -378,7 +394,7 @@ export const CREW_ROLES: Record<CrewRoleKey, { name: string; duty: string }> = {
   },
   screenwriter: {
     name: "编剧",
-    duty: "黄金 3 秒钩子 · 三幕剧本",
+    duty: "黄金 3 秒钩子 · 场次剧本",
   },
   casting: {
     name: "选角定妆",
@@ -386,7 +402,7 @@ export const CREW_ROLES: Record<CrewRoleKey, { name: string; duty: string }> = {
   },
   director: {
     name: "导演",
-    duty: "一幕拆多镜 · 正反打节奏",
+    duty: "一场拆多镜 · 正反打节奏",
   },
   supervisor: {
     name: "场记",
@@ -675,7 +691,7 @@ export interface ClipData {
   sfxHint: string | null;
 }
 
-/** 分镜拆解产物：一幕 → 多个镜头（v2 协议：能量 / 音效 / 资产引用） */
+/** 分镜拆解产物：一场 → 多个镜头（v2 协议：能量 / 音效 / 资产引用） */
 export interface ShotBreakdownItem {
   name: string;
   shotSize: ShotSize | string;
@@ -846,7 +862,7 @@ export function toExportData(detail: ProjectDetail): DramaProjectData {
     timelineClips: clips.map((c, i) => ({
       no: i + 1,
       name: c.name,
-      beatRef: `第 ${String(c.beatIndex).padStart(2, "0")} 幕`,
+      beatRef: `场 ${String(c.beatIndex).padStart(2, "0")}`,
       subtitle: c.subtitle,
       format: c.format,
       status: CLIP_STATUS[c.status].label,

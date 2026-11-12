@@ -8,9 +8,9 @@ import { getTextProvider, parseJsonLoose } from "@/server/providers";
 import { BREAKDOWN_SPEC } from "@/config/templates";
 
 /**
- * 分镜拆解服务（导演阶段的执行单元）—— 把每幕剧情拆成镜头组。
+ * 分镜拆解服务（导演阶段的执行单元）—— 把每场剧情拆成镜头组。
  *
- * 拆镜档位（每幕镜头数 / 单镜时长 / 整集目标时长）由配置驱动
+ * 拆镜档位（每场镜头数 / 单镜时长 / 整集目标时长）由配置驱动
  * （src/config/templates.ts · BREAKDOWN_SPEC），当前为 60 秒集档位。
  *
  * v2 协议升级（对齐 docs/architecture-v2.md §7.6 / §4 C2 C3 C9）：
@@ -51,12 +51,12 @@ function strArray(v: unknown, max: number): string[] {
 
 function buildBreakdownPrompt(ctx: BreakdownContext): string {
   const target = ctx.beats.find((b) => b.index === ctx.targetIndex);
-  if (!target) throw new Error(`第 ${ctx.targetIndex} 幕不存在`);
+  if (!target) throw new Error(`第 ${ctx.targetIndex} 场不存在`);
   const neighbors = ctx.beats
     .filter((b) => b.index !== ctx.targetIndex)
     .map(
       (b) =>
-        `第 ${b.index} 幕（${b.actTitle}）：${b.description} | 金句：${b.dialogueSubtitle}`
+        `场 ${b.index}（${b.actTitle}）：${b.description} | 金句：${b.dialogueSubtitle}`
     )
     .join("\n");
 
@@ -71,21 +71,21 @@ function buildBreakdownPrompt(ctx: BreakdownContext): string {
 道具：${roster.props.join("、") || "（无）"}`
     : "【资产库】尚未建库，characters/scene/props 输出空数组或空字符串即可。";
 
-  return `你是一位竖屏微短剧的资深分镜师（Shot List Writer），服务于真实短剧承制团队。你的任务是把单幕剧情拆解为一组连续镜头，形成可执行拍摄的分镜脚本。本集为约 ${BREAKDOWN_SPEC.targetEpisodeSeconds} 秒的竖屏微短剧，三幕合计镜头节奏需支撑整集时长。
+  return `你是一位竖屏微短剧的资深分镜师（Shot List Writer），服务于真实短剧承制团队。你的任务是把单场剧情拆解为一组连续镜头，形成可执行拍摄的分镜脚本。本集为约 ${BREAKDOWN_SPEC.targetEpisodeSeconds} 秒的竖屏微短剧，全场次合计镜头节奏需支撑整集时长。
 
 【全剧梗概】
 ${ctx.synopsis}
 
 【题材调性】${ctx.genreName}（${ctx.genreBadge}）；英文影调锚点：${ctx.tonePrompt}
 
-【其他幕内容（保持因果衔接，不要改写）】
+【其他场次内容（保持因果衔接，不要改写）】
 ${neighbors}
 
-【本次要拆解的一幕】
+【本次要拆解的一场】
 ${target.actTitle}
 节奏要求：${target.pacingNote}
-幕级画面：${target.description}
-幕级金句（必须完整保留在其中最关键的 1 个镜头字幕里）：${target.dialogueSubtitle}
+场次画面：${target.description}
+场次金句（必须完整保留在其中最关键的 1 个镜头字幕里）：${target.dialogueSubtitle}
 画面提示：${target.promptGuidance}
 
 ${rosterSection}
@@ -93,15 +93,15 @@ ${rosterSection}
 【拆解规则（严格遵守）】
 1. 输出 ${BREAKDOWN_SPEC.shotsPerActMin}~${BREAKDOWN_SPEC.shotsPerActMax} 个镜头，每个镜头 ${Math.round(BREAKDOWN_SPEC.shotMsMin / 100) / 10}~${Math.round(BREAKDOWN_SPEC.shotMsMax / 100) / 10} 秒（plannedMs ${BREAKDOWN_SPEC.shotMsMin}~${BREAKDOWN_SPEC.shotMsMax}），支撑整集约 ${BREAKDOWN_SPEC.targetEpisodeSeconds} 秒的节奏
 2. 景别 shotSize 只能从：${SHOT_SIZES.join("/")} 中选择，相邻镜头景别必须不同（正反打优先：A 特写 → B 大特写 → 全景反应 → 主角近景）
-3. 运镜 cameraMovement 只能从本幕推荐池中选择：${poolDesc}；同一幕内尽量不重复
+3. 运镜 cameraMovement 只能从本场推荐池中选择：${poolDesc}；同一场内尽量不重复
 4. visualDesc：25~60 字中文，完全可视化（人物、动作、表情、环境、光效），禁止抽象抒情
 5. visualPrompt：与 visualDesc 同义的英文动作描述（15~25 words，供 AI 视频基模直接使用）
-6. subtitle：该镜头画面内字幕；普通镜头可为空字符串 ""，全幕金句只出现 1 次
+6. subtitle：该镜头画面内字幕；普通镜头可为空字符串 ""，全场金句只出现 1 次
 7. name：8 字以内的镜头标题，如「宴会厅 · 众人震惊」「黑卡 · 道具特写」
-8. energy：该镜头的情绪能量 0~100 整数，幕内必须逐镜递进（情绪推向幕尾顶点）
+8. energy：该镜头的情绪能量 0~100 整数，场内必须逐镜递进（情绪推向场尾顶点）
 9. sfxHint：8 字以内的中文音效提示，如「重低音入」「剑鸣破空」「玻璃碎裂」
 10. characters：本镜头出场角色名数组（必须取自资产库名单）；scene：本镜头场景名（取自资产库名单，无则空字符串）；props：关键道具名数组
-11. 情绪必须递进：从该幕的开场状态推向幕尾状态
+11. 情绪必须递进：从该场的开场状态推向场尾状态
 
 【输出格式】只输出 JSON，禁止解释文字、禁止 markdown 围栏：
 {"shots":[{"name":"…","shotSize":"特写","cameraMovement":"push","visualDesc":"…","visualPrompt":"…","subtitle":"…","plannedMs":${Math.round((BREAKDOWN_SPEC.shotMsMin + BREAKDOWN_SPEC.shotMsMax) / 2)},"energy":62,"sfxHint":"…","characters":["…"],"scene":"…","props":["…"]}]}`;
@@ -143,7 +143,7 @@ function parseShots(raw: string): ShotBreakdownItem[] | null {
   return shots;
 }
 
-/** 调用文本通道拆解一幕（带 2 次解析级重试），返回结构化镜头组 */
+/** 调用文本通道拆解一场（带 2 次解析级重试），返回结构化镜头组 */
 export async function breakdownAct(
   ctx: BreakdownContext
 ): Promise<ShotBreakdownItem[]> {
@@ -176,7 +176,7 @@ export async function breakdownAct(
     );
   }
 
-  // 幕级运镜池归位：池外值回退到该幕推荐池的轮转位
+  // 场次运镜池归位：池外值回退到该场推荐池的轮转位
   const target = ctx.beats.find((b) => b.index === ctx.targetIndex);
   if (target) {
     const pool = ACT_MOVEMENT_POOLS[target.narrativeFunction];

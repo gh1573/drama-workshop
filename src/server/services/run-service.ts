@@ -1,13 +1,10 @@
 import { db } from "@/lib/db";
 import { RouteError } from "@/lib/api-utils";
 import {
-  ACT_MOVEMENT_POOLS,
-  CAMERA_MOVEMENTS,
   NARRATIVE_META,
   RUN_STAGES,
   type AssetKind,
   type CrewRoleKey,
-  type NarrativeFunction,
   type RunDTO,
   type RunLogEntry,
   type RunStageInfo,
@@ -24,6 +21,10 @@ import {
 } from "@/config/templates";
 import { breakdownAct } from "./breakdown-service";
 import {
+  buildScreenplayMessages,
+  parseScreenplayBeats,
+} from "./screenplay";
+import {
   replaceActClips,
   updateBeatEnergy,
   updateProject,
@@ -34,13 +35,14 @@ import type { ProductionRun, Project, StoryBeat as DbBeat } from "@prisma/client
  * 剧组流水线服务 —— 「AI 剧组」的编排核心。
  *
  * 产品定位：不是视频生成器，而是一条剧组流水线——
- * 制片立项 → 编剧三幕 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包。
+ * 制片立项 → 编剧场次剧本 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包。
  * 普通用户不慬运镜/景别/轴线，也能拿到专业级制作包。
  *
  * 工程语义：
  * - 每个阶段幂等（断点重试从首个未成功阶段继续）；
  * - 阶段快照 + 剧组日志持久化，前端轮询即可获得完整生产观测；
- * - LLM 调用全部经 Provider 通道（解析级重试 2 次）。
+ * - LLM 调用全部经 Provider 通道（解析级重试 2 次）；
+ * - 编剧提示词与解析统一在 screenplay.ts（v2.7 单一提示词源）。
  */
 
 type StageKey = string;
@@ -50,9 +52,9 @@ interface StageResult {
 }
 
 const STAGE_START_MESSAGE: Record<string, string> = {
-  screenwriting: "领取任务：围绕黄金 3 秒钩子推演三幕剧本（节奏模式：{mode}）",
-  casting: "通读剧本，提取角色 / 场景 / 道具，逐一完成定妆锁定",
-  directing: "逐幕拆解分镜：正反打节奏、景别交替、运镜梯级调度",
+  screenwriting: "领取任务：围绕黄金 3 秒钩子推演场次剧本（节奏模式：{mode}）",
+  casting: "通读场次剧本，提取角色 / 场景 / 道具，逐一完成定妆锁定",
+  directing: "逐场拆解分镜：正反打节奏、景别交替、运镜梯级调度",
   anchoring: "按「角色段 → 场景段 → 道具段 → 动作段 → 运镜段 → 影调段」组装每镜提示词",
   postproduction: "字幕 / 音效 / 配乐三轨落轨，生成情绪能量曲线",
 };
@@ -167,14 +169,8 @@ async function recomputeProgress(runId: string): Promise<void> {
 }
 
 // ============================================================
-// 编剧阶段（提示词自 v1 generate 路由迁移，质量约束不变）
+// 编剧阶段（v2.7：提示词与解析统一在 screenplay.ts，此处只做编排）
 // ============================================================
-
-const PACING_FALLBACK: Record<NarrativeFunction, string> = {
-  hook: "0~3s 强冲突切入！拒绝无效铺垫，拉满情绪张力",
-  climax: "4~8s 顶级反转登场，局势瞬间颠覆",
-  cliffhanger: "9~12s 意犹未尽，悬念卡点让观众欲罢不能",
-};
 
 function thinkingModeLabel(level: string): string {
   if (level === "high") return "伏笔回收";
@@ -182,164 +178,51 @@ function thinkingModeLabel(level: string): string {
   return "直给爆点";
 }
 
-function buildScreenwritingMessages(project: Project): {
-  messages: Array<{ role: "assistant" | "user"; content: string }>;
-} {
-  const thinkingLevel = project.thinkingLevel;
-  const enhance = project.promptEnhance;
-
-  const levelDesc =
-    thinkingLevel === "high"
-      ? "伏笔回收模式：第一幕埋入一个不起眼的道具/细节伏笔，第三幕反转时回收该伏笔，制造双重反转"
-      : thinkingLevel === "medium"
-        ? "节奏铺垫模式：第一幕冲突前允许 1 拍情绪铺垫，随后立即爆点"
-        : "直给爆点模式：第一幕 0 秒直接进入最强冲突，拒绝任何铺垫";
-
-  const enhanceDesc = enhance
-    ? "【提示词增强已开启】每幕的 promptGuidance 需在中文镜头提示末尾追加 2~3 个英文电影级关键词（如 cinematic lighting, slow motion, anamorphic flare, shallow depth of field），用逗号自然衔接，强化 AI 视频出片质量。"
-    : "【提示词增强已关闭】promptGuidance 仅使用中文镜头提示。";
-
-  const poolDesc = (fn: NarrativeFunction) =>
-    ACT_MOVEMENT_POOLS[fn]
-      .map((k) => `${k}=${CAMERA_MOVEMENTS[k].label}`)
-      .join("、");
-
-  const system = `你是一位顶级竖屏微短剧编剧兼分镜导演，精通 9:16 黄金三幕结构与 AI 视频提示词工程，作品以"3 秒抓人、8 秒反转、12 秒留钩"著称。
-
-【任务】根据【题材预设】与【剧情梗概】，产出一支约 12 秒竖屏短剧的完整三幕分镜脚本，严格输出 JSON。
-
-【三幕结构（必须严格遵守）】
-- 第 1 幕 narrativeFunction=hook（0~3s 黄金开头）：actTitle 固定为「第一幕：极致冲突 (黄金开头 Hook)」
-- 第 2 幕 narrativeFunction=climax（4~8s 绝地反转）：actTitle 固定为「第二幕：身份揭晓 (绝地反转 Clash)」
-- 第 3 幕 narrativeFunction=cliffhanger（9~12s 卡点留钩）：actTitle 固定为「第三幕：致命悬念 (卡点留钩 Cliffhanger)」
-
-【节奏策略（本次采用）】${levelDesc}
-
-【三幕梯级运镜调度（视听导演硬约束）】
-三幕必须呈现递进的视角层次，禁止同质化：
-- 第 1 幕 hook（锁定/冲击类）：${poolDesc("hook")}
-- 第 2 幕 climax（排场/压迫类）：${poolDesc("climax")}
-- 第 3 幕 cliffhanger（炫技/悬念类）：${poolDesc("cliffhanger")}
-每幕只能从本幕推荐池中选择 cameraMovement，且三幕之间不得重复。
-
-【写作要求】
-1. 情节画面 description：40~80 字，完全可视化——人物在做什么、穿着、环境、冲突焦点，禁止抽象抒情
-2. 台词金句 dialogueSubtitle：该幕的"封神台词"，口语化、有记忆点，不超过 18 个字，用中文双引号包裹
-3. 节奏要求 pacingNote：说明该幕时间区间（0~3s / 4~8s / 9~12s）与节奏策略
-4. 画面提示补充 promptGuidance：包含构图方式、人物微表情、关键道具、光效氛围
-5. 三幕必须形成完整因果链：冲突 → 反转 → 留钩，梗概中的所有关键元素都要用上
-6. 紧扣题材的钩子策略与调性，台词金句要有该题材的"爽点/甜点/悬念点"
-7. ${enhanceDesc}
-
-【输出格式】只输出 JSON，禁止任何解释文字、禁止 markdown 代码块围栏：
-{
-  "storyBeats": [
-    { "index": 1, "actTitle": "第一幕：极致冲突 (黄金开头 Hook)", "narrativeFunction": "hook", "pacingNote": "…", "description": "…", "dialogueSubtitle": "…", "cameraMovement": "push", "promptGuidance": "…" },
-    { "index": 2, "narrativeFunction": "climax", "…": "…" },
-    { "index": 3, "narrativeFunction": "cliffhanger", "…": "…" }
-  ]
-}`;
-
-  const user = `【题材预设】
-题材：${project.genreName}（${project.genreBadge}）
-黄金3秒钩子策略：${project.hookTactic}
-建议配乐音效：${project.musicMood}
-英文影调锚点：${project.tonePrompt}
-
-【剧情梗概】
-${project.synopsis}
-
-【模型配置】
-单镜时长：${project.durationSeconds} 秒 | 分辨率：${project.resolution} | 剧本思考深度：${thinkingLevel} | 提示词增强：${enhance ? "开启" : "关闭"}
-
-请基于以上信息生成三幕分镜 JSON。`;
-
-  return { messages: [{ role: "assistant", content: system }, { role: "user", content: user }] };
-}
-
-function parseBeats(raw: string): StoryBeat[] | null {
-  const data = parseJsonLoose(raw) as { storyBeats?: unknown[] } | null;
-  const arr = data?.storyBeats;
-  if (!Array.isArray(arr) || arr.length < 3) return null;
-
-  const funcs: NarrativeFunction[] = ["hook", "climax", "cliffhanger"];
-  const beats: StoryBeat[] = [];
-  for (let i = 0; i < 3; i++) {
-    const item = arr[i] as Record<string, unknown>;
-    const fn = funcs.includes(item?.narrativeFunction as NarrativeFunction)
-      ? (item.narrativeFunction as NarrativeFunction)
-      : funcs[i];
-    const meta = NARRATIVE_META[fn];
-    const str = (v: unknown, fallback: string) =>
-      typeof v === "string" && v.trim() ? v.trim() : fallback;
-    const cam =
-      typeof item?.cameraMovement === "string" &&
-      item.cameraMovement in CAMERA_MOVEMENTS
-        ? item.cameraMovement
-        : "";
-    beats.push({
-      index: i + 1,
-      actTitle: `${meta.actNo}：${meta.label} (${meta.tag})`,
-      narrativeFunction: fn,
-      pacingNote: str(item?.pacingNote, PACING_FALLBACK[fn]),
-      description: str(item?.description, "（分镜内容生成异常，请重试）"),
-      dialogueSubtitle: str(item?.dialogueSubtitle, "台词生成异常，请重试"),
-      cameraMovement: cam,
-      promptGuidance: str(item?.promptGuidance, "提示生成异常，请重试"),
-      energyStart: null,
-      energyEnd: null,
-    });
-  }
-  // 运镜合规修复：池外 → 本幕池；三幕互斥 → 换池内备选
-  const used = new Set<string>();
-  for (const beat of beats) {
-    const pool = ACT_MOVEMENT_POOLS[beat.narrativeFunction];
-    let mv = beat.cameraMovement;
-    if (!pool.includes(mv)) mv = pool[0];
-    if (used.has(mv)) {
-      const alt = pool.find((k) => !used.has(k));
-      if (alt) mv = alt;
-    }
-    used.add(mv);
-    beat.cameraMovement = mv;
-  }
-  return beats;
-}
-
 async function stageScreenwriting(
   runId: string,
   project: Project
 ): Promise<StageResult> {
   const provider = getTextProvider();
-  const base = buildScreenwritingMessages(project);
+  const messages = buildScreenplayMessages({
+    genreName: project.genreName,
+    genreBadge: project.genreBadge,
+    hookTactic: project.hookTactic,
+    musicMood: project.musicMood,
+    tonePrompt: project.tonePrompt,
+    synopsis: project.synopsis,
+    durationSeconds: project.durationSeconds,
+    resolution: project.resolution,
+    thinkingLevel: project.thinkingLevel as "low" | "medium" | "high",
+    enhance: project.promptEnhance,
+  });
 
   let beats: StoryBeat[] | null = null;
   let lastRaw = "";
   for (let attempt = 0; attempt < 2 && !beats; attempt++) {
     const { text } = await provider.complete({
       messages: [
-        base.messages[0],
+        messages[0],
         {
           role: "user",
           content:
             attempt === 0
-              ? base.messages[1].content
-              : `${base.messages[1].content}\n\n注意：上一次输出无法解析。请严格只输出一个合法 JSON 对象（含 storyBeats 数组），不要任何其他文字。`,
+              ? messages[1].content
+              : `${messages[1].content}\n\n注意：上一次输出无法解析。请严格只输出一个合法 JSON 对象（含 storyBeats 数组），不要任何其他文字。`,
         },
       ],
       thinking: { type: project.thinkingLevel === "low" ? "disabled" : "enabled" },
     });
     lastRaw = text;
-    beats = parseBeats(text);
+    beats = parseScreenplayBeats(text);
   }
   if (!beats) {
     throw new Error(`剧本解析失败（${lastRaw.slice(0, 120)}…）`);
   }
   await updateProject(project.id, { storyBeats: beats, status: "beatsReady" });
   return {
-    summary: `三幕剧本定稿：${beats
+    summary: `场次剧本定稿：${beats.length} 场（${beats
       .map((b) => NARRATIVE_META[b.narrativeFunction].label)
-      .join(" → ")}，运镜 ${beats.map((b) => b.cameraMovement).join(" / ")}`,
+      .join(" → ")}），运镜 ${beats.map((b) => b.cameraMovement).join(" / ")}`,
   };
 }
 
@@ -357,17 +240,17 @@ function buildCastingMessages(beats: DbBeat[], project: Project): string {
   const script = beats
     .map(
       (b) =>
-        `【第 ${b.index} 幕 · ${b.actTitle}】\n画面：${b.description}\n金句：${b.dialogueSubtitle}\n提示：${b.promptGuidance}`
+        `【场 ${b.index} · ${b.actTitle}】\n画面：${b.description}\n金句：${b.dialogueSubtitle}\n提示：${b.promptGuidance}`
     )
     .join("\n\n");
 
-  return `你是微短剧剧组的选角导演兼美术指导。任务：通读三幕剧本，建立全剧资产库（角色 / 场景 / 道具），供后续所有镜头做「一致性锚定」——每个镜头的提示词都将引用这里的定妆描述，保证跨镜头不换脸、不穿帮。
+  return `你是微短剧剧组的选角导演兼美术指导。任务：通读场次剧本，建立全剧资产库（角色 / 场景 / 道具），供后续所有镜头做「一致性锚定」——每个镜头的提示词都将引用这里的定妆描述，保证跨镜头不换脸、不穿帮。
 
 【题材调性】${project.genreName}（${project.genreBadge}）；英文影调锚点：${project.tonePrompt}
 
 ${CASTING_FACE_RULE}
 
-【三幕剧本】
+【场次剧本】
 ${script}
 
 【要求（严格遵守）】
@@ -441,7 +324,7 @@ async function stageCasting(
     orderBy: { index: "asc" },
   });
   if (beats.length < 3) {
-    throw new Error("剧本尚未就绪，请先完成编剧阶段");
+    throw new Error("场次剧本尚未就绪，请先完成编剧阶段");
   }
 
   const provider = getTextProvider();
@@ -528,7 +411,7 @@ async function stageDirecting(
     db.asset.findMany({ where: { projectId: project.id } }),
   ]);
   if (beats.length < 3) {
-    throw new Error("剧本尚未就绪，请先完成编剧阶段");
+    throw new Error("场次剧本尚未就绪，请先完成编剧阶段");
   }
 
   const roster = {
@@ -538,20 +421,20 @@ async function stageDirecting(
   };
 
   let totalShots = 0;
-  let skippedActs = 0;
+  let skippedScenes = 0;
   for (const beat of beats) {
-    // 成片保护：该幕已有已生成镜头时跳过拆解（不覆盖劳动成果），
-    // 由日志明确告知；如需重拍请先在镜头轨把该幕镜头重置为待生成
+    // 成片保护：该场已有已生成镜头时跳过拆解（不覆盖劳动成果），
+    // 由日志明确告知；如需重拍请先在镜头轨把该场镜头重置为待生成
     const hasReadyClip = await db.timelineClip.findFirst({
       where: { projectId: project.id, beatIndex: beat.index, status: "ready" },
       select: { id: true },
     });
     if (hasReadyClip) {
-      skippedActs++;
+      skippedScenes++;
       await appendLog(
         runId,
         "director",
-        `第 ${beat.index} 幕已有已生成镜头，跳过拆解以保护成片（重拍请先重置该幕镜头）`
+        `场 ${beat.index}（${beat.actTitle}）已有已生成镜头，跳过拆解以保护成片（重拍请先重置该场镜头）`
       );
       continue;
     }
@@ -583,14 +466,14 @@ async function stageDirecting(
     await appendLog(
       runId,
       "director",
-      `第 ${beat.index} 幕拆解完成：${shots.length} 镜（${shots
+      `场 ${beat.index}（${beat.actTitle}）拆解完成：${shots.length} 镜（${shots
         .map((s) => s.shotSize)
         .join("→")}，能量 ${shots[0]?.energy ?? "-"}→${shots[shots.length - 1]?.energy ?? "-"}）`
     );
   }
   return {
-    summary: `三幕拆镜完成：共 ${totalShots} 个镜头，正反打景别交替已就位${
-      skippedActs > 0 ? `；${skippedActs} 幕含成片已跳过` : ""
+    summary: `全场次拆镜完成：共 ${totalShots} 个镜头，正反打景别交替已就位${
+      skippedScenes > 0 ? `；${skippedScenes} 场含成片已跳过` : ""
     }`,
   };
 }
@@ -869,7 +752,7 @@ async function executeRun(runId: string): Promise<void> {
     await appendLog(
       runId,
       "producer",
-      "全片杀青 🎬 制作包已就绪：三幕剧本 · 分镜表 · 资产定妆 · 镜头级提示词 · 三轨 · 能量曲线，可导出交付"
+      "全片杀青 🎬 制作包已就绪：场次剧本 · 分镜表 · 资产定妆 · 镜头级提示词 · 三轨 · 能量曲线，可导出交付"
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "未知错误";

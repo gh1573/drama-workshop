@@ -282,7 +282,7 @@ export async function deleteProject(id: string): Promise<void> {
   await db.project.delete({ where: { id } });
 }
 
-/** 幕级能量回写（导演阶段：幕首/幕尾能量取自本幕首末镜头） */
+/** 场次级能量回写（导演阶段：场首/场尾能量取自本场首末镜头） */
 export async function updateBeatEnergy(
   projectId: string,
   beatIndex: number,
@@ -315,13 +315,13 @@ export async function replaceActClips(
 ): Promise<ClipData[]> {
   const project = await requireProjectRow(projectId);
   const beat = project.beats.find((b) => b.index === beatIndex);
-  if (!beat) throw new RouteError(`第 ${beatIndex} 幕不存在，无法拆解`, 400);
+  if (!beat) throw new RouteError(`第 ${beatIndex} 场不存在，无法拆解`, 400);
   const locked = project.clips.filter(
     (c) => c.beatIndex === beatIndex && c.status === "ready"
   );
   if (locked.length > 0) {
     throw new RouteError(
-      `该幕已有 ${locked.length} 个已生成的镜头，请先重置为待生成后再重新拆解`,
+      `该场已有 ${locked.length} 个已生成的镜头，请先重置为待生成后再重新拆解`,
       409
     );
   }
@@ -330,7 +330,7 @@ export async function replaceActClips(
     await tx.timelineClip.deleteMany({
       where: { projectId, beatIndex },
     });
-    // 按幕分组重排：保留其他幕片段的相对顺序，新镜头替换该幕段
+    // 按场分组重排：保留其他场片段的相对顺序，新镜头替换该场段
     const rest = project.clips
       .filter((c) => c.beatIndex !== beatIndex)
       .sort((a, b) => a.order - b.order);
@@ -393,7 +393,7 @@ export async function createClip(
 ): Promise<ClipData> {
   const project = await requireProjectRow(projectId);
   const beatExists = project.beats.some((b) => b.index === input.beatIndex);
-  if (!beatExists) throw new RouteError(`关联的第 ${input.beatIndex} 幕不存在`, 400);
+  if (!beatExists) throw new RouteError(`关联的第 ${input.beatIndex} 场不存在`, 400);
 
   const maxOrder = project.clips.reduce((m, c) => Math.max(m, c.order), -1);
   const clip = await db.timelineClip.create({
