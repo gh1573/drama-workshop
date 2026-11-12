@@ -72,9 +72,10 @@ export interface VoiceProvider {
 }
 
 export interface VideoRenderRequest {
-  /** 组装管线产出的最终提示词（锚定段 + 动作 + 运镜 + 影调 + 技术） */
+  /** 组装管线产出的最终提示词（锚定段 + 动作 + 运镜 + 影调 + 技术）。
+   * 台词不在此列：台词走 TTS 配音 + 字幕烧录链路（v2.9.4 接口面收口，
+   * 移除无消费方的 subtitle 字段防误用） */
   finalPrompt: string;
-  subtitle: string;
   durationSeconds: number;
   resolution: string;
   aspectRatio: string;

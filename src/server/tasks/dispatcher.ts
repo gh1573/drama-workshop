@@ -515,7 +515,6 @@ const handlers: Partial<Record<TaskKind, Handler>> = {
 
     const result = await provider.render({
       finalPrompt: clip.finalPrompt,
-      subtitle: clip.subtitle,
       durationSeconds: project.durationSeconds,
       resolution: project.resolution,
       aspectRatio: project.aspectRatio,

@@ -3,6 +3,7 @@ import {
   ACT_MOVEMENT_POOLS,
   CAMERA_MOVEMENTS,
   SHOT_SIZES,
+  STATE_NOTE_KEYS,
 } from "@/lib/drama";
 import { getTextProvider, parseJsonLoose } from "@/server/providers";
 import { BREAKDOWN_SPEC } from "@/config/templates";
@@ -115,7 +116,7 @@ ${rosterSection}
 8. energy：该镜头的情绪能量 0~100 整数，场内必须逐镜递进（情绪推向场尾顶点）
 9. sfxHint：8 字以内的中文音效提示，如「重低音入」「剑鸣破空」「玻璃碎裂」
 10. characters：本镜头出场角色名数组（必须取自资产库名单）；scene：本镜头场景名（取自资产库名单，无则空字符串）；props：关键道具名数组
-11. characterStates：本镜头内角色可变状态注记（场记单），仅在剧情发生状态变化时输出（如 {"陈锋":"负伤"}）；状态词优先用：负伤/血迹/湿身/泪痕/疲惫/狼狈/换军装/换官服/换西装/换礼服/换囚服/换嫁衣等短词（供确定性翻译），无变化则省略字段
+11. characterStates：本镜头内角色可变状态注记（场记单），仅在剧情发生状态变化时输出（如 {"陈锋":"负伤"}）；状态词优先用：${STATE_NOTE_KEYS.join("/")}（命中将确定性译为英文注入画面提示词；确需表外新词时可用短语短词），无变化则省略字段
 12. 情绪必须递进：从该场的开场状态推向场尾状态
 
 【输出格式】只输出 JSON，禁止解释文字、禁止 markdown 围栏：

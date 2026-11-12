@@ -1,12 +1,15 @@
 /**
  * 演示项目种子（零配额）：直接落 DB + 复用 public/assets 既有文件，
  * 用于工作台会话视图的视觉审计与截图回归。不调用任何外部通道。
- * 用法：node scripts/seed-demo-project.mjs [--keep]
+ * 用法：bun scripts/seed-demo-project.mjs [--keep]
+ *   （v2.9.4 起需 bun 运行：finalPrompt 由真组装器 composeVideoPrompt
+ *    现算产出——演示数据与真实流水线提示词协议同源，禁止手写快照漂移）
  */
 import { PrismaClient } from "@prisma/client";
 import { copyFileSync, existsSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { composeVideoPrompt } from "../src/server/engines/prompt-engine";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ASSETS = join(ROOT, "public", "assets");
@@ -78,17 +81,21 @@ const shotPlan = [
      历史版本自造驼峰名（slowPushIn/craneDown/orbitRight…）不在池内，
      导致节奏页运镜多样性统计把 8 种算成 1 种——演示数据必须与
      真实流水线同协议（breakdown-service 拆镜协议零容错，种子同样零容错）。 */
-  { beat: 1, name: "寿宴全景", shotSize: "远景", cam: "pan_horizontal", energy: 68, desc: "豪门寿宴大厅全景，水晶灯下宾客举杯寒暄，热闹表象下暗流涌动", sfx: "宴会环境音渐起", sub: "「陈锋，你连给我提鞋都不配——滚出林家！」", voice: "voice_demo_hook.wav" },
-  { beat: 1, name: "撕婚书特写", shotSize: "特写", cam: "static_close", energy: 82, desc: "林晚秋纤手撕碎婚书，纸屑纷飞砸向镜头，慢镜中纸片如雪", sfx: "纸张撕裂声放大" },
-  { beat: 1, name: "泼汤羞辱", shotSize: "近景", cam: "handheld", energy: 88, desc: "菜汤泼在陈锋胸口，汤汁顺着衣襟滴落，周围宾客窃笑指点", sfx: "液体泼洒+窃笑声" },
-  { beat: 1, name: "眼神转冷", shotSize: "大特写", cam: "push", energy: 90, desc: "陈锋垂眸的睫毛颤动，抬眼瞬间瞳孔里最后一点温度熄灭", sfx: "心跳低频渐强" },
-  { beat: 2, name: "大门轰开", shotSize: "全景", cam: "whip_pan", energy: 92, desc: "寿宴大门轰然洞开，逆光中玄甲卫士列阵涌入，宾客惊退", sfx: "金属破门轰鸣" },
-  { beat: 2, name: "统帅跪呈", shotSize: "中景", cam: "low_angle_tracking", energy: 96, desc: "为首统帅单膝跪地，双手呈上鎏金虎符，甲胄铿锵", sfx: "甲胄碰撞+闷雷" },
-  { beat: 2, name: "万人齐呼", shotSize: "远景", cam: "top_down", energy: 100, desc: "俯拍大远景，门外将士单膝跪地齐呼龙王，声浪震彻云霄", sfx: "山呼海啸齐诵", sub: "「北境统帅陈锋，今日——清账。」", voice: "voice_demo_climax.wav" },
-  { beat: 2, name: "酒杯坠地", shotSize: "特写", cam: "static_close", energy: 97, desc: "林晚秋指尖松开，高脚杯坠地炸裂，酒液溅上她的裙摆", sfx: "玻璃碎裂+死寂" },
-  { beat: 3, name: "环视全场", shotSize: "中景", cam: "orbit", energy: 95, desc: "陈锋接过虎符却不看，缓缓起身环视满堂噤声的宾客", sfx: "衣料摩擦+静默", sub: "「三年前泼我冷水的账……今天，连本带利。」", voice: "voice_demo_cliffhanger.wav" },
-  { beat: 3, name: "意味深长一笑", shotSize: "大特写", cam: "push", energy: 92, desc: "陈锋弹去袖口汤渍，唇角缓缓勾起，眼底寒光一闪，画面压黑", sfx: "低频收束音" },
+  { beat: 1, name: "寿宴全景", shotSize: "远景", cam: "pan_horizontal", energy: 68, desc: "豪门寿宴大厅全景，水晶灯下宾客举杯寒暄，热闹表象下暗流涌动", sfx: "宴会环境音渐起", sub: "「陈锋，你连给我提鞋都不配——滚出林家！」", voice: "voice_demo_hook.wav", vp: "wide shot of a luxurious banquet hall, guests toasting under crystal chandeliers, festive surface with hidden tension, warm golden lighting" },
+  { beat: 1, name: "撕婚书特写", shotSize: "特写", cam: "static_close", energy: 82, desc: "林晚秋纤手撕碎婚书，纸屑纷飞砸向镜头，慢镜中纸片如雪", sfx: "纸张撕裂声放大", vp: "close-up of elegant hands tearing a marriage document, paper scraps flying toward camera in slow motion, falling like snow, dramatic backlight" },
+  { beat: 1, name: "泼汤羞辱", shotSize: "近景", cam: "handheld", energy: 88, desc: "菜汤泼在陈锋胸口，汤汁顺着衣襟滴落，周围宾客窃笑指点", sfx: "液体泼洒+窃笑声", vp: "soup splashed onto a man's chest, dripping down his dark robe, guests whispering and pointing around him, controlled handheld, shallow depth of field" },
+  { beat: 1, name: "眼神转冷", shotSize: "大特写", cam: "push", energy: 90, desc: "陈锋垂眸的睫毛颤动，抬眼瞬间瞳孔里最后一点温度熄灭", sfx: "心跳低频渐强", vp: "extreme close-up of a man's eyes, trembling lashes then a slowly freezing gaze, last warmth fading from his pupils, low-key dramatic lighting" },
+  { beat: 2, name: "大门轰开", shotSize: "全景", cam: "whip_pan", energy: 92, desc: "寿宴大门轰然洞开，逆光中玄甲卫士列阵涌入，宾客惊退", sfx: "金属破门轰鸣", vp: "grand banquet doors burst open with strong backlight, armored guards marching in formation, guests recoiling in shock, whip pan sweep, dramatic silhouettes" },
+  { beat: 2, name: "统帅跪呈", shotSize: "中景", cam: "low_angle_tracking", energy: 96, desc: "为首统帅单膝跪地，双手呈上鎏金虎符，甲胄铿锵", sfx: "甲胄碰撞+闷雷", vp: "low angle of a veteran general kneeling on one knee, presenting a gilded tiger tally with both hands, black armor glinting, solemn hero shot" },
+  { beat: 2, name: "万人齐呼", shotSize: "远景", cam: "top_down", energy: 100, desc: "俯拍大远景，门外将士单膝跪地齐呼龙王，声浪震彻云霄", sfx: "山呼海啸齐诵", sub: "「北境统帅陈锋，今日——清账。」", voice: "voice_demo_climax.wav", vp: "top-down wide shot, thousands of soldiers kneeling outside the gate roaring in unison, massive scale, epic overhead composition, dust and torch light" },
+  { beat: 2, name: "酒杯坠地", shotSize: "特写", cam: "static_close", energy: 97, desc: "林晚秋指尖松开，高脚杯坠地炸裂，酒液溅上她的裙摆", sfx: "玻璃碎裂+死寂", vp: "close-up of a wine glass slipping from trembling fingers, shattering on the floor, red wine splashing onto her cream gown, frozen silence" },
+  { beat: 3, name: "环视全场", shotSize: "中景", cam: "orbit", energy: 95, desc: "陈锋接过虎符却不看，缓缓起身环视满堂噤声的宾客", sfx: "衣料摩擦+静默", sub: "「三年前泼我冷水的账……今天，连本带利。」", voice: "voice_demo_cliffhanger.wav", vp: "slow orbiting medium shot of a man holding a tiger tally, calmly scanning the silenced banquet hall, confident and unhurried, cinematic tension" },
+  { beat: 3, name: "意味深长一笑", shotSize: "大特写", cam: "push", energy: 92, desc: "陈锋弹去袖口汤渍，唇角缓缓勾起，眼底寒光一闪，画面压黑", sfx: "低频收束音", vp: "extreme close-up, a man brushing stains off his sleeve, corner of his mouth curling into a cold smile, glint of menace in his eyes, fade to black" },
 ];
+
+/* 项目影调锚点：project.create 与每镜组装同源引用（禁两处字面量漂移） */
+const PROJECT_TONE =
+  "high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions";
 
 async function main() {
   const keep = process.argv.includes("--keep");
@@ -122,8 +129,7 @@ async function main() {
       genreBadge: "高燃打脸 · 爽感爆棚",
       hookTactic: "0~3s 冲突爆发：撕毁婚书当众羞辱，主角眼神冰冷，身份信物若隐若现",
       musicMood: "重低音震荡战鼓、霸气交响乐渐强、金属拔剑音效",
-      tonePrompt:
-        "high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions",
+      tonePrompt: PROJECT_TONE,
       synopsis:
         "赘婿隐忍三年受尽欺凌，反派当众撕碎婚书泼菜汤；主角冷笑亮出信物，顶级统帅带十万将士破门而入跪地齐呼龙王！",
       videoModel: "Omni 1.2 Flash",
@@ -188,10 +194,60 @@ async function main() {
     assets.push(await db.asset.create({ data: { ...c, projectId: project.id, source: "crew" } }));
   }
 
+  const refPlan = [
+    [0, 3, 4], [0, 1, 3, 4], [0, 1, 3, 4], [0, 3, 4],
+    [2, 3, 4], [2, 3, 4], [2, 3, 4], [1, 3],
+    [0, 3, 4], [0, 3],
+  ];
+  /* 状态注记：只用 STATE_NOTE_PROMPTS 词表词（确定性翻译），且挂对对象——
+   * 历史版本「衣襟汤渍」自造词挂在晚秋身上，实际汤泼在陈锋身上 */
+  const shotStates = { 2: { 0: "衣冠不整" } };
   const clips = [];
   for (let i = 0; i < shotPlan.length; i++) {
     const s = shotPlan[i];
     const ready = i < shotPlan.length - 1; // 最后一镜留 pending，验证「待出片」状态
+    /* v2.9.4：finalPrompt 由真组装器 composeVideoPrompt 现算（与真实流水线
+     * run-service 同一条代码路径），promptVersion 落锚点指纹——历史版本
+     * 手写快照（旧一段式格式 + promptVersion 填版本号格式串）两处协议漂移 */
+    const refs = (refPlan[i] ?? []).map((ai) => ({
+      idx: ai,
+      asset: assets[ai],
+    }));
+    const characters = refs
+      .filter((r) => r.asset.kind === "character")
+      .map((r) => ({
+        name: r.asset.name,
+        visualAnchor: r.asset.visualAnchor,
+        stateNote: shotStates[i]?.[r.idx] ?? null,
+      }));
+    const sceneRef = refs.find((r) => r.asset.kind === "scene") ?? null;
+    const { finalPrompt, fingerprint } = composeVideoPrompt({
+      shot: {
+        visualDesc: s.desc,
+        visualPrompt: s.vp,
+        cameraMovement: s.cam,
+        shotSize: s.shotSize,
+      },
+      characters,
+      scene: sceneRef
+        ? {
+            name: sceneRef.asset.name,
+            visualAnchor: sceneRef.asset.visualAnchor,
+            stateNote: shotStates[i]?.[sceneRef.idx] ?? null,
+          }
+        : null,
+      props: refs
+        .filter((r) => r.asset.kind === "prop")
+        .map((r) => ({
+          name: r.asset.name,
+          visualAnchor: r.asset.visualAnchor,
+          stateNote: shotStates[i]?.[r.idx] ?? null,
+        })),
+      tonePrompt: PROJECT_TONE,
+      aspectRatio: "9:16",
+      plannedMs: 5000,
+      resolution: "1080p",
+    });
     clips.push(
       await db.timelineClip.create({
         data: {
@@ -207,12 +263,10 @@ async function main() {
           shotSize: s.shotSize,
           cameraMovement: s.cam,
           visualDesc: s.desc,
-          visualPrompt:
-            "slow motion paper scraps falling, dramatic backlight, shallow depth of field, cinematic tension",
+          visualPrompt: s.vp,
           plannedMs: 5000,
-          finalPrompt:
-            "East Asian male, 30s, sharp eyebrows, cold piercing eyes — slow motion paper scraps falling, dramatic backlight, cinematic tension, high-contrast dramatic cinema, low angle hero shot",
-          promptVersion: "anchor-v2",
+          finalPrompt,
+          promptVersion: fingerprint,
           energy: s.energy,
           sfxHint: s.sfx,
         },
@@ -220,16 +274,13 @@ async function main() {
     );
   }
 
-  // 镜头 ↔ 资产引用（陈锋全勤，晚秋前 4 镜，统帅第 5-8 镜，场景全勤）
-  const refPlan = [
-    [0, 4], [0, 1, 4], [0, 1, 4], [0, 4],
-    [2, 4], [2, 3, 4], [2, 3, 4], [1, 3, 4],
-    [0, 3, 4], [0, 3],
-  ];
+  // 镜头 ↔ 资产引用（v2.9.4 修正：场景全勤——历史版本前 4 镜漏挂宴会厅，
+  // 组装出的 finalPrompt 缺 [SCENE] 段一致性锚定失效；镜 8「酒杯坠地」去错挂
+  // 的虎符——画面里只有酒杯）。资产序：0 陈锋 / 1 晚秋 / 2 统帅 / 3 寿宴大厅 / 4 虎符
   for (let i = 0; i < refPlan.length; i++) {
     for (const ai of refPlan[i]) {
       await db.shotRef.create({
-        data: { shotId: clips[i].id, assetId: assets[ai].id, stateNote: i === 2 ? "衣襟汤渍" : null },
+        data: { shotId: clips[i].id, assetId: assets[ai].id, stateNote: shotStates[i]?.[ai] ?? null },
       });
     }
   }

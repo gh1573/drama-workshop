@@ -239,11 +239,11 @@ export const SHOT_SIZE_PROMPTS: Record<
 };
 
 /**
- * 场记状态注记 → 英文映射（v2.8.3）：stateNote 是服化道/伤效等
- * 「角色跨镜头可变状态」（场记单职责），中文直接拼进英文 prompt
- * 基模读不到。命中未表期高频状态则确定性翻译；未命中保留原文
- * （双语基模可客，不作丢弃）。导演拆镜产出 characterStates 时
- * 应优先使用本表词汇（提示词已约束）。
+ * 场记状态注记 → 英文映射（v2.8.3，v2.9.4 扩容近义高频词）：stateNote 是
+ * 服化道/伤效等「角色跨镜头可变状态」（场记单职责），中文直接拼进英文
+ * prompt 基模读不到。命中则确定性翻译；未命中保留原文（双语基模可客，
+ * 不作丢弃）。导演拆镜提示词的优先词单由 STATE_NOTE_KEYS 内插（单一来源，
+ * 新增词零漏同步），导演拆镜产出 characterStates 时同源取词。
  */
 export const STATE_NOTE_PROMPTS: Record<string, string> = {
   负伤: "wounded, visible injuries",
@@ -253,22 +253,34 @@ export const STATE_NOTE_PROMPTS: Record<string, string> = {
   染血: "blood-stained clothes",
   湿身: "soaked wet clothes",
   淋湿: "soaked wet clothes",
+  淋雨: "soaked wet clothes, rain-soaked",
   泪痕: "tear-streaked face",
+  泪流满面: "tears streaming down face",
   疲惫: "exhausted, weary look",
   醉态: "drunk, flushed face",
+  醉酒: "drunk, flushed face",
   狼狈: "disheveled, dirt-streaked",
+  披头散发: "disheveled hair, unkempt",
   灰头土脸: "dust-covered face",
-  衣冠不整: "clothes torn and disheveled",
+  衣冠不整: "clothes stained and disheveled",
   赤脚: "barefoot",
   铐镣: "in shackles",
+  镣铐: "in shackles",
   蒙眼: "blindfolded",
+  昏迷: "unconscious, eyes closed",
+  暴怒: "furious, glaring with rage",
+  狞笑: "sinister grin",
   换军装: "changed into military uniform",
   换官服: "changed into official court robe",
   换西装: "changed into tailored suit",
   换礼服: "changed into formal gown",
   换囚服: "changed into prison garb",
   换嫁衣: "changed into bridal dress",
+  换常服: "changed into plain clothes",
 };
+
+/** 状态注记行话全集（键即词表）：导演拆镜提示词同源内插，禁止另抄一份 */
+export const STATE_NOTE_KEYS = Object.keys(STATE_NOTE_PROMPTS);
 
 /** 场次叙事功能 → 产品语言（tag 徽标 / label 短名；v2.7 不再持有 actNo——
  *  场次号由 index 动态生成，同一功能可出现在任意中段位置） */

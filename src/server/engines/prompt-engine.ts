@@ -33,7 +33,6 @@ export interface PromptInput {
     visualPrompt: string | null;
     cameraMovement: string | null;
     shotSize: string | null;
-    subtitle: string;
   };
   characters: PromptAssetRef[];
   scene: PromptAssetRef | null;
@@ -97,6 +96,12 @@ export function composeVideoPrompt(input: PromptInput): PromptOutput {
     characters: input.characters.map(refToSegment).join("; "),
     scene: input.scene ? refToSegment(input.scene) : "",
     props: input.props.map(refToSegment).join("; "),
+    /* 动作段语言纪律（v2.9.4）：首选 visualPrompt（导演拆镜规则 5 强制英文
+     * 15~25 words）；visualPrompt 缺失时回退 visualDesc（中文）——这是降级
+     * 路径（双语基模可容），仅限历史/外部数据；不引入 LLM 即时翻译
+     * （不确定性违背确定性映射纪律）。台词 subtitle 永不进画面提示词：
+     * 台词走 TTS 配音 + 字幕烧录链路（dispatcher 语音阶段），画面提示词
+     * 混入中文台词会污染视觉语义 */
     action: (shot.visualPrompt?.trim() || shot.visualDesc.trim()) as string,
     camera:
       (shot.cameraMovement && CAMERA_MOVEMENTS[shot.cameraMovement]?.prompt) ||

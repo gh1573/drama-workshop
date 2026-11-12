@@ -598,7 +598,6 @@ export async function anchorProjectClips(
         visualPrompt: clip.visualPrompt,
         cameraMovement: clip.cameraMovement,
         shotSize: clip.shotSize,
-        subtitle: clip.subtitle,
       },
       characters,
       scene: sceneRef
