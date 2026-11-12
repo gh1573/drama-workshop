@@ -53,6 +53,42 @@ export interface ModelConfig {
   enablePromptEnhance: boolean;
 }
 
+/**
+ * 模型参数剧组语言化（v2.9.3）：工程值 → 剧组语言的单一映射源。
+ *
+ * 产品原则：我们是 AI 剧组——底层是模型参数，但创作语言是剧组语言。
+ * 与 SHOT_SIZE_PROMPTS「中文景别→英文电影术语」同款确定性映射模式：
+ * 底层 id 入库持久化不变（历史项目/连载继承零迁移），仅展示层取词；
+ * 未命中回退工程值本身（新增机型未登记时专业者仍可读）。
+ * genres.ts 的下拉常量、工作台信息卡、导出 Markdown 均从此处取词。
+ */
+export function videoModelCrewLabel(id: string): string {
+  if (id === "Omni 1.2 Pro") return "主力机组 · Pro（单镜 8s · 1080p）";
+  if (id === "Omni 1.2 Flash") return "快拍机组 · Flash（单镜 5s · 720p）";
+  return id;
+}
+
+export function thinkingLevelCrewLabel(level: string): string {
+  if (level === "high") return "围读深磨（high · 深挖伏笔）";
+  if (level === "medium") return "两稿打磨（medium · 节奏铺垫）";
+  if (level === "low") return "初稿直拍（low · 快出爆点）";
+  return level;
+}
+
+export function durationCrewLabel(seconds: number): string {
+  if (seconds === 3) return "3 秒 · 快切";
+  if (seconds === 5) return "5 秒 · 标准镜";
+  if (seconds === 8) return "8 秒 · 长镜头";
+  return `${seconds} 秒`;
+}
+
+export function resolutionCrewLabel(resolution: string): string {
+  if (resolution === "1080p") return "1080p · 高清母版";
+  if (resolution === "720p") return "720p · 流媒体成片";
+  if (resolution === "540p") return "540p · 样片粗剪";
+  return resolution;
+}
+
 export interface StoryBeat {
   index: number;
   /** 场次标题（编剧自拟，如「婚书碎地」；旧数据为「第 N 幕：…」格式，兼容渲染） */
@@ -270,7 +306,9 @@ export function buildMarkdown(project: DramaProjectData): string {
   lines.push(`> 题材类型：**${p.genre.name}**（${p.genre.badge}）  `);
   lines.push(`> 画幅比例：**${p.aspectRatio} 竖屏短剧**  `);
   lines.push(
-    `> AI 视频基模：**${p.modelConfig.videoModel}** (${p.modelConfig.durationSeconds}s / ${p.modelConfig.resolution})  `
+    `> 拍摄机组：**${videoModelCrewLabel(p.modelConfig.videoModel)}** · 单镜 ${durationCrewLabel(
+      p.modelConfig.durationSeconds
+    )} · 成片 ${resolutionCrewLabel(p.modelConfig.resolution)}  `
   );
   lines.push(`> 建议配乐音效：${p.genre.musicMood}`);
   lines.push("");

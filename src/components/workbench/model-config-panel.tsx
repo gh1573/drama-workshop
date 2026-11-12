@@ -10,11 +10,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  durationCrewLabel,
+  resolutionCrewLabel,
+} from "@/lib/drama";
 import { DURATIONS, RESOLUTIONS, THINKING_LEVELS, VIDEO_MODELS } from "@/lib/genres";
 import { useWorkbench } from "@/store/workbench";
 import { StepCard } from "./step-card";
 
-/** 第三步 · 模型配置（基模切换联动时长/分辨率默认值） */
+/**
+ * 第三步 · 拍摄配置（v2.9.3 用户语言化：AI 剧组用剧组语言讲模型参数）。
+ * 机组切换联动时长/规格默认值——机组决定默认拍摄规格，专业语义不变。
+ */
 export function ModelConfigPanel() {
   const modelConfig = useWorkbench((s) => s.modelConfig);
   const patchModelConfig = useWorkbench((s) => s.patchModelConfig);
@@ -29,12 +36,12 @@ export function ModelConfigPanel() {
 
   return (
     <StepCard
-      title="模型配置"
+      title="拍摄配置"
       icon={<MonitorPlay className="h-4 w-4" />}
     >
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">AI 视频基模</Label>
+          <Label className="text-xs text-muted-foreground">拍摄机组</Label>
           <Select
             value={modelConfig.videoModel}
             onValueChange={handleVideoModelChange}
@@ -52,7 +59,7 @@ export function ModelConfigPanel() {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">剧本思考深度</Label>
+          <Label className="text-xs text-muted-foreground">编剧室深度</Label>
           <Select
             value={modelConfig.scriptThinkingLevel}
             onValueChange={(v) =>
@@ -85,14 +92,14 @@ export function ModelConfigPanel() {
             <SelectContent>
               {DURATIONS.map((d) => (
                 <SelectItem key={d} value={String(d)}>
-                  {d} 秒
+                  {durationCrewLabel(d)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">分辨率</Label>
+          <Label className="text-xs text-muted-foreground">成片规格</Label>
           <Select
             value={modelConfig.resolution}
             onValueChange={(v) => patchModelConfig({ resolution: v })}
@@ -103,7 +110,7 @@ export function ModelConfigPanel() {
             <SelectContent>
               {RESOLUTIONS.map((r) => (
                 <SelectItem key={r} value={r}>
-                  {r}
+                  {resolutionCrewLabel(r)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -114,10 +121,10 @@ export function ModelConfigPanel() {
         <div>
           <p className="flex items-center gap-1.5 text-sm font-medium">
             <Wand2 className="h-3.5 w-3.5 text-amber-400" />
-            提示词增强
+            导演讲戏
           </p>
           <p className="text-xs text-muted-foreground">
-            画面提示自动追加英文电影级关键词
+            每镜自动补写英文电影级镜头语言（运镜/光影/质感）
           </p>
         </div>
         <Switch

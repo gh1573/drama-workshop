@@ -8,7 +8,11 @@ import {
   PROJECT_STATUS,
   buildMarkdown,
   downloadFile,
+  durationCrewLabel,
+  resolutionCrewLabel,
+  thinkingLevelCrewLabel,
   toExportData,
+  videoModelCrewLabel,
 } from "@/lib/drama";
 import { sessionToDetail, useWorkbench } from "@/store/workbench";
 import { GENRE_ICONS } from "./genre-icons";
@@ -99,16 +103,23 @@ export function ProjectInfoCard() {
       </p>
 
       {/* §7.13 v2.5.2：参数格「标签上/值下」两行栅格。VLM 二轮复审：4 列太窄导致
-          "Omni 1.2 Flash""5s · 1080p" 截断——改 2 列宽格，值完整可读（高频修复点）；
+          截断——改 2 列宽格，值完整可读（高频修复点）；
+          v2.9.3 用户语言化：值一律走 drama.ts 剧组语言映射（单一来源），
+          面向创作者不泄漏裸工程值（low/720p 等经映射后仍内含工程值小注）；
           状态值（开启/已合成）用语义徽标与可调参数区分 */}
       <div className="grid grid-cols-2 gap-2 text-xs">
         {[
           { label: "画幅", value: detail.aspectRatio },
-          { label: "视频基模", value: session.modelConfig.videoModel },
-          { label: "单镜", value: `${session.modelConfig.durationSeconds}s · ${session.modelConfig.resolution}` },
-          { label: "思考深度", value: session.modelConfig.scriptThinkingLevel },
+          { label: "拍摄机组", value: videoModelCrewLabel(session.modelConfig.videoModel) },
           {
-            label: "提示词增强",
+            label: "单镜规格",
+            value: `${durationCrewLabel(session.modelConfig.durationSeconds)} · ${resolutionCrewLabel(
+              session.modelConfig.resolution
+            )}`,
+          },
+          { label: "编剧深度", value: thinkingLevelCrewLabel(session.modelConfig.scriptThinkingLevel) },
+          {
+            label: "导演讲戏",
             value: session.modelConfig.enablePromptEnhance ? "开启" : "关闭",
             tone: session.modelConfig.enablePromptEnhance ? "on" : "off",
           },

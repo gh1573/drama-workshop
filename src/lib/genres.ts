@@ -1,4 +1,5 @@
 import type { GenrePreset } from "./drama";
+import { thinkingLevelCrewLabel, videoModelCrewLabel } from "./drama";
 
 /**
  * 热门题材预设库 — 每个题材是一组完整的创作 preset：
@@ -119,16 +120,20 @@ export const GENRES: GenrePreset[] = [
   },
 ];
 
+/**
+ * 拍摄机组与参数档位（v2.9.3 用户语言化）：id 入库不变，label 由 drama.ts
+ * 剧组语言映射生成（单一来源），展示层不再出现裸工程值。
+ */
 export const VIDEO_MODELS = [
-  { id: "Omni 1.2 Flash", label: "Omni 1.2 Flash（5s / 720p 标准出片）" },
-  { id: "Omni 1.2 Pro", label: "Omni 1.2 Pro（8s / 1080p 高质出片）" },
+  { id: "Omni 1.2 Flash", label: videoModelCrewLabel("Omni 1.2 Flash") },
+  { id: "Omni 1.2 Pro", label: videoModelCrewLabel("Omni 1.2 Pro") },
 ];
 
 export const DURATIONS = [3, 5, 8];
 export const RESOLUTIONS = ["540p", "720p", "1080p"];
 
 export const THINKING_LEVELS = [
-  { id: "low", label: "low · 直给爆点（快）" },
-  { id: "medium", label: "medium · 节奏铺垫（均衡）" },
-  { id: "high", label: "high · 伏笔回收（深）" },
+  { id: "low", label: thinkingLevelCrewLabel("low") },
+  { id: "medium", label: thinkingLevelCrewLabel("medium") },
+  { id: "high", label: thinkingLevelCrewLabel("high") },
 ];

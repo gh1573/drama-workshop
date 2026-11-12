@@ -4,7 +4,7 @@ import type { NarrativeFunction } from "@/lib/drama";
  * 产品版本徽标（顶栏）——单一出处，改版必改此处；
  * 与 docs/architecture-v2.md 头部版本号、变更记录同步（禁止硬编码散落导致口径漂移）。
  */
-export const APP_VERSION = "v2.9.2";
+export const APP_VERSION = "v2.9.3";
 
 /**
  * v2.8 设计令牌（视图层单一来源）
