@@ -114,26 +114,35 @@ export interface AssetExportItem {
 
 /**
  * 运镜库（枚举值 → 中文机位说明 + 英文生成 Prompt）。
- * v2.8.1 防抖铁律：视频基模对「handheld/whip/destabilized」等词是字面执行的——
- * 全部机位一律用稳定器正向词汇（smooth/steadicam/gimbal/steady）表述，
- * 动感来自推拉速度与构图，不来自画面晃动；key 保持不变以兼容存量项目数据。
+ *
+ * 摄影组专业规范（v2.8.2）：运镜 = 运动语义 + 执行设备 + 受控度。
+ * 真实剧组防抖靠设备（轨道/摇臂/斯坦尼康），不是删掉手持——手持、
+ * 甩镜、荷兰倾斜是正当的电影技法，语义保留，但 prompt 必须写明执行
+ * 设备与受控度，让基模生成「有意图的运镜」而非「意外抖动」：
+ * - 推拉 → dolly（轨道车，天然稳定）
+ * - 升降/俯拍 → crane/jib（摇臂）
+ * - 环绕 → steadicam/gimbal（稳定器环绕）
+ * - 固定/横摇 → locked-off tripod（三脚架）
+ * - 手持 → controlled handheld（受控手持，幅度 subtle，风格化选择）
+ * - 甩镜 → precise whip pan（精准甩镜，单条完成，受控运动模糊）
+ * key 保持不变以兼容存量项目数据。
  */
 export const CAMERA_MOVEMENTS: Record<
   string,
   { label: string; prompt: string }
 > = {
-  push: { label: "快速推近特写", prompt: "smooth rapid push-in to close-up, aggressive framing, stabilized gimbal" },
-  pull: { label: "极速拉远全景", prompt: "smooth fast pull-back revealing full scene scale, stabilized gimbal" },
-  handheld: { label: "稳定跟拍", prompt: "steadicam tracking shot, gliding smoothly alongside subject, urgent and immersive" },
-  whip_pan: { label: "快速平摇", prompt: "fast clean pan transition, smooth stabilized camera sweep" },
-  dolly_zoom: { label: "希区柯克变焦", prompt: "smooth dolly zoom, vertigo effect, background warps while subject locked steady" },
-  crane_up: { label: "升降上摇", prompt: "smooth crane up, rising overhead reveal, stabilized" },
-  orbit: { label: "360°环绕运镜", prompt: "smooth 360 degree circular orbit around subject, gimbal stabilized" },
-  low_angle_tracking: { label: "低角度仰拍跟拍", prompt: "low-angle ground shot gliding forward smoothly on stabilized dolly, dominant and imposing" },
-  top_down: { label: "俯瞰全景", prompt: "steady top-down bird's eye view, god-like overview" },
-  dutch_tilt: { label: "荷兰倾斜", prompt: "subtle dutch tilt angle, steady locked framing, dramatic tension" },
-  static_close: { label: "固定特写", prompt: "locked-off static close-up, tense stillness" },
-  pan_horizontal: { label: "凌厉横摇", prompt: "smooth crisp horizontal pan scanning across the crowd, stabilized" },
+  push: { label: "快速推近特写", prompt: "fast dolly push-in to close-up, aggressive framing" },
+  pull: { label: "极速拉远全景", prompt: "fast dolly pull-back revealing full scene scale" },
+  handheld: { label: "手持跟拍", prompt: "controlled handheld camera, subtle organic sway, urgent and immersive, shot by experienced operator" },
+  whip_pan: { label: "甩镜转场", prompt: "precise whip pan, controlled fast swing with clean motion blur, single take" },
+  dolly_zoom: { label: "希区柯克变焦", prompt: "dolly zoom vertigo effect, background warps while subject stays locked" },
+  crane_up: { label: "摇臂升降", prompt: "crane jib rising overhead reveal" },
+  orbit: { label: "360°环绕运镜", prompt: "steadicam orbital arc circling the subject in full circle" },
+  low_angle_tracking: { label: "低角度仰拍跟拍", prompt: "low-angle dolly tracking shot gliding forward, dominant and imposing" },
+  top_down: { label: "摇臂俯瞰", prompt: "overhead crane shot, bird's eye view, god-like overview" },
+  dutch_tilt: { label: "荷兰倾斜", prompt: "intentional dutch tilt, canted-angle composition, dramatic unease, steady frame" },
+  static_close: { label: "固定机位特写", prompt: "locked-off tripod close-up, tense stillness" },
+  pan_horizontal: { label: "凌厉横摇", prompt: "crisp tripod pan scanning across the crowd" },
 };
 
 /** 运镜中文说明（兼容旧引用） */
@@ -144,11 +153,12 @@ export function cameraLabel(movement: string): string {
 /**
  * 场次功能运镜池（v2.7：按叙事功能结构性分配机位调度，防止同质化）：
  * - hook：锁定/冲击类，3 秒内抓住眼球
- * - buildup：跟拍/压迫类，把冲突逐层推高
+ * - buildup：跟拍/压迫类，把冲突逐层推高（手持临场感是正当选择）
  * - twist：揭示/颠覆类，配合身份反转的尺度变化
  * - climax：排场/压迫类，展现顶点的震撞力
  * - cliffhanger：炫技/悬念类，制造意犹未尽的离场感
- * 池首位即「LLM 给错时的回退默认位」，必须放该功能最稳的机位（v2.8.1 防抖）。
+ * 池首位是 LLM 给错时的回退默认位，放该功能最通用的机位（v2.8.2）；
+ * 池内成员保持专业多样性，风格化机位（手持/甩镜）保留在后位。
  */
 export const ACT_MOVEMENT_POOLS: Record<NarrativeFunction, string[]> = {
   hook: ["push", "static_close", "dutch_tilt", "whip_pan", "handheld"],
@@ -168,6 +178,20 @@ export const SHOT_SIZES = [
   "大特写",
 ] as const;
 export type ShotSize = (typeof SHOT_SIZES)[number];
+
+/**
+ * 景别 → 英文电影术语映射（v2.8.2）：SHOT_SIZES 是面向编剧/导演的中文
+ * 行话，但视频基模只懂英文电影术语——中文景别直拼英文 prompt 基模
+ * 无法消费，必须在此完成确定性映射（prompt-engine 消费）。
+ */
+export const SHOT_SIZE_PROMPTS: Record<ShotSize, string> = {
+  远景: "extreme long shot",
+  全景: "wide full shot",
+  中景: "medium shot",
+  近景: "medium close-up",
+  特写: "close-up",
+  大特写: "extreme close-up",
+};
 
 /** 场次叙事功能 → 产品语言（tag 徽标 / label 短名；v2.7 不再持有 actNo——
  *  场次号由 index 动态生成，同一功能可出现在任意中段位置） */

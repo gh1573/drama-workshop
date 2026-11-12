@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { CAMERA_MOVEMENTS } from "@/lib/drama";
+import { CAMERA_MOVEMENTS, SHOT_SIZE_PROMPTS } from "@/lib/drama";
 import {
   PROMPT_SEGMENT_LABELS,
   PROMPT_TECHNICAL_TAIL,
@@ -95,7 +95,10 @@ export function composeVideoPrompt(input: PromptInput): PromptOutput {
       `vertical ${input.aspectRatio} format`,
       input.plannedMs ? `${Math.round(input.plannedMs / 100) / 10}s duration` : null,
       input.resolution,
-      shot.shotSize ? `${shot.shotSize} framing` : null,
+      // 景别映射（v2.8.2）：中文景别是行话，基模只懂英文电影术语
+      shot.shotSize
+        ? `${SHOT_SIZE_PROMPTS[shot.shotSize as keyof typeof SHOT_SIZE_PROMPTS] ?? shot.shotSize} framing`
+        : null,
       PROMPT_TECHNICAL_TAIL,
     ]
       .filter(Boolean)

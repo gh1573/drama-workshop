@@ -84,12 +84,13 @@ export const PROMPT_SEGMENT_LABELS = {
 } as const;
 
 /**
- * 技术段固定尾缀（画质锚点 + 全局防抖兜底）。
- * v2.8.1：视频基模只吃正向提示词，稳定器语义（smooth/steady/gimbal）
- * 必须正向注入——这是每镜必带的全局兜底，即便运镜段被改写也不会晃。
+ * 技术段固定尾缀（画质锚点 + 全局运镜纪律兜底）。
+ * v2.8.2 摄影组专业表述：要排除的是「意外抖动」，不是「有意图的运镜」——
+ * intentional camera movement 是电影摄影行话，不与手持/甩镜等风格化
+ * 机位打架，同时压制基模自发的低质量抖动与随机漂移。每镜必带。
  */
 export const PROMPT_TECHNICAL_TAIL =
-  "cinematic quality, smooth stabilized camera work, steady gimbal movement";
+  "cinematic quality, professional cinematography, intentional camera movement, steady controlled framing";
 
 /**
  * 拆镜规格（导演阶段提示词参数，决定单集总时长档位）。
