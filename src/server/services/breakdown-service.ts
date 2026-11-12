@@ -49,6 +49,20 @@ function strArray(v: unknown, max: number): string[] {
     .slice(0, max);
 }
 
+/** characterStates 容错解析（v2.8.3 场记自动化）：只接受字符串→字符串，
+ *  键值各截断 30/20 字，非法形态整体丢弃（不影响镜头成立） */
+function parseCharacterStates(
+  v: unknown
+): Record<string, string> | undefined {
+  if (typeof v !== "object" || v === null) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof val !== "string" || !val.trim()) continue;
+    out[k.trim().slice(0, 30)] = val.trim().slice(0, 20);
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function buildBreakdownPrompt(ctx: BreakdownContext): string {
   const target = ctx.beats.find((b) => b.index === ctx.targetIndex);
   if (!target) throw new Error(`第 ${ctx.targetIndex} 场不存在`);
@@ -92,19 +106,20 @@ ${rosterSection}
 
 【拆解规则（严格遵守）】
 1. 输出 ${BREAKDOWN_SPEC.shotsPerActMin}~${BREAKDOWN_SPEC.shotsPerActMax} 个镜头，每个镜头 ${Math.round(BREAKDOWN_SPEC.shotMsMin / 100) / 10}~${Math.round(BREAKDOWN_SPEC.shotMsMax / 100) / 10} 秒（plannedMs ${BREAKDOWN_SPEC.shotMsMin}~${BREAKDOWN_SPEC.shotMsMax}），支撑整集约 ${BREAKDOWN_SPEC.targetEpisodeSeconds} 秒的节奏
-2. 景别 shotSize 只能从：${SHOT_SIZES.join("/")} 中选择，相邻镜头景别必须不同（正反打优先：A 特写 → B 大特写 → 全景反应 → 主角近景）
+2. 景别 shotSize 只能从：${SHOT_SIZES.join("/")} 中选择，相邻镜头景别必须不同（正反打优先：A 特写 → B 大特写 → 全景反应 → 主角近景）；剪点优先「动接动」——切在动作进行中（伸手/转身/掷物瞬间），避免静态跳切堆叠
 3. 运镜 cameraMovement 只能从本场推荐池中选择：${poolDesc}；同一场内尽量不重复。所有运镜为有意图的调度（轨道推拉/摇臂升降/稳定器环绕；手持仅限受控手持，幅度轻微）；对话正反打遵守 180° 轴线规则不得跳轴；visualPrompt 不写抖动/糊甩类描述
-4. visualDesc：25~60 字中文，完全可视化（人物、动作、表情、环境、光效），禁止抽象抒情
+4. visualDesc：25~60 字中文，完全可视化（人物、动作、表情、环境、光效），禁止抽象抒情；光效必须与本场时段（日/夜）及主光源方向一致，同一场内不得日夜跳变、光源无端转向
 5. visualPrompt：与 visualDesc 同义的英文动作描述（15~25 words，供 AI 视频基模直接使用）
 6. subtitle：该镜头画面内字幕；普通镜头可为空字符串 ""，全场金句只出现 1 次
 7. name：8 字以内的镜头标题，如「宴会厅 · 众人震惊」「黑卡 · 道具特写」
 8. energy：该镜头的情绪能量 0~100 整数，场内必须逐镜递进（情绪推向场尾顶点）
 9. sfxHint：8 字以内的中文音效提示，如「重低音入」「剑鸣破空」「玻璃碎裂」
 10. characters：本镜头出场角色名数组（必须取自资产库名单）；scene：本镜头场景名（取自资产库名单，无则空字符串）；props：关键道具名数组
-11. 情绪必须递进：从该场的开场状态推向场尾状态
+11. characterStates：本镜头内角色可变状态注记（场记单），仅在剧情发生状态变化时输出（如 {"陈锋":"负伤"}）；状态词优先用：负伤/血迹/湿身/泪痕/疲惫/狼狈/换军装/换官服/换西装/换礼服/换囚服/换嫁衣等短词（供确定性翻译），无变化则省略字段
+12. 情绪必须递进：从该场的开场状态推向场尾状态
 
 【输出格式】只输出 JSON，禁止解释文字、禁止 markdown 围栏：
-{"shots":[{"name":"…","shotSize":"特写","cameraMovement":"push","visualDesc":"…","visualPrompt":"…","subtitle":"…","plannedMs":${Math.round((BREAKDOWN_SPEC.shotMsMin + BREAKDOWN_SPEC.shotMsMax) / 2)},"energy":62,"sfxHint":"…","characters":["…"],"scene":"…","props":["…"]}]}`;
+{"shots":[{"name":"…","shotSize":"特写","cameraMovement":"push","visualDesc":"…","visualPrompt":"…","subtitle":"…","plannedMs":${Math.round((BREAKDOWN_SPEC.shotMsMin + BREAKDOWN_SPEC.shotMsMax) / 2)},"energy":62,"sfxHint":"…","characters":["…"],"scene":"…","props":["…"],"characterStates":{"…":"…"}}]}`;
 }
 
 function parseShots(raw: string): ShotBreakdownItem[] | null {
@@ -137,6 +152,7 @@ function parseShots(raw: string): ShotBreakdownItem[] | null {
       characters: strArray(o.characters, 4),
       scene: str(o.scene).slice(0, 30),
       props: strArray(o.props, 3),
+      characterStates: parseCharacterStates(o.characterStates),
     });
   }
   if (shots.length < 2) return null;

@@ -255,7 +255,7 @@ ${script}
 
 【要求（严格遵守）】
 1. characters：主角、对手与关键配角，最多 6 个。lockedAppearance 为中文定妆描述（25~60 字：年龄、性别、身份气质、发型、脸型特征、服装、标志物）；visualAnchor 为对应英文串（15~30 words，如 "35-year-old Chinese male special forces captain, buzz cut, scar on left brow, black tactical vest"）
-2. scenes：关键场景，最多 5 个。name 为短名（如「宴会厅」「冷宫」）；lockedAppearance 描述空间与光线；visualAnchor 为英文
+2. scenes：关键场景，最多 5 个。name 为短名（如「宴会厅」「冷宫」）；lockedAppearance 中文描述空间，并写明时段与内外景（如「夜·内，水晶吊灯暖光」）；visualAnchor 为英文，必须含时段与主光源（如 "luxury banquet hall at night, warm chandelier glow, interior"）——同场镜头光效一致性由此时段锚定保证，不得日夜跳变
 3. props：推动剧情的关键道具，最多 4 个，没有则输出空数组
 4. 名称必须与剧本用词一致，不得杜撰剧本中未出现的角色
 5. visualAnchor 是所有镜头共用的视觉锚点，聚焦「跨镜头不变的外观特征」，不要写动作
@@ -507,9 +507,16 @@ export async function bindRefsFromShots(
     const shot = shots[i];
     const clip = actClips[i];
     const targets = new Set<string>();
+    // 场记状态注记（v2.8.3）：导演拆镜产出的 characterStates 落到
+    // ShotRef.stateNote（角色名 → 资产 id 对齐后写入），锚定时译为英文
+    const stateByAssetId = new Map<string, string>();
     for (const name of shot.characters) {
       const asset = resolve("character", name);
-      if (asset) targets.add(asset.id);
+      if (asset) {
+        targets.add(asset.id);
+        const state = shot.characterStates?.[name.trim()];
+        if (state) stateByAssetId.set(asset.id, state);
+      }
     }
     const scene = resolve("scene", shot.scene);
     if (scene) targets.add(scene.id);
@@ -520,7 +527,11 @@ export async function bindRefsFromShots(
     for (const assetId of targets) {
       await db.shotRef.upsert({
         where: { shotId_assetId: { shotId: clip.id, assetId } },
-        create: { shotId: clip.id, assetId },
+        create: {
+          shotId: clip.id,
+          assetId,
+          stateNote: stateByAssetId.get(assetId) ?? null,
+        },
         update: {},
       });
       bound++;
@@ -659,7 +670,7 @@ async function stagePostproduction(
 
   const count = (kind: string) => tracks.filter((t) => t.kind === kind).length;
   return {
-    summary: `三轨落轨：字幕 ${count("subtitle")} · 音效 ${count("sfx")} · 配乐 ${count("bgm")} 段；${submitted > 0 ? `定妆任务 ${submitted} 个已入队，定妆图将陆续出片；` : ""}情绪能量曲线与制作包就绪`,
+    summary: `轨道就绪：字幕 ${count("subtitle")} 段（成片烧录）· 音效 ${count("sfx")} 段（随制作包交付，由后期按拟音提示执行）· 配乐 ${count("bgm")} 段（成片混音+响度归一）；${submitted > 0 ? `定妆任务 ${submitted} 个已入队，定妆图将陆续出片；` : ""}情绪能量曲线与制作包就绪`,
   };
 }
 
