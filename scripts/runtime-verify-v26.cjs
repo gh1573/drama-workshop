@@ -2,7 +2,7 @@
  * v2.6 运行时回归：流水线导轨 + 色彩收口
  * 断言：
  *   1. 零 pageerror / console error
- *   2. 会话态导轨渲染：01-05 五阶段 + 产物计数（幕/资产/镜/锚定/成片）
+ *   2. 会话态导轨渲染：01-05 五阶段 + 产物计数（场/资产/镜/锚定/成片）
  *   3. 导轨点击导航：02 选角定妆 → 资产定妆页签激活；05 后期成包 → 成片页签
  *   4. 剧组进程阶段卡产物计数与导轨同源
  *   5. 题材选中态唯一品牌渐变（马甲大佬不再 violet/fuchsia）
@@ -69,7 +69,7 @@ function log(name, ok, extra) {
   for (const kw of ["01", "05", "剧本创作", "后期成包"]) {
     if (!railText.includes(kw)) log(`rail-text-${kw}`, false, railText.slice(0, 120));
   }
-  const artifacts = ["幕", "资产", "镜", "10/10", "成片可下载"].filter((k) => railText.includes(k));
+  const artifacts = ["场", "资产", "镜", "10/10", "成片可下载"].filter((k) => railText.includes(k));
   log("rail-artifact-counts", artifacts.length >= 4, "found: " + artifacts.join("/"));
   await page.screenshot({ path: `${SHOTS}/02-session-cut.png` });
 
@@ -95,7 +95,7 @@ function log(name, ok, extra) {
   /* Radix 保留全部 5 个 tabpanel 节点（inactive 为空），必须取 active 态 */
   const panel = page.locator('[role="tabpanel"][data-state="active"]');
   const panelText = await panel.innerText();
-  const panelArtifacts = ["幕", "资产", "镜"].filter((k) => panelText.includes(k));
+  const panelArtifacts = ["场", "资产", "镜"].filter((k) => panelText.includes(k));
   log("pipeline-card-artifacts", panelArtifacts.length >= 3, "found: " + panelArtifacts.join("/"));
   await page.screenshot({ path: `${SHOTS}/03-pipeline.png` });
 

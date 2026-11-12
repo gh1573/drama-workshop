@@ -3,10 +3,10 @@
 v2.5 成片专业化验收（docs §10 v2.5）——零配额：全部用既有 clip 素材本地合成。
 
 流程：
-  1. 向空库注入验收 fixture（1 项目 + 3 幕 + 6 镜 + 2 条字幕；2 镜复用真实配音文件）；
+  1. 向空库注入验收 fixture（1 项目 + 3 场 + 6 镜 + 2 条字幕；2 镜复用真实配音文件）；
   2. Run A（回归）：cut 模式 + 720x1280@30 —— 应与 v2.4.4 行为一致（无转场、时长不缩短）；
   3. Run B（v2.5）：auto 转场 + 1080x1920@30 + 调色滤镜 —— 应出现 2 处转场
-     （片头卡 fade + 进入 cliffhanger 幕 fadeblack），时长缩短 2×0.5s，画幅 1080x1920；
+     （片头卡 fade + 进入 cliffhanger 场 fadeblack），时长缩短 2×0.5s，画幅 1080x1920；
   4. ffprobe 核验画幅/时长；转场点抽帧核验溶解发生；调色帧 vs 原始帧核验滤镜生效；
   5. 清理 fixture 行与产物（DB 恢复空库）。
 
@@ -69,7 +69,7 @@ def setup_fixture() -> None:
             """INSERT INTO story_beats (id, projectId, "index", actTitle, narrativeFunction,
                pacingNote, description, dialogueSubtitle, cameraMovement, promptGuidance)
                VALUES (?, ?, ?, ?, ?, '4~5s', 'fixture', '台词', 'static', 'fixture')""",
-            (f"{FIXTURE_PID}_b{idx}", FIXTURE_PID, idx, f"第{idx}幕", fn),
+            (f"{FIXTURE_PID}_b{idx}", FIXTURE_PID, idx, f"第{idx}场", fn),
         )
     for i, (src_id, beat, planned, has_voice) in enumerate(CLIPS):
         clip_id = src_id  # 原始 id 直用（voice/clip 文件名天然匹配）

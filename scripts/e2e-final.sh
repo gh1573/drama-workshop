@@ -23,7 +23,7 @@ assets=d["assets"]
 fp=[c for c in clips if c.get("finalPrompt")]
 from collections import Counter
 tc=Counter(t["kind"] for t in d["tracks"])
-print("  第%s集: 幕=%d 镜头=%d 时长=%ss 资产=%d 定妆=%d 提示词=%d 轨道=%s" % (
+print("  第%s集: 场=%d 镜头=%d 时长=%ss 资产=%d 定妆=%d 提示词=%d 轨道=%s" % (
   ep, len(d["storyBeats"]), len(clips), secs, len(assets),
   sum(1 for a in assets if a.get("portraitUrl")), len(fp), dict(tc)))
 assert len(d["storyBeats"])==3 and len(clips)>=12 and 45<=secs<=85

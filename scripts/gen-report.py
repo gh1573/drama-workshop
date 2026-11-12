@@ -13,8 +13,7 @@ for i, name in enumerate(EPS, 1):
     d = json.loads((OUT / f"龙王归来_第{i}集_制作包.json").read_text(encoding="utf-8"))
     data.append(d)
 
-# ---------- 1. 能量曲线图 ----------
-import matplotlib
+# ---------- 1. 能量曲线图 ----------import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.font_manager as fm
@@ -27,14 +26,13 @@ plt.rcParams["axes.unicode_minus"] = False
 fig, axes = plt.subplots(3, 1, figsize=(10, 8.5), sharex=False, constrained_layout=True)
 fig.suptitle("《龙王归来》三集情绪能量曲线（节奏卡点表）", fontsize=15, fontweight="bold")
 
-ACT_BOUNDS = {1: 6, 2: 12}  # 每幕 5~6 镜，边界近似
 for idx, (ax, d, name) in enumerate(zip(axes, data, EPS), 1):
     clips = d["timelineClips"]
     energies = [int(c["energy"]) for c in clips]
     xs = list(range(1, len(energies) + 1))
     ax.plot(xs, energies, marker="o", markersize=4.5, linewidth=2, color="#f59e0b", zorder=3)
     ax.fill_between(xs, energies, alpha=0.15, color="#f59e0b")
-    # 幕分界（每集 16 镜：幕1=1-6，幕2=7-12，幕3=13-16 近似，按 beatRef 精确算）
+    # 场次分界（按 beatRef 精确计算，场次数由编剧阶段白定）
     bounds = []
     beat_seq = [c["beatRef"] for c in clips]
     for j in range(1, len(beat_seq)):
@@ -50,8 +48,10 @@ for idx, (ax, d, name) in enumerate(zip(axes, data, EPS), 1):
     ax.tick_params(labelsize=8)
     ax.grid(axis="y", alpha=0.2)
     if bounds:
-        labels = ["第1幕", "第2幕", "第3幕"]
-        centers = [bounds[0] / 2, (bounds[0] + bounds[-1]) / 2, (bounds[-1] + len(xs)) / 2]
+        n_seg = len(bounds) + 1
+        labels = [f"第{k}场" for k in range(1, n_seg + 1)]
+        edges = [0] + list(bounds) + [len(xs)]
+        centers = [(edges[k] + edges[k + 1]) / 2 for k in range(n_seg)]
         for cx, lb in zip(centers, labels):
             ax.text(cx, 102, lb, ha="center", fontsize=9, color="#94a3b8")
 
@@ -77,12 +77,12 @@ print(f"定妆图归档: {len(char_rows)} 张")
 lines = []
 lines.append("# 《龙王归来》AI 剧组流水线 · 系列效果报告")
 lines.append("")
-lines.append("> 题材：战神逆袭（高燃打脸）｜ 系列 3 集 ｜ 每集三幕 × 16 镜头 × ~48 秒 ｜ 竖屏 9:16 720p")
+lines.append(f"> 题材：战神逆袭（高燃打脸）｜ 系列 3 集 ｜ 每集 {len(data[0]['storyBeats'])} 场 × {len(data[0]['timelineClips'])} 镜头 × ~48 秒 ｜ 竖屏 9:16 720p")
 lines.append("> 产出：真实 LLM 流水线（编剧→选角→导演→场记→后期五阶段）+ 真实图像通道定妆 65 张 + 镜头级英文提示词 48 条")
 lines.append("")
 lines.append("## 一、系列总览")
 lines.append("")
-lines.append("| 集数 | 剧名 | 幕 | 镜头 | 时长 | 资产 | 定妆图 | 最终提示词 | 字幕/音效/配乐轨 |")
+lines.append("| 集数 | 剧名 | 场 | 镜头 | 时长 | 资产 | 定妆图 | 最终提示词 | 字幕/音效/配乐轨 |")
 lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
 for i, (d, name) in enumerate(zip(data, EPS), 1):
     clips = d["timelineClips"]
@@ -107,7 +107,7 @@ for i, d in enumerate(data, 1):
     lines.append(f"> {d['project']['synopsis']}")
     lines.append("")
     for b in beats:
-        lines.append(f"- **第{b['index']}幕 · {b['actTitle']}**（{b['narrativeFunction']}）：{b['description'][:80]}…")
+        lines.append(f"- **第{b['index']}场 · {b['actTitle']}**（{b['narrativeFunction']}）：{b['description'][:80]}…")
     lines.append("")
 
 lines.append("## 三、镜头节选（导演组拆镜 + 场记锚定产物）")
@@ -142,7 +142,7 @@ lines.append("## 五、能量曲线（节奏卡点表）")
 lines.append("")
 lines.append("![能量曲线](龙王归来_能量曲线.png)")
 lines.append("")
-lines.append("三集能量曲线均呈「三幕阶梯递进」：第 1 幕钩子 30→100 拉满，第 2 幕高潮 65→95，第 3 幕悬念 62→95 收钩。红色虚线为节奏塌陷预警线（40），三集全部镜头在预警线之上。")
+lines.append("三集能量曲线均呈「场次阶梯递进」：首场钩子 30→100 拉满，中段高潮 65→95，末场悬念 62→95 收钩。红色虚线为节奏塌陷预警线（40），三集全部镜头在预警线之上。")
 lines.append("")
 
 lines.append("## 六、主要角色定妆（跨集一致性）")

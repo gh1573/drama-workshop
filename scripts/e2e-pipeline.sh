@@ -37,7 +37,7 @@ print("shotRefs:", len(d["shotRefs"]), "| tracks:", {k: sum(1 for t in d["tracks
 print("anchorStale:", len(d["anchorStaleClipIds"]), "| activeRun:", d["activeRun"]["status"] if d["activeRun"] else None)
 fp = [c["finalPrompt"] for c in d["timelineClips"] if c["finalPrompt"]]
 print("finalPrompt 示例:", (fp[0][:180] + "…") if fp else "无")
-assert d["storyBeats"], "缺三幕"
+assert d["storyBeats"], "缺场次剧本"
 assert len(d["timelineClips"]) >= 6, "镜头数不足"
 assert d["assets"], "缺资产库"
 assert fp, "缺 finalPrompt"

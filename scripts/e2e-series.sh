@@ -64,10 +64,12 @@ assets=d["assets"]
 fp=[c for c in clips if c.get("finalPrompt")]
 from collections import Counter
 tc=Counter(t["kind"] for t in d["tracks"])
-print("  第%s集校验: 幕=%d 镜头=%d 时长=%ss 资产=%d 定妆图=%d 提示词=%d 轨道=%s 状态=%s" % (
+print("  第%s集校验: 场=%d 镜头=%d 时长=%ss 资产=%d 定妆图=%d 提示词=%d 轨道=%s 状态=%s" % (
   ep, len(d["storyBeats"]), len(clips), secs, len(assets),
   sum(1 for a in assets if a.get("portraitUrl")), len(fp), dict(tc), d["status"]))
-assert len(d["storyBeats"])==3, "缺三幕"
+assert 3 <= len(d["storyBeats"]) <= 6, "场次弹性丿6：第%s集 %d 场" % (ep, len(d["storyBeats"]))
+assert d["storyBeats"][0]["narrativeFunction"] == "hook", "首场非 hook"
+assert d["storyBeats"][-1]["narrativeFunction"] == "cliffhanger", "末场非 cliffhanger"
 assert len(clips)>=12, "镜头数不足: %d" % len(clips)
 assert 45<=secs<=85, "时长偏离60s: %ss" % secs
 assert len(assets)>=6, "资产库不足"

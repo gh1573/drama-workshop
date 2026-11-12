@@ -1,7 +1,7 @@
 """v2.4.1 UI 验收：新项目载入 → 全部 5 页签逐一检查 → 新交互断言 + 截图 + 滚动测量
 断言清单（docs §7.10）：
   A. 桌面端视口锁定：整页滚动高度 ≈ 1 屏（无超长滚动）
-  B. 分镜表按幕默认折叠：摘要行可见、镜头行不可见；展开后出现
+  B. 分镜表按场次默认折叠：摘要行可见、镜头行不可见；展开后出现
   C. 行内「渲染此镜」按钮：已锚定非 ready 镜头可见
   D. 渲染状态徽标/成片进度联动
   E. 定妆页签 9 图齐全
@@ -50,20 +50,20 @@ async def main():
         await page.wait_for_timeout(1200)
         sh2 = await page.evaluate("document.documentElement.scrollHeight")
         print(f"[B] 分镜页 整页滚动高度 {sh2}px = {sh2/ih:.2f} 屏 {'✅' if sh2 <= ih * 1.05 else '❌ 超长'}")
-        # 幕摘要行（含「就绪」字样的分组头按钮）
-        summaries = page.locator('button:has-text("幕"), button:has-text("就绪")')
+        # 场次摘要行（含「就绪」字样的分组头按钮）
+        summaries = page.locator('button:has-text("场"), button:has-text("就绪")')
         sn = await page.count if False else await summaries.count()
-        # 更精确：分镜表容器内的幕头按钮
+        # 更精确：分镜表容器内的场次头按钮
         heads = page.locator("section button", has_text="就绪")
         hn = await heads.count()
-        print(f"    幕分组摘要行(含就绪计数): {hn} 个 {'✅' if hn == 3 else '⚠️ 期望3'}")
+        print(f"    场次分组摘要行(含就绪计数): {hn} 个 {'✅' if hn == 3 else '⚠️ 期望3'}")
         # 展开前：镜头行应不可见（编号徽标在折叠区内）
         await heads.first.click()
         await page.wait_for_timeout(800)
         await page.screenshot(path=f"{OUT}-script-expanded.png")
         # 展开后滚动测量（页签内滚，不撑开整页）
         sh3 = await page.evaluate("document.documentElement.scrollHeight")
-        print(f"    展开第1幕后 整页高度 {sh3}px = {sh3/ih:.2f} 屏 {'✅ 内滚不撑页' if sh3 <= ih * 1.05 else '❌'}")
+        print(f"    展开第1场后 整页高度 {sh3}px = {sh3/ih:.2f} 屏 {'✅ 内滚不撑页' if sh3 <= ih * 1.05 else '❌'}")
 
         # —— C. 渲染此镜按钮（已锚定且非 ready 的镜头行）——
         render_btns = page.locator('button[aria-label="渲染此镜"]')

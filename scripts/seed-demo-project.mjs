@@ -231,7 +231,7 @@ async function main() {
   // 已成功的制作运行（含剧组日志，形状对齐 run-service：{ at, role, message }）
   const journal = [
     { at: new Date(Date.now() - 40 * 60000).toISOString(), role: "producer", message: "项目《战神逆袭 · 演示第一集》正式开机 🎬 题材战术手册已下发全组" },
-    { at: new Date(Date.now() - 38 * 60000).toISOString(), role: "screenwriter", message: "三幕推演完成：hook「婚书碎地」/ climax「统帅破门」/ cliffhanger「旧账新算」" },
+    { at: new Date(Date.now() - 38 * 60000).toISOString(), role: "screenwriter", message: "场次推演完成：hook「婚书碎地」/ climax「统帅破门」/ cliffhanger「旧账新算」" },
     { at: new Date(Date.now() - 32 * 60000).toISOString(), role: "casting", message: "5 项资产定妆完成（3 角色 / 1 场景 / 1 道具），华人面孔校验全部通过" },
     { at: new Date(Date.now() - 25 * 60000).toISOString(), role: "director", message: "10 镜拆解完成，能量曲线 68→100→92，运镜多样性 8 式" },
     { at: new Date(Date.now() - 18 * 60000).toISOString(), role: "supervisor", message: "10/10 镜头锚点组装完成，提示词指纹全部最新" },
@@ -244,7 +244,7 @@ async function main() {
       progress: 100,
       stage: "postproduction",
       stages: JSON.stringify([
-        { key: "screenwriting", status: "succeeded", note: "三幕剧本就绪" },
+        { key: "screenwriting", status: "succeeded", note: "场次剧本就绪" },
         { key: "casting", status: "succeeded", note: "5 资产定妆" },
         { key: "directing", status: "succeeded", note: "10 镜拆解" },
         { key: "anchoring", status: "succeeded", note: "锚点组装完成" },

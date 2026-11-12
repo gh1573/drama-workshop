@@ -52,7 +52,7 @@ SUBTITLE_BASE_STYLES = {
 # 转场矩阵（§7.11 auto 模式）：返回 ffmpeg xfade transition 名，None = 硬切
 AUTO_MATRIX_CARD = "fade"  # 片头卡 → 第一镜：溶解入戏
 AUTO_MATRIX_ACT = {
-    # 幕界 → 进入该幕：hook/climax 硬切（冲击），cliffhanger 压黑（悬念收束）
+    # 场次界 → 进入该场：hook/climax 硬切（冲击），cliffhanger 压黑（悬念收束）
     "hook": None,
     "climax": None,
     "cliffhanger": "fadeblack",
@@ -233,7 +233,7 @@ def main() -> None:
             else:
                 entering_beat = timeline[b][3]
                 prev_beat = timeline[b - 1][3]
-                # 同幕内硬切；幕界按「进入幕」的叙事功能选型（未知功能回落硬切）
+                # 同场内硬切；场次界按「进入场」的叙事功能选型（未知功能回落硬切）
                 junctions.append(
                     None
                     if entering_beat == prev_beat
