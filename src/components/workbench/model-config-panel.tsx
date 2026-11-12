@@ -29,7 +29,7 @@ export function ModelConfigPanel() {
 
   return (
     <StepCard
-      step="第三步"
+      step="03"
       title="模型配置"
       icon={<MonitorPlay className="h-4 w-4" />}
     >
@@ -114,7 +114,7 @@ export function ModelConfigPanel() {
       <div className="flex items-center justify-between rounded-lg border border-border/70 bg-secondary/30 px-3 py-2.5">
         <div>
           <p className="flex items-center gap-1.5 text-sm font-medium">
-            <Wand2 className="h-3.5 w-3.5 text-fuchsia-400" />
+            <Wand2 className="h-3.5 w-3.5 text-amber-400" />
             提示词增强
           </p>
           <p className="text-xs text-muted-foreground">

@@ -13,7 +13,7 @@ export function GenrePanel() {
   const genre = GENRES.find((g) => g.id === genreId) ?? GENRES[0];
 
   return (
-    <StepCard step="第一步" title="选择题材" icon={<Lightbulb className="h-4 w-4" />}>
+    <StepCard step="01" title="选择题材" icon={<Lightbulb className="h-4 w-4" />}>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-2">
         {GENRES.map((g) => {
           const active = g.id === genreId;
@@ -30,11 +30,12 @@ export function GenrePanel() {
               }`}
             >
               <span className="flex items-center justify-between">
+                {/* §7.13：未选中态图标中性灰，题材身份色仅保留在选中态（内容色） */}
                 <span
                   className={`flex h-7 w-7 items-center justify-center rounded-lg ${
                     active
                       ? "bg-white/20 text-white"
-                      : `bg-secondary/80 ${g.text}`
+                      : "bg-secondary/80 text-muted-foreground"
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -69,9 +70,9 @@ export function GenrePanel() {
           </span>
         </p>
         <p className="flex gap-2">
-          <Music className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-400" />
+          <Music className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
           <span className="text-xs leading-relaxed">
-            <span className="font-semibold text-rose-400">配乐音效：</span>
+            <span className="font-semibold text-amber-400">配乐音效：</span>
             {genre.musicMood}
           </span>
         </p>

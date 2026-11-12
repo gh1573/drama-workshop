@@ -17,7 +17,6 @@ import {
   Play,
   ScanFace,
   Scissors,
-  Smartphone,
   Sparkles,
   UserRound,
   Users,
@@ -33,6 +32,12 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { GenrePanel } from "@/components/workbench/genre-panel";
 import { SynopsisPanel } from "@/components/workbench/synopsis-panel";
 import { ModelConfigPanel } from "@/components/workbench/model-config-panel";
@@ -69,31 +74,33 @@ const STAGE_ICONS: Record<string, LucideIcon> = {
   postproduction: Scissors,
 };
 
-/** 开机前置亮点（产品能力导览，数据驱动计数） */
-const VALUE_PROPS: Array<{ icon: LucideIcon; title: string; desc: string; tint: string }> = [
+/** 开机前置亮点（§7.13 色彩纪律：中性卡 + 唯一 accent 卡，accent = 主转化目标） */
+const VALUE_PROPS: Array<{
+  icon: LucideIcon;
+  title: string;
+  desc: string;
+  accent?: boolean;
+}> = [
+  {
+    icon: Sparkles,
+    title: "一键成片 ffmpeg",
+    desc: "片头卡 + 字幕烧录 + 配音混音 + 转场调色，直出 9:16 MP4",
+    accent: true,
+  },
   {
     icon: ScanFace,
     title: "定妆参考图注入",
     desc: "角色定妆照作为首帧参考提交视频通道，跨镜头面孔一致",
-    tint: "text-sky-400 bg-sky-500/10 border-sky-500/20",
   },
   {
     icon: History,
     title: "断点恢复 · 限流自愈",
     desc: "阶段幂等推进，中断原地进行接力；429 指数退避错峰重试",
-    tint: "text-teal-400 bg-teal-500/10 border-teal-500/20",
-  },
-  {
-    icon: Sparkles,
-    title: "一键成片 ffmpeg",
-    desc: "片头卡 + 字幕烧录 + 配音混音 + 逐镜裁剪，直出 9:16 MP4",
-    tint: "text-amber-400 bg-amber-500/10 border-amber-500/20",
   },
   {
     icon: Users,
     title: "六岗位剧组协作",
     desc: "制片/编剧/选角/导演/场记/后期按阶段接力，全链路可观测",
-    tint: "text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20",
   },
 ];
 
@@ -232,22 +239,24 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLibraryOpen(true)}
-              className="border-border/70 text-xs"
-            >
-              <FolderOpen className="h-3.5 w-3.5" />
-              项目库
-            </Button>
-            <Badge
-              variant="outline"
-              className="hidden gap-1.5 border-border/70 text-muted-foreground sm:inline-flex"
-            >
-              <Smartphone className="h-3 w-3" />
-              9:16 竖屏短剧工作台
-            </Badge>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLibraryOpen(true)}
+                    className="border-border/70 text-xs"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5" />
+                    项目库
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  查看已立项项目 · 断点恢复 · 跨项目切换
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </header>
@@ -407,7 +416,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* —— 五阶段导览（数据驱动：RUN_STAGES × CREW_ROLES） —— */}
+                {/* —— 五阶段导览（数据驱动：RUN_STAGES × CREW_ROLES；§7.13 图标统一 amber） —— */}
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                   {RUN_STAGES.map((st, i) => {
                     const Icon = STAGE_ICONS[st.key] ?? Sparkles;
@@ -421,7 +430,7 @@ export default function Home() {
                           <span className="font-mono text-[10px] text-muted-foreground/70">
                             0{i + 1}
                           </span>
-                          <Icon className={`h-4 w-4 ${role?.color ?? ""}`} />
+                          <Icon className="h-4 w-4 text-amber-400/90" />
                         </div>
                         <p className="text-xs font-semibold leading-tight">{st.name}</p>
                         <p className="text-[10px] leading-snug text-muted-foreground">
@@ -433,8 +442,9 @@ export default function Home() {
                 </div>
 
                 {/* —— 成片预览手机模型 × 能力亮点 —— */}
-                <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-[200px,1fr]">
-                  <div className="relative mx-auto flex aspect-[9/16] max-h-[380px] w-full max-w-[200px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black shadow-2xl">
+                <div className="grid flex-1 grid-cols-1 items-center gap-4 sm:grid-cols-[200px,1fr]">
+                  <div className="mx-auto flex w-full max-w-[200px] flex-col items-center gap-2.5">
+                  <div className="relative flex aspect-[9/16] max-h-[380px] w-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black shadow-2xl">
                     {/* 弱光晕场景底 */}
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(239,68,68,0.18),transparent_60%)]" />
                     <div className="absolute left-1/2 top-2 h-1 w-14 -translate-x-1/2 rounded-full bg-white/10" />
@@ -444,6 +454,16 @@ export default function Home() {
                       </span>
                       <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[9px] text-white/60">
                         1080p
+                      </span>
+                    </div>
+                    {/* §7.13：REC 呼吸点让预览从孤立装饰变为「产品在工作」的语境 */}
+                    <div className="absolute right-2.5 top-5 flex items-center gap-1">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+                      </span>
+                      <span className="font-mono text-[9px] font-bold tracking-widest text-red-400">
+                        REC
                       </span>
                     </div>
                     <div className="relative flex flex-1 flex-col items-center justify-center gap-2.5">
@@ -479,20 +499,39 @@ export default function Home() {
                     </div>
                     <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/60 to-transparent" />
                   </div>
+                  {/* §7.13：预览语境化 —— 从孤立装饰变为产品承诺 */}
+                  <p className="text-center text-[10px] leading-relaxed text-muted-foreground">
+                    开机后自动产出 · 9:16 竖屏成片
+                    <br />
+                    <span className="font-mono text-muted-foreground/70">
+                      片头卡 / 字幕 / 配音 / 转场 / 调色
+                    </span>
+                  </p>
+                  </div>
 
                   <div className="grid content-center gap-2.5">
                     {VALUE_PROPS.map((v) => (
                       <div
                         key={v.title}
-                        className="flex items-start gap-3 rounded-xl border border-border/60 bg-card p-3.5"
+                        className={`flex items-start gap-3 rounded-xl border p-3.5 ${
+                          v.accent
+                            ? "border-amber-500/30 bg-amber-500/[0.06]"
+                            : "border-border/60 bg-card"
+                        }`}
                       >
                         <span
-                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${v.tint}`}
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+                            v.accent
+                              ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                              : "border-border/60 bg-secondary/50 text-muted-foreground"
+                          }`}
                         >
                           <v.icon className="h-4 w-4" />
                         </span>
                         <div>
-                          <p className="text-xs font-semibold">{v.title}</p>
+                          <p className={`text-xs font-semibold ${v.accent ? "text-amber-300" : ""}`}>
+                            {v.title}
+                          </p>
                           <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
                             {v.desc}
                           </p>
@@ -509,14 +548,14 @@ export default function Home() {
                     {GENRES.length} 套题材预设
                   </span>
                   <span className="flex items-center gap-1">
-                    <Film className="h-3 w-3 text-sky-400/80" />
+                    <Film className="h-3 w-3 text-amber-400/80" />
                     {Object.keys(CAMERA_MOVEMENTS).length} 式运镜库
                   </span>
                   <span className="flex items-center gap-1">
-                    <Users className="h-3 w-3 text-fuchsia-400/80" />
+                    <Users className="h-3 w-3 text-amber-400/80" />
                     {Object.keys(CREW_ROLES).length} 个剧组岗位
                   </span>
-                  <span className="ml-auto font-mono">v2.4 · 配额友好的占位视频通道</span>
+                  <span className="ml-auto font-mono">v2.5 · 转场矩阵 · 全片调色 · 响度归一</span>
                 </div>
               </section>
             )}

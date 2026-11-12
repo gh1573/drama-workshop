@@ -15,7 +15,7 @@ export function SynopsisPanel() {
   const genre = GENRES.find((g) => g.id === genreId) ?? GENRES[0];
 
   return (
-    <StepCard step="第二步" title="剧情梗概" icon={<Film className="h-4 w-4" />}>
+    <StepCard step="02" title="剧情梗概" icon={<Film className="h-4 w-4" />}>
       <Textarea
         value={synopsis}
         onChange={(e) => setSynopsis(e.target.value)}

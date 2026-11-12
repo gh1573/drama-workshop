@@ -146,7 +146,7 @@ export function CrewPipelinePanel() {
         {RUN_STAGES.map((def) => {
           const stage = run?.stages.find((s) => s.key === def.key);
           const status = stage?.status ?? "pending";
-          const role = CREW_ROLES[def.role];
+          const roleName = CREW_ROLES[def.role]?.name ?? def.role;
           return (
             <div
               key={def.key}
@@ -164,7 +164,8 @@ export function CrewPipelinePanel() {
                 <StageIcon status={status} />
                 <p className="truncate text-xs font-bold">{def.name}</p>
               </div>
-              <p className={`text-[10px] ${role.color}`}>{role.name}</p>
+              {/* §7.13 色彩纪律：岗位色降级为数据层属性，卡片渲染统一中性 */}
+              <p className="text-[10px] text-muted-foreground">{roleName}</p>
               {stage?.error && (
                 <p className="truncate text-[10px] text-rose-400" title={stage.error}>
                   {stage.error}
@@ -179,14 +180,15 @@ export function CrewPipelinePanel() {
       {run && journal.length > 0 && (
         <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-lg border border-border/60 bg-secondary/20 p-3">
           {journal.map((entry, i) => {
-            const role = CREW_ROLES[entry.role];
+            /* §7.13 P0：journal 为 DB JSON 直读，role 键可能失效/缺失/脏数据 —— 防御式降级，禁止裸取 */
+            const roleName = CREW_ROLES[entry.role as keyof typeof CREW_ROLES]?.name ?? "剧组";
             return (
               <div key={`${entry.at}-${i}`} className="flex items-start gap-2 text-xs">
                 <span className="shrink-0 font-mono text-[10px] text-muted-foreground/70">
                   {clockOf(entry.at)}
                 </span>
-                <span className={`shrink-0 font-semibold ${role.color}`}>
-                  {role.name}
+                <span className="shrink-0 font-semibold text-foreground/75">
+                  {roleName}
                 </span>
                 <span className="min-w-0 flex-1 text-foreground/85">{entry.message}</span>
               </div>
@@ -225,7 +227,9 @@ export function CrewPipelinePanel() {
           </p>
         )}
         {succeeded && (
-          <p className="text-xs text-emerald-400">
+          /* §7.13 色彩收敛：绿色仅保留给状态徽标，说明文字回归中性 */
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
             制作包已就绪：分镜表 · 资产定妆 · 镜头提示词 · 三轨 · 能量曲线，可导出交付
           </p>
         )}

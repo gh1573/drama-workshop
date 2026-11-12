@@ -83,11 +83,11 @@ export function ProjectInfoCard() {
         ].map(([k, v, positive]) => (
           <div
             key={k as string}
-            className="rounded-lg border border-border/60 bg-secondary/40 px-2.5 py-1.5"
+            className="flex items-baseline justify-between gap-1 rounded-lg border border-border/60 bg-secondary/40 px-2.5 py-1.5"
           >
-            <p className="text-muted-foreground">{k as string}</p>
+            <p className="shrink-0 text-muted-foreground">{k as string}</p>
             <p
-              className={`mt-0.5 ${
+              className={`text-right ${
                 positive ? "font-semibold" : "font-normal text-muted-foreground"
               }`}
             >
@@ -105,7 +105,8 @@ export function ProjectInfoCard() {
           className="h-auto bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 px-2 py-2 text-xs font-bold leading-snug text-white shadow-lg shadow-red-600/20 hover:opacity-90"
         >
           {saving ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <Save className="h-4 w-4 shrink-0" />}
-          <span className="whitespace-normal">{session.dbId ? "更新项目" : "保存到项目库"}</span>
+          {/* §7.13：语义明确化 —— 用户能预知点击后发生什么 */}
+          <span className="whitespace-normal">{session.dbId ? "保存本次修改到项目库" : "保存到项目库"}</span>
         </Button>
         <Button
           onClick={exportJson}
