@@ -318,7 +318,8 @@ export default function Home() {
                       与 amber 保存主 CTA 拉开语义（VLM 审计 P0） */}
                   <Button
                     size="lg"
-                    disabled={pipelineRunning || pipelineStarting || synopsis.trim().length < 10}
+                    /* v2.7.1：同空态主 CTA——不再因梗概长度灰化（校验与指引交给点击时 toast） */
+                    disabled={generating || pipelineRunning || pipelineStarting}
                     onClick={() => setRerunConfirmOpen(true)}
                     className="h-12 w-full border border-red-500/40 bg-transparent text-sm font-bold text-red-300 shadow-none hover:bg-red-500/10 hover:text-red-200"
                   >
@@ -348,7 +349,9 @@ export default function Home() {
                 <ModelConfigPanel />
                 <Button
                   size="lg"
-                  disabled={pipelineRunning || pipelineStarting || synopsis.trim().length < 10}
+                  /* v2.7.1 VLM 走查修复：不再因梗概长度禁用主 CTA（灰化后“主操作隐形”
+                      是空态双 P1 主因）——按钮始终醒目，点击时校验并 toast 指引 */
+                  disabled={generating || pipelineRunning || pipelineStarting}
                   onClick={handleStartPipeline}
                   className="h-14 w-full bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 text-base font-bold text-white shadow-xl shadow-red-600/25 hover:opacity-90"
                 >

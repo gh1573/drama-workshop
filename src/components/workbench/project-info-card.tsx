@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
   PROJECT_STATUS,
-  BRAND_GRADIENT,
   buildMarkdown,
   downloadFile,
   toExportData,
@@ -55,8 +54,9 @@ export function ProjectInfoCard() {
   return (
     <div className="space-y-3 rounded-xl border bg-card p-5">
       <div className="flex flex-wrap items-center gap-2">
-        {/* §7.13 v2.6：题材徽标与全站主 CTA 同源的唯一品牌渐变 */}
-        <Badge className={`gap-1.5 border-0 bg-gradient-to-r ${BRAND_GRADIENT} text-white`}>
+        {/* v2.7.1 VLM 双轮复审：题材徽标从品牌渐变降为中性 chip——红色胶囊与
+            错误语义冲突，且收紧后品牌渐变仅存 logo/主 CTA 两处，标题正文权重最高 */}
+        <Badge className="gap-1.5 border-border/60 bg-secondary/70 text-foreground">
           <GenreIcon className="h-3 w-3" />
           {session.genre.name}
         </Badge>

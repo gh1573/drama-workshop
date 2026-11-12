@@ -389,6 +389,39 @@ export function FinalCutPanel() {
         )}
       </div>
 
+      {/* —— 成片动作区（v2.7.1 VLM P0 修复：终态主操作从页尾上移至紧随播放器，
+          免滚动直达；后期风格/BGM 属高级配置让位其后） —— */}
+      {finalVideoUrl && (
+        <div className="flex flex-wrap items-center justify-center gap-2 border-t border-border/60 pt-3">
+          <a href={finalVideoUrl} download target="_blank" rel="noreferrer">
+            {/* v2.6 VLM 复审：下载成片 = 全链路终点主操作，从 emerald 描边升级为
+                品牌渐变实底（绿色仅限状态徽标，不承载操作） */}
+            <Button className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 font-bold text-white shadow-lg shadow-red-600/25 hover:opacity-90">
+              <Download className="h-4 w-4" />
+              下载成片 MP4
+            </Button>
+          </a>
+          <Button
+            variant="outline"
+            disabled={composing}
+            onClick={handleCompose}
+            className="border-border/70 text-xs hover:bg-secondary/40"
+          >
+            {composing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            镜头有改动？重新合成
+          </Button>
+          {/* v2.7.1：去掉绿勾图标（与页签绿点/「已合成」徽标构成三层状态重复，
+              VLM P1）——本行为合成内容说明，回归纯文本 */}
+          <p className="text-xs text-muted-foreground">
+            片头卡 + 转场 + 调色 + 字幕烧录 + 配音混音{bgm ? " + BGM" : ""} 已合入成片
+          </p>
+        </div>
+      )}
+
       {/* —— 后期风格（v2.5 §7.11）：转场策略 + 调色预设，重合成后生效 —— */}
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
         <Wand2 className="h-3.5 w-3.5 shrink-0 text-sky-400" />
@@ -510,7 +543,7 @@ export function FinalCutPanel() {
         </p>
       </div>
 
-      {/* —— 操作区（CTA 居中 + 流程说明紧随） —— */}
+      {/* —— 操作区（渲染前/中的 CTA；成片后的下载动作已上移至播放器下方） —— */}
       <div className="flex flex-col items-center gap-2 border-t border-border/60 pt-3">
         {!finalVideoUrl && !allReady && activeVideoTasks === 0 && (
           <div className="flex flex-col items-center gap-1.5">
@@ -555,38 +588,6 @@ export function FinalCutPanel() {
             重新合成成片
           </Button>
         )}
-        {finalVideoUrl && (
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <a href={finalVideoUrl} download target="_blank" rel="noreferrer">
-              {/* v2.6 VLM 复审：下载成片 = 全链路终点主操作，从 emerald 描边升级为
-                  品牌渐变实底（绿色仅限状态徽标，不承载操作） */}
-              <Button className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 font-bold text-white shadow-lg shadow-red-600/25 hover:opacity-90">
-                <Download className="h-4 w-4" />
-                下载成片 MP4
-              </Button>
-            </a>
-            <Button
-              variant="outline"
-              disabled={composing}
-              onClick={handleCompose}
-              className="border-border/70 text-xs hover:bg-secondary/40"
-            >
-              {composing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-              镜头有改动？重新合成
-            </Button>
-            {/* v2.6：绿色仅保留给 BadgeCheck 图标，说明文字回归中性（§7.13 语义色仅限状态） */}
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
-              <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" />
-              片头卡 + 转场 + 调色 + 字幕烧录 + 配音混音{bgm ? " + BGM" : ""} 已合入成片
-            </p>
-          </div>
-        )}
-
-        {/* 失败提示（占位模式下改写文案，避免误导重试 */}
         {failedVideoTasks.length > 0 && !finalVideoUrl && (
           <p className="flex items-center gap-1.5 text-center text-xs text-rose-400">
             <AlertTriangle className="h-3.5 w-3.5" />
