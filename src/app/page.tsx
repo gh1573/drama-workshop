@@ -16,6 +16,7 @@ import {
   Loader2,
   Package,
   PenLine,
+  PencilLine,
   Play,
   ScanFace,
   Scissors,
@@ -484,6 +485,20 @@ export default function Home() {
                   })}
                 </div>
 
+                {/* —— v2.9.2 可干预性声明（VLM 产品走查 7/11 视图高频缺口：
+                    「全组开机=黑箱、不敢用于生产」）——流水线确有中间审校机制，
+                    但空态只强调「自动执行」不讲「可干预」，把真实能力说没了 —— */}
+                <div className="flex items-start gap-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-3.5 py-2.5">
+                  <PencilLine className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    开机不是放手不管：每一阶段的产出（剧本 / 定妆图 / 分镜）都在工作台留档，
+                    <span className="text-foreground">可改后继续</span>
+                    ；改动角色或场景设定会自动标出受影响的镜头，
+                    <span className="text-foreground">只补拍该补的</span>
+                    ；中途失败从断点续跑，已完成阶段不重来。
+                  </p>
+                </div>
+
                 {/* —— v2.8 P3（VLM 复审）：空态右栏缺显式开机入口，视线落点在预览器播放键上
                     ——在导览正下方补一枚次级开机 CTA（amber 实底，让位左栏品牌渐变主 CTA） —— */}
                 <button
@@ -521,9 +536,12 @@ export default function Home() {
                     {/* v2.9 信任实据（VLM 产品走查 P0：占位 mockup → 流水线实产示例成片，
                         点击即播——把「产品承诺」变成「可验证的演示」；
                         v2.9.1：示例成片已有配音与烧录字幕，不设 muted（无 autoplay 不受
-                        浏览器静音策略约束），用户点播即得完整声画体验 */}
+                        浏览器静音策略约束），用户点播即得完整声画体验；
+                        v2.9.2：补 poster 高燃帧——首帧是暗场片头卡，浏览器默认渲染
+                        黑屏首帧，三轮 VLM 产品走查均误判「黑箱播放器/无内容」 */}
                     <video
                       src="/assets/final_cmwd6bk9k0000sj35v6cg1a9j.mp4"
+                      poster="/assets/final_cmwd6bk9k0000sj35v6cg1a9j_poster.jpg"
                       controls
                       playsInline
                       preload="metadata"

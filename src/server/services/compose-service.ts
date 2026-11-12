@@ -148,6 +148,14 @@ export async function composeEpisode(projectId: string): Promise<ComposeResult> 
     throw new RouteError("成片产物异常（文件缺失或过小），请重试合成", 500);
   }
 
+  /* v2.9.2 封面帧抽取：合成即产 poster（约定路径 final_{id}_poster.jpg，
+     前端 <video poster> 按约定引用，404 时浏览器自动回退黑帧——不落库、不迁移）。
+     抽 25% 时长处（跳过片头卡暗场，取剧情中段高燃帧）；失败仅日志不阻断——
+     封面是增强，合成主产物已就绪不能因海报翻车 */
+  await extractPosterFrame(filePath).catch((e) => {
+    console.warn(`[compose] 封面帧抽取失败（不影响成片）: ${e instanceof Error ? e.message : e}`);
+  });
+
   await db.project.update({
     where: { id: projectId },
     data: { finalVideoUrl: parsed.url },
@@ -160,4 +168,28 @@ export async function composeEpisode(projectId: string): Promise<ComposeResult> 
     withVoice: parsed.withVoice ?? false,
     withBgm: parsed.withBgm ?? false,
   };
+}
+
+/** 成片封面帧：25% 时长处抽一帧，810 宽（9:16 高清档），落 {成片路径}_poster.jpg */
+async function extractPosterFrame(finalMp4Path: string): Promise<string> {
+  const posterPath = finalMp4Path.replace(/\.mp4$/, "_poster.jpg");
+  const durSec = await new Promise<number>((resolve, reject) => {
+    execFile(
+      "ffprobe",
+      ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", finalMp4Path],
+      { timeout: 10_000 },
+      (err, out) => (err ? reject(err) : resolve(parseFloat(out.trim()) || 0))
+    );
+  });
+  const seek = Math.max(1, Math.round(durSec * 0.25));
+  await new Promise<void>((resolve, reject) => {
+    execFile(
+      "ffmpeg",
+      ["-y", "-v", "error", "-ss", String(seek), "-i", finalMp4Path,
+        "-frames:v", "1", "-vf", "scale=810:-2", "-q:v", "4", posterPath],
+      { timeout: 20_000 },
+      (err) => (err ? reject(err) : resolve())
+    );
+  });
+  return posterPath;
 }

@@ -372,6 +372,9 @@ export function FinalCutPanel() {
           <video
             key={finalVideoUrl}
             src={finalVideoUrl}
+            /* v2.9.2：封面帧走约定路径（合成时 25% 处抽取）；旧成片无 poster 时
+               404 自动回退黑帧，行为不变 */
+            poster={finalVideoUrl.replace(/\.mp4$/, "_poster.jpg")}
             controls
             playsInline
             className="max-h-[560px] w-auto max-w-full rounded-xl border border-white/10 bg-black shadow-2xl shadow-black/70 ring-1 ring-white/15"
