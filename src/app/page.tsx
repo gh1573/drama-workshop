@@ -506,57 +506,31 @@ export default function Home() {
                   <div className="relative flex aspect-[9/16] max-h-[380px] w-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black shadow-2xl">
                     {/* 弱光晕场景底 */}
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(239,68,68,0.18),transparent_60%)]" />
-                    <div className="absolute left-1/2 top-2 h-1 w-14 -translate-x-1/2 rounded-full bg-white/10" />
-                    <div className="absolute left-2.5 top-5 flex gap-1.5">
+                    <div className="absolute left-1/2 top-2 z-10 h-1 w-14 -translate-x-1/2 rounded-full bg-white/10" />
+                    <div className="absolute left-2.5 top-5 z-10 flex gap-1.5">
                       {/* v2.8：EP.01 / 1080p / PREVIEW 三组标签被 VLM 判冗余——只留 EP.01 */}
-                      <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[9px] text-white/80">
+                      <span className="rounded bg-black/50 px-1.5 py-0.5 font-mono text-[9px] text-white/80">
                         EP.01
                       </span>
                     </div>
-                    {/* v2.6 VLM 复审：REC 呼吸点语义混杂（预览 mockup 非真录制态）
-                        → 静态 PREVIEW 标签，录制态语义只留给真实运行状态 */}
-                    <div className="absolute right-2.5 top-5 flex items-center gap-1">
-                      <span className="h-1.5 w-1.5 rounded-full bg-white/30" />
-                      <span className="font-mono text-[9px] font-bold tracking-widest text-white/50">
-                        PREVIEW
-                      </span>
+                    <div className="pointer-events-none absolute right-2.5 top-5 z-10 flex items-center gap-1 rounded bg-black/50 px-1.5 py-0.5">
+                      <Play className="h-2.5 w-2.5 shrink-0 text-white/70" />
+                      <span className="font-mono text-[9px] text-white/70">示例 · 实产</span>
                     </div>
-                    <div className="relative flex flex-1 flex-col items-center justify-center gap-2.5">
-                      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-xl shadow-red-600/30">
-                        <Play className="h-6 w-6 translate-x-[1px] text-red-600" />
-                      </span>
-                      <p className="font-mono text-[9px] text-white/40">
-                        SHOT 03 · 逆光特写 · 5s
-                      </p>
-                    </div>
-                    {/* 章节刻度（分镜时间轴示意） */}
-                    <div className="absolute inset-x-4 bottom-[52px] flex gap-1">
-                      {[0.4, 0.6, 1, 0.7, 0.5].map((w, i) => (
-                        <span
-                          key={i}
-                          style={{ flexGrow: w }}
-                          className={`h-4 rounded-[3px] border border-white/10 ${
-                            i === 2
-                              ? "bg-gradient-to-b from-red-600/70 to-amber-500/70"
-                              : "bg-white/[0.07]"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <div className="absolute inset-x-4 bottom-8 space-y-1.5">
-                      <div className="h-1 rounded-full bg-white/10">
-                        <div className="h-1 w-2/5 rounded-full bg-gradient-to-r from-red-600 to-amber-500" />
-                      </div>
-                      <div className="flex justify-between font-mono text-[9px] text-white/50">
-                        <span>00:24</span>
-                        <span>00:58</span>
-                      </div>
-                    </div>
-                    <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/60 to-transparent" />
+                    {/* v2.9 信任实据（VLM 产品走查 P0：占位 mockup → 流水线实产示例成片，
+                        点击即播——把「产品承诺」变成「可验证的演示」） */}
+                    <video
+                      src="/assets/final_cmwatz8k800wqpzia68d9lgbt.mp4"
+                      controls
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="absolute inset-0 h-full w-full bg-black object-cover"
+                    />
                   </div>
                   {/* §7.13：预览语境化 —— 从孤立装饰变为产品承诺 */}
                   <p className="text-center text-[10px] leading-relaxed text-muted-foreground">
-                    开机后自动产出 · 9:16 竖屏成片
+                    示例成片可直接播放 · 开机后你的剧集同样直出
                     <br />
                     <span className="font-mono text-muted-foreground/70">
                       片头卡 / 字幕 / 配音 / 转场 / 调色
