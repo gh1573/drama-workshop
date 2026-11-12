@@ -448,11 +448,12 @@ export function composeVideoPrompt(input: PromptInput): PromptOutput;
 组装顺序固定：`角色段 → 场景段 → 道具段 → 动作段 → 运镜段（CAMERA_MOVEMENTS.prompt）→ 影调段 → 技术段（比例/时长/画质）`。
 分段结构的意义：前端「提示词微调」只允许改段内容重新组装，不允许绕过管线手写全文——保证锚定不被破坏。
 
-**运镜防抖铁律（v2.8.1）**：视频基模只吃正向提示词，且对「handheld / whip pan / destabilized」等词汇按字面执行，会直接生成晃动镜头。因此：
-1. 运镜库全部 12 个机位一律用稳定器正向词汇（smooth / steadicam / gimbal / steady）表述，动感来自推拉速度与构图，不来自画面晃动；key 不变，兼容存量数据；
-2. 运镜池首位（`pool[0]`）是 LLM 给错时的回退默认位，必须放该功能最稳的机位；
-3. 技术段尾缀（`PROMPT_TECHNICAL_TAIL`）全局注入稳定器语义，构成每镜必带的兜底；
-4. 剧本与拆镜两处 LLM 提示词带「运镜稳定硬约束」，约束模型自产的 promptGuidance / visualPrompt 措辞。
+**运镜执行规范（v2.8.2 · 摄影组专业纪律）**：要排除的是「意外抖动」，不是「有意图的运镜」。手持、甩镜、荷兰倾斜是正当的电影技法（专业语义保留），但 AI 视频基模分不清「风格化运动」与「低质量抖动」，因此运镜 prompt 必须写明三要素——运动语义 + 执行设备 + 受控度：
+1. 每个机位声明执行设备或受控限定：推拉走轨道（dolly）、升降/俯拍用摇臂（crane/jib）、环绕用稳定器（steadicam/gimbal）、固定/横摇用三脚架（locked-off tripod）；手持 = controlled handheld（受控手持、幅度 subtle）、甩镜 = precise whip pan（单条完成、受控运动模糊）；
+2. 运镜池首位（`pool[0]`，LLM 给错时的回退默认位）必须是通用设备执行机位（push/pull），风格化机位（手持/甩镜）保留在池中后位，服务于 buildup 等需要临场感的场次；
+3. 技术段尾缀（`PROMPT_TECHNICAL_TAIL`）全局注入 `intentional camera movement, steady controlled framing`——用电影摄影行话区分「有意图的调度」与「意外抖动」，且不与风格化机位打架；
+4. 剧本与拆镜两处 LLM 提示词带「运镜执行规范」硬约束，并遵守 180° 轴线规则（正反打不得跳轴）；
+5. 景别（SHOT_SIZES 中文行话）经 `SHOT_SIZE_PROMPTS` 确定性映射为英文电影术语（extreme long shot / close-up / extreme close-up…）后才进提示词——中文景别直拼英文 prompt 基模无法消费。
 
 ### 7.3 异步任务管线（C4/C5）
 
