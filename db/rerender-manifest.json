@@ -1,0 +1,220 @@
+{
+  "generatedAt": "2026-11-12T14:18:50.198Z",
+  "disciplineCutoff": "2026-11-12T04:50:42Z (commit e658549 运镜防抖纪律)",
+  "note": "执行单仅在本工具输出，不自动触发任何生成通道；配额窗口打开后由人工执行",
+  "projects": [
+    {
+      "projectId": "cmwdmpceu0002q5920odaycw5",
+      "title": "战神逆袭 · 演示第一集",
+      "series": "战神逆袭 · 第 1 集",
+      "clips": [
+        {
+          "clipId": "cmwdmpcf1000hq592e3bb9boc",
+          "order": 0,
+          "name": "1-1 寿宴全景",
+          "status": "ready",
+          "cameraMovement": "pan_horizontal",
+          "styledCam": null,
+          "shotSize": "远景",
+          "promptState": "up_to_date",
+          "mediaVintage": "pre_discipline_render",
+          "mediaMtime": "2026-11-11T00:21:14.000Z",
+          "mediaUrl": "/assets/clip_cmwau9p4n013vpziac1ro9t3k.mp4",
+          "reanchored": false,
+          "rerenderNeeded": true
+        },
+        {
+          "clipId": "cmwdmpcf2000jq5926b6wphb2",
+          "order": 1,
+          "name": "1-2 撕婚书特写",
+          "status": "ready",
+          "cameraMovement": "static_close",
+          "styledCam": null,
+          "shotSize": "特写",
+          "promptState": "up_to_date",
+          "mediaVintage": "pre_discipline_render",
+          "mediaMtime": "2026-11-11T00:12:38.000Z",
+          "mediaUrl": "/assets/clip_cmwau9ios012bpziawgghhn5p.mp4",
+          "reanchored": false,
+          "rerenderNeeded": true
+        },
+        {
+          "clipId": "cmwdmpcf3000lq592ci9urtmg",
+          "order": 2,
+          "name": "1-3 泼汤羞辱",
+          "status": "ready",
+          "cameraMovement": "handheld",
+          "styledCam": "受控技法（重渲染版自带限定词）",
+          "shotSize": "近景",
+          "promptState": "up_to_date",
+          "mediaVintage": "pre_discipline_render",
+          "mediaMtime": "2026-11-11T01:11:43.000Z",
+          "mediaUrl": "/assets/clip_cmwau9p4m013tpziadjo1qply.mp4",
+          "reanchored": false,
+          "rerenderNeeded": true
+        },
+        {
+          "clipId": "cmwdmpcf5000nq592cgb4jgb2",
+          "order": 3,
+          "name": "1-4 眼神转冷",
+          "status": "ready",
+          "cameraMovement": "push",
+          "styledCam": null,
+          "shotSize": "大特写",
+          "promptState": "up_to_date",
+          "mediaVintage": "pre_discipline_render",
+          "mediaMtime": "2026-11-11T03:41:47.000Z",
+          "mediaUrl": "/assets/clip_cmwbgvrpk0013phtee29x7b5g.mp4",
+          "reanchored": false,
+          "rerenderNeeded": true
+        },
+        {
+          "clipId": "cmwdmpcf7000pq5928cw03sml",
+          "order": 4,
+          "name": "2-5 大门轰开",
+          "status": "ready",
+          "cameraMovement": "whip_pan",
+          "styledCam": "受控技法（重渲染版自带限定词）",
+          "shotSize": "全景",
+          "promptState": "up_to_date",
+          "mediaVintage": "pre_discipline_render",
+          "mediaMtime": "2026-11-11T00:51:08.000Z",
+          "mediaUrl": "/assets/clip_cmwau9ioq0127pziatonygilo.mp4",
+          "reanchored": false,
+          "rerenderNeeded": true
+        },
+        {
+          "clipId": "cmwdmpcf8000rq592co8pavqy",
+          "order": 5,
+          "name": "2-6 统帅跪呈",
+          "status": "ready",
+          "cameraMovement": "low_angle_tracking",
+          "styledCam": null,
+          "shotSize": "中景",
+          "promptState": "up_to_date",
+          "mediaVintage": "pre_discipline_render",
+          "mediaMtime": "2026-11-11T02:31:33.000Z",
+          "mediaUrl": "/assets/clip_cmwbgvzka002rphtex72mwy50.mp4",
+          "reanchored": false,
+          "rerenderNeeded": true
+        },
+        {
+          "clipId": "cmwdmpcf9000tq592huhqmyny",
+          "order": 6,
+          "name": "2-7 万人齐呼",
+          "status": "ready",
+          "cameraMovement": "top_down",
+          "styledCam": null,
+          "shotSize": "远景",
+          "promptState": "up_to_date",
+          "mediaVintage": "pre_discipline_render",
+          "mediaMtime": "2026-11-11T03:31:04.000Z",
+          "mediaUrl": "/assets/clip_cmwbgvuzr0029phtel4bq33hm.mp4",
+          "reanchored": false,
+          "rerenderNeeded": true
+        },
+        {
+          "clipId": "cmwdmpcfa000vq592vvc1h6u2",
+          "order": 7,
+          "name": "2-8 酒杯坠地",
+          "status": "ready",
+          "cameraMovement": "static_close",
+          "styledCam": null,
+          "shotSize": "特写",
+          "promptState": "up_to_date",
+          "mediaVintage": "pre_discipline_render",
+          "mediaMtime": "2026-11-11T00:42:53.000Z",
+          "mediaUrl": "/assets/clip_cmwau9p4o013xpziak6h4u629.mp4",
+          "reanchored": false,
+          "rerenderNeeded": true
+        },
+        {
+          "clipId": "cmwdmpcfb000xq592nzq1m42z",
+          "order": 8,
+          "name": "3-9 环视全场",
+          "status": "ready",
+          "cameraMovement": "orbit",
+          "styledCam": null,
+          "shotSize": "中景",
+          "promptState": "up_to_date",
+          "mediaVintage": "pre_discipline_render",
+          "mediaMtime": "2026-11-11T00:30:52.000Z",
+          "mediaUrl": "/assets/clip_cmwaua0wn014xpziav69pya92.mp4",
+          "reanchored": false,
+          "rerenderNeeded": true
+        },
+        {
+          "clipId": "cmwdmpcfc000zq592riohqxx2",
+          "order": 9,
+          "name": "3-10 意味深长一笑",
+          "status": "pending",
+          "cameraMovement": "push",
+          "styledCam": null,
+          "shotSize": "大特写",
+          "promptState": "up_to_date",
+          "mediaVintage": "no_local_media",
+          "mediaMtime": null,
+          "mediaUrl": null,
+          "reanchored": false,
+          "rerenderNeeded": false
+        }
+      ]
+    }
+  ],
+  "plan": [
+    {
+      "project": "战神逆袭 · 演示第一集",
+      "clip": "1-1 寿宴全景",
+      "clipId": "cmwdmpcf1000hq592e3bb9boc",
+      "command": "curl -s -X POST http://localhost:3000/api/projects/cmwdmpceu0002q5920odaycw5/tasks -H 'Content-Type: application/json' -d '{\"kind\":\"video\",\"clipId\":\"cmwdmpcf1000hq592e3bb9boc\"}'"
+    },
+    {
+      "project": "战神逆袭 · 演示第一集",
+      "clip": "1-2 撕婚书特写",
+      "clipId": "cmwdmpcf2000jq5926b6wphb2",
+      "command": "curl -s -X POST http://localhost:3000/api/projects/cmwdmpceu0002q5920odaycw5/tasks -H 'Content-Type: application/json' -d '{\"kind\":\"video\",\"clipId\":\"cmwdmpcf2000jq5926b6wphb2\"}'"
+    },
+    {
+      "project": "战神逆袭 · 演示第一集",
+      "clip": "1-3 泼汤羞辱",
+      "clipId": "cmwdmpcf3000lq592ci9urtmg",
+      "command": "curl -s -X POST http://localhost:3000/api/projects/cmwdmpceu0002q5920odaycw5/tasks -H 'Content-Type: application/json' -d '{\"kind\":\"video\",\"clipId\":\"cmwdmpcf3000lq592ci9urtmg\"}'"
+    },
+    {
+      "project": "战神逆袭 · 演示第一集",
+      "clip": "1-4 眼神转冷",
+      "clipId": "cmwdmpcf5000nq592cgb4jgb2",
+      "command": "curl -s -X POST http://localhost:3000/api/projects/cmwdmpceu0002q5920odaycw5/tasks -H 'Content-Type: application/json' -d '{\"kind\":\"video\",\"clipId\":\"cmwdmpcf5000nq592cgb4jgb2\"}'"
+    },
+    {
+      "project": "战神逆袭 · 演示第一集",
+      "clip": "2-5 大门轰开",
+      "clipId": "cmwdmpcf7000pq5928cw03sml",
+      "command": "curl -s -X POST http://localhost:3000/api/projects/cmwdmpceu0002q5920odaycw5/tasks -H 'Content-Type: application/json' -d '{\"kind\":\"video\",\"clipId\":\"cmwdmpcf7000pq5928cw03sml\"}'"
+    },
+    {
+      "project": "战神逆袭 · 演示第一集",
+      "clip": "2-6 统帅跪呈",
+      "clipId": "cmwdmpcf8000rq592co8pavqy",
+      "command": "curl -s -X POST http://localhost:3000/api/projects/cmwdmpceu0002q5920odaycw5/tasks -H 'Content-Type: application/json' -d '{\"kind\":\"video\",\"clipId\":\"cmwdmpcf8000rq592co8pavqy\"}'"
+    },
+    {
+      "project": "战神逆袭 · 演示第一集",
+      "clip": "2-7 万人齐呼",
+      "clipId": "cmwdmpcf9000tq592huhqmyny",
+      "command": "curl -s -X POST http://localhost:3000/api/projects/cmwdmpceu0002q5920odaycw5/tasks -H 'Content-Type: application/json' -d '{\"kind\":\"video\",\"clipId\":\"cmwdmpcf9000tq592huhqmyny\"}'"
+    },
+    {
+      "project": "战神逆袭 · 演示第一集",
+      "clip": "2-8 酒杯坠地",
+      "clipId": "cmwdmpcfa000vq592vvc1h6u2",
+      "command": "curl -s -X POST http://localhost:3000/api/projects/cmwdmpceu0002q5920odaycw5/tasks -H 'Content-Type: application/json' -d '{\"kind\":\"video\",\"clipId\":\"cmwdmpcfa000vq592vvc1h6u2\"}'"
+    },
+    {
+      "project": "战神逆袭 · 演示第一集",
+      "clip": "3-9 环视全场",
+      "clipId": "cmwdmpcfb000xq592nzq1m42z",
+      "command": "curl -s -X POST http://localhost:3000/api/projects/cmwdmpceu0002q5920odaycw5/tasks -H 'Content-Type: application/json' -d '{\"kind\":\"video\",\"clipId\":\"cmwdmpcfb000xq592nzq1m42z\"}'"
+    }
+  ]
+}
