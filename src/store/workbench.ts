@@ -159,9 +159,6 @@ function fallbackGenre(detail: ProjectDetail): GenrePreset {
     hookTactic: detail.genre.hookTactic,
     musicMood: detail.genre.musicMood,
     tonePrompt: detail.genre.tonePrompt,
-    gradient: "from-red-600 via-rose-600 to-amber-500",
-    ring: "ring-red-500/70",
-    text: "text-red-400",
     sampleSynopsis: detail.synopsis,
   };
 }

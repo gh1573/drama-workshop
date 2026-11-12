@@ -16,7 +16,9 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]",
+      /* v2.6 VLM 复审 P0：toast 从右下移右上——右下是成片下载/重新合成等关键操作区，
+         弹层遮挡操作栏比短暂遮顶栏（z-40，toast z-[100] 暂时覆盖）代价更高 */
+      "fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:right-0 sm:bottom-auto sm:flex-col md:max-w-[420px]",
       className
     )}
     {...props}

@@ -50,6 +50,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { GenrePanel } from "@/components/workbench/genre-panel";
+import { PipelineRail } from "@/components/workbench/pipeline-rail";
 import { SynopsisPanel } from "@/components/workbench/synopsis-panel";
 import { ModelConfigPanel } from "@/components/workbench/model-config-panel";
 import { ActCard } from "@/components/workbench/act-card";
@@ -243,7 +244,7 @@ export default function Home() {
                   variant="outline"
                   className="hidden border-amber-500/40 text-amber-400 sm:inline-flex"
                 >
-                  DRAMA STUDIO v2.5.2
+                  DRAMA STUDIO v2.6.0
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -478,14 +479,12 @@ export default function Home() {
                         1080p
                       </span>
                     </div>
-                    {/* §7.13：REC 呼吸点让预览从孤立装饰变为「产品在工作」的语境 */}
+                    {/* v2.6 VLM 复审：REC 呼吸点语义混杂（预览 mockup 非真录制态）
+                        → 静态 PREVIEW 标签，录制态语义只留给真实运行状态 */}
                     <div className="absolute right-2.5 top-5 flex items-center gap-1">
-                      <span className="relative flex h-1.5 w-1.5">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
-                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
-                      </span>
-                      <span className="font-mono text-[9px] font-bold tracking-widest text-red-400">
-                        REC
+                      <span className="h-1.5 w-1.5 rounded-full bg-white/30" />
+                      <span className="font-mono text-[9px] font-bold tracking-widest text-white/50">
+                        PREVIEW
                       </span>
                     </div>
                     <div className="relative flex flex-1 flex-col items-center justify-center gap-2.5">
@@ -536,15 +535,17 @@ export default function Home() {
                       <div
                         key={v.title}
                         className={`flex items-start gap-3 rounded-xl border p-3.5 ${
+                          /* v2.6 VLM 复审：accent 卡从「描边微亮」升级为唯一实底图标位 +
+                              加重描边/底色，与普通功能行拉开明显层级（原几乎等权被指 P0） */
                           v.accent
-                            ? "border-amber-500/30 bg-amber-500/[0.06]"
+                            ? "border-amber-500/50 bg-amber-500/10 shadow-lg shadow-amber-500/10"
                             : "border-border/60 bg-card"
                         }`}
                       >
                         <span
                           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
                             v.accent
-                              ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                              ? "border-amber-400/40 bg-amber-500 text-amber-950"
                               : "border-border/60 bg-secondary/50 text-muted-foreground"
                           }`}
                         >
@@ -554,7 +555,9 @@ export default function Home() {
                           <p className={`text-xs font-semibold ${v.accent ? "text-amber-300" : ""}`}>
                             {v.title}
                           </p>
-                          <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                          <p className={`mt-0.5 text-[11px] leading-relaxed ${
+                            v.accent ? "text-foreground/80" : "text-muted-foreground"
+                          }`}>
                             {v.desc}
                           </p>
                         </div>
@@ -577,7 +580,7 @@ export default function Home() {
                     <Users className="h-3 w-3 text-amber-400/80" />
                     {Object.keys(CREW_ROLES).length} 个剧组岗位
                   </span>
-                  <span className="ml-auto font-mono">v2.5 · 转场矩阵 · 全片调色 · 响度归一</span>
+                  <span className="ml-auto font-mono">DRAMA STUDIO v2.6</span>
                 </div>
               </section>
             )}
@@ -586,7 +589,14 @@ export default function Home() {
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
+                className="space-y-3"
               >
+                {/* v2.6：五阶段导轨常驻页签上方——生产进度即导航（详见 pipeline-rail.tsx） */}
+                <PipelineRail
+                  run={activeRun}
+                  session={session}
+                  onNavigate={setTab}
+                />
                 <Tabs
                   value={tab}
                   onValueChange={(v) => setTab(v as WorkbenchTab)}
@@ -597,7 +607,7 @@ export default function Home() {
                         绿点加 tooltip 说明成片就绪语义（VLM 审计 P1/P2） */}
                     <TabsTrigger
                       value="cut"
-                      className="relative gap-1.5 px-3 text-xs after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
+                      className="relative gap-1.5 px-3 text-xs font-medium data-[state=active]:font-bold after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
                     >
                       <Film className="h-3.5 w-3.5" />
                       成片
@@ -610,28 +620,28 @@ export default function Home() {
                     </TabsTrigger>
                     <TabsTrigger
                       value="script"
-                      className="relative gap-1.5 px-3 text-xs after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
+                      className="relative gap-1.5 px-3 text-xs font-medium data-[state=active]:font-bold after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
                     >
                       <Layers className="h-3.5 w-3.5" />
                       分镜剧本
                     </TabsTrigger>
                     <TabsTrigger
                       value="assets"
-                      className="relative gap-1.5 px-3 text-xs after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
+                      className="relative gap-1.5 px-3 text-xs font-medium data-[state=active]:font-bold after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
                     >
                       <Users className="h-3.5 w-3.5" />
                       资产定妆
                     </TabsTrigger>
                     <TabsTrigger
                       value="rhythm"
-                      className="relative gap-1.5 px-3 text-xs after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
+                      className="relative gap-1.5 px-3 text-xs font-medium data-[state=active]:font-bold after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
                     >
                       <Gauge className="h-3.5 w-3.5" />
                       节奏轨道
                     </TabsTrigger>
                     <TabsTrigger
                       value="pipeline"
-                      className="relative gap-1.5 px-3 text-xs after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
+                      className="relative gap-1.5 px-3 text-xs font-medium data-[state=active]:font-bold after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
                     >
                       <Workflow className="h-3.5 w-3.5" />
                       剧组进程
@@ -641,26 +651,41 @@ export default function Home() {
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="cut" className="mt-0 space-y-4">
+                  <TabsContent
+                    value="cut"
+                    className="mt-0 space-y-4 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-200"
+                  >
                     <FinalCutPanel />
                   </TabsContent>
 
-                  <TabsContent value="script" className="mt-0 space-y-5">
+                  <TabsContent
+                    value="script"
+                    className="mt-0 space-y-5 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-200"
+                  >
                     {session.beats.map((beat, idx) => (
                       <ActCard key={beat.index} beat={beat} delay={idx * 0.08} />
                     ))}
                     <TimelinePanel />
                   </TabsContent>
 
-                  <TabsContent value="assets" className="mt-0">
+                  <TabsContent
+                    value="assets"
+                    className="mt-0 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-200"
+                  >
                     <AssetLibraryPanel />
                   </TabsContent>
 
-                  <TabsContent value="rhythm" className="mt-0">
+                  <TabsContent
+                    value="rhythm"
+                    className="mt-0 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-200"
+                  >
                     <RhythmPanel />
                   </TabsContent>
 
-                  <TabsContent value="pipeline" className="mt-0">
+                  <TabsContent
+                    value="pipeline"
+                    className="mt-0 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-200"
+                  >
                     <CrewPipelinePanel />
                   </TabsContent>
                 </Tabs>

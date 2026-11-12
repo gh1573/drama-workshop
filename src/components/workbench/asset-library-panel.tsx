@@ -348,7 +348,9 @@ export function AssetLibraryPanel() {
                 ((editing?.refCount ?? 0) > 0 && !confirmUnfreeze)
               }
               onClick={handleSaveEdit}
-              className="bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:opacity-90"
+              /* §7.13 v2.6：保存类主操作统一 amber 实底（原 emerald→teal 渐变越出
+                 品牌色域，且绿色语义应保留给状态徽标）——与「保存到项目库」同语言 */
+              className="bg-amber-500 font-bold text-amber-950 shadow-lg shadow-amber-500/20 hover:bg-amber-400"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
               保存锚点

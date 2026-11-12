@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
   PROJECT_STATUS,
+  BRAND_GRADIENT,
   buildMarkdown,
   downloadFile,
   toExportData,
@@ -54,14 +55,19 @@ export function ProjectInfoCard() {
   return (
     <div className="space-y-3 rounded-xl border bg-card p-5">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge className={`gap-1.5 border-0 bg-gradient-to-r ${session.genre.gradient} text-white`}>
+        {/* §7.13 v2.6：题材徽标与全站主 CTA 同源的唯一品牌渐变 */}
+        <Badge className={`gap-1.5 border-0 bg-gradient-to-r ${BRAND_GRADIENT} text-white`}>
           <GenreIcon className="h-3 w-3" />
           {session.genre.name}
         </Badge>
         <Badge variant="outline">{session.genre.badge}</Badge>
-        <Badge variant="outline" className="border-amber-500/40 text-amber-400">
-          {PROJECT_STATUS[session.status]}
-        </Badge>
+        {/* v2.6 VLM 复审：finalVideoUrl 存在时项目状态徽标让位（「制作中」与
+            「成片已合成」同屏语义冲突）——成片徽标即最强事实 */}
+        {!session.finalVideoUrl && (
+          <Badge variant="outline" className="border-amber-500/40 text-amber-400">
+            {PROJECT_STATUS[session.status]}
+          </Badge>
+        )}
         {/* §7.13 v2.5.2：成片产出为关键状态而非可调参数，从参数格上提至标题行
             （VLM 三轮复审反复指出状态与参数混排层级不清） */}
         <Badge
@@ -77,8 +83,9 @@ export function ProjectInfoCard() {
       </div>
 
       <p className="text-sm font-semibold">{session.title}</p>
+      {/* v2.6 VLM 复审：行内标签从 amber 降为中性 section 标签（原标签权重高于正文形成倒挂） */}
       <p className="text-sm leading-relaxed text-foreground/90">
-        <span className="font-semibold text-amber-400">梗概：</span>
+        <span className="font-semibold text-muted-foreground">梗概 · </span>
         {session.synopsis}
       </p>
 
@@ -96,8 +103,11 @@ export function ProjectInfoCard() {
             value: session.modelConfig.enablePromptEnhance ? "开启" : "关闭",
             tone: session.modelConfig.enablePromptEnhance ? "on" : "off",
           },
-          { label: "分镜幕数", value: `${session.beats.length} 幕` },
-          { label: "镜头片段", value: `${session.clips.length} 个` },
+          /* v2.6 VLM 复审：原 7 格 2+2+2+1 孤行断裂栅格——合并为一格收口成 2×3 */
+          {
+            label: "分镜规模",
+            value: `${session.beats.length} 幕 · ${session.clips.length} 镜`,
+          },
         ].map((s) => (
           <div
             key={s.label}

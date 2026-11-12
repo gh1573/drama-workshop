@@ -16,9 +16,6 @@ export const GENRES: GenrePreset[] = [
     musicMood: "重低音震荡战鼓、霸气交响乐渐强、金属拔剑音效",
     tonePrompt:
       "high-contrast dramatic cinema, intense confrontation, low angle hero shot, cinematic lighting, gold and obsidian tones, high tension facial micro-expressions",
-    gradient: "from-red-600 via-rose-600 to-amber-500",
-    ring: "ring-red-500/70",
-    text: "text-red-400",
     sampleSynopsis:
       "赘婿隐忍三年受尽欺凌，反派当众撕碎婚书泼菜汤；主角冷笑亮出信物，顶级统帅带十万将士破门而入跪地齐呼龙王！",
   },
@@ -33,9 +30,6 @@ export const GENRES: GenrePreset[] = [
     musicMood: "轻快钢琴与弦乐交织、心动瞬间八音盒音效、华丽转场重拍",
     tonePrompt:
       "warm romantic cinema, soft golden hour lighting, luxury penthouse aesthetic, gentle bokeh, champagne and blush tones, subtle smile close-ups",
-    gradient: "from-rose-400 via-pink-500 to-amber-400",
-    ring: "ring-rose-400/70",
-    text: "text-rose-300",
     sampleSynopsis:
       "上门女婿被岳母当众羞辱让离婚，妻子攥紧他的手说要一起租房过苦日子；他心口一热，低头按下手机静音键——屏幕上还亮着集团股东大会的连线请求。",
   },
@@ -50,9 +44,6 @@ export const GENRES: GenrePreset[] = [
     musicMood: "空灵女声吟唱渐入、心跳音效渐强、时钟倒转混响",
     tonePrompt:
       "moody revenge thriller, cold desaturated grade with crimson accents, rain-soaked night streets, dramatic rim lighting, flashback cross-fade aesthetic, piercing gaze close-ups",
-    gradient: "from-slate-500 via-red-700 to-rose-500",
-    ring: "ring-red-600/70",
-    text: "text-rose-400",
     sampleSynopsis:
       "被闺蜜与未婚夫联手推下天台，睁眼却重生回大学开学日；她攥紧书包带走向人群中的两人，微笑着说出她们此刻还没做过、却注定败露的那件事。",
   },
@@ -67,9 +58,6 @@ export const GENRES: GenrePreset[] = [
     musicMood: "低频弦乐持续压迫、突然静默留白、玻璃碎裂与耳语声",
     tonePrompt:
       "neo-noir mystery thriller, desaturated teal and slate palette, harsh chiaroscuro shadows, voyeuristic framing, unreliable narrator tension, extreme detail insert shots",
-    gradient: "from-zinc-500 via-teal-600 to-emerald-500",
-    ring: "ring-teal-500/70",
-    text: "text-teal-300",
     sampleSynopsis:
       "刑警队长在结案庆功宴上举杯致谢，角落里他口袋中的匿名手机突然震动；屏幕只有一行字：物证袋 07 号的 DNA 结果，和你苦追十年的人不匹配——他握杯的手停在半空，脸色骤变。",
   },
@@ -84,9 +72,6 @@ export const GENRES: GenrePreset[] = [
     musicMood: "古筝与编钟混响、战马嘶鸣、朝堂钟声回荡",
     tonePrompt:
       "epic period drama, imperial palace golden interiors, silk robes flowing, candlelit court intrigue, misty mountain vistas, majestic crane shots",
-    gradient: "from-amber-500 via-yellow-600 to-stone-500",
-    ring: "ring-amber-500/70",
-    text: "text-amber-300",
     sampleSynopsis:
       "现代建筑设计师在机房加班时触电，醒来成了冷宫废妃；她用炭笔在墙上画出机关结构图，三日后皇帝深夜微服到访，看见她把整座皇城的暗道网络画了个通透。",
   },
@@ -101,9 +86,6 @@ export const GENRES: GenrePreset[] = [
     musicMood: "电子节拍混搭嘻哈、钞票翻动音效、超跑引擎轰鸣",
     tonePrompt:
       "glossy aspirational lifestyle cinema, neon-lit city skylines, luxury car reflections, champagne gold highlights, slow-motion wealth flex shots, storefront glass glamour",
-    gradient: "from-yellow-500 via-amber-500 to-orange-600",
-    ring: "ring-amber-400/70",
-    text: "text-yellow-300",
     sampleSynopsis:
       "外卖员穿着骑手服给前女友的订婚宴送最后一单，被保安拦在酒店旋转门外；他低头看了眼手机余额，转身拨通管家电话：把这家酒店连着楼顶停机坪，一起买下来。",
   },
@@ -118,9 +100,6 @@ export const GENRES: GenrePreset[] = [
     musicMood: "大提琴沉郁主旋律、电梯开门音效、高跟鞋走廊回响",
     tonePrompt:
       "sleek corporate romance, glass office skyline views, monochrome suits with crimson accents, rain on window intimacy, elevator tension close-ups, slow push-in power framing",
-    gradient: "from-stone-600 via-neutral-700 to-red-600",
-    ring: "ring-stone-400/70",
-    text: "text-stone-300",
     sampleSynopsis:
       "为了救回被抵押的公司，她在家族联姻协议上签下自己的名字；电梯门打开的瞬间，传闻中从不露面的执行总裁弯腰拾起她的笔，说合同第七条——婚后他亲自拟定。",
   },
@@ -135,9 +114,6 @@ export const GENRES: GenrePreset[] = [
     musicMood: "电音混搭军鼓、消息提示音连响、全场哗然人声鼎沸",
     tonePrompt:
       "high-energy identity reveal cinema, medical lab and esports stage mixed aesthetics, dramatic spotlight reveals, crisp detail insert shots, crowd reaction wide shots",
-    gradient: "from-violet-600 via-fuchsia-500 to-rose-500",
-    ring: "ring-fuchsia-400/70",
-    text: "text-fuchsia-300",
     sampleSynopsis:
       "电竞战队垫底替补被解约当晚，直播间弹幕刷满嘲讽；镜头无意扫过她房间墙上的合影——照片里她穿着国家联队队服，站在世界赛领奖台最高处，全网瞬间安静了。",
   },

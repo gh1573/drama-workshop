@@ -42,6 +42,7 @@ import {
   type RunStageInfo,
 } from "@/lib/drama";
 import { useWorkbench } from "@/store/workbench";
+import { stageArtifact } from "./pipeline-rail";
 
 /**
  * AI 剧组流水线面板 —— 「全组开机」的生产观测中心。
@@ -138,9 +139,7 @@ export function CrewPipelinePanel() {
             待开机
           </Badge>
         )}
-        <span className="ml-auto text-xs text-muted-foreground">
-          制片 → 编剧 → 选角 → 导演 → 场记 → 后期
-        </span>
+        {/* v2.6 VLM 复审：删去「制片 → 编剧 → …」文字链——与下方阶段卡信息重复 */}
       </div>
 
       {/* —— 进度条 —— */}
@@ -159,6 +158,10 @@ export function CrewPipelinePanel() {
           const stage = run?.stages.find((s) => s.key === def.key);
           const status = stage?.status ?? "pending";
           const roleName = CREW_ROLES[def.role]?.name ?? def.role;
+          /* v2.6：已完成阶段展示产物计数（与页签上方导轨同源 stageArtifact，禁止两处口径漂移）
+             ——抽象阶段变成可验证产出 */
+          const artifact =
+            status === "succeeded" ? stageArtifact(def.key, session) : null;
           return (
             <div
               key={def.key}
@@ -174,7 +177,12 @@ export function CrewPipelinePanel() {
             >
               <div className="flex items-center gap-1.5">
                 <StageIcon status={status} />
-                <p className="truncate text-xs font-bold">{def.name}</p>
+                <p className="min-w-0 flex-1 truncate text-xs font-bold">{def.name}</p>
+                {artifact && (
+                  <span className="shrink-0 font-mono text-[10px] leading-none text-muted-foreground">
+                    {artifact}
+                  </span>
+                )}
               </div>
               {/* §7.13 色彩纪律：岗位色降级为数据层属性，卡片渲染统一中性 */}
               <p className="text-[10px] text-muted-foreground">{roleName}</p>
@@ -189,28 +197,47 @@ export function CrewPipelinePanel() {
       </div>
 
       {/* —— 剧组日志 —— */}
-      {run && journal.length > 0 && (
+      {run && (
         <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-lg border border-border/60 bg-secondary/20 p-3">
-          {journal.map((entry, i) => {
-            /* §7.13 P0：journal 为 DB JSON 直读，role 键可能失效/缺失/脏数据 —— 防御式降级，禁止裸取 */
-            const roleName = CREW_ROLES[entry.role as keyof typeof CREW_ROLES]?.name ?? "剧组";
-            return (
-              <div key={`${entry.at}-${i}`} className="flex items-start gap-2 text-xs">
-                <span className="inline-block w-[52px] shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/70">
-                  {clockOf(entry.at)}
-                </span>
-                <span className="shrink-0 font-semibold text-foreground/75">
-                  {roleName}
-                </span>
-                <span className="min-w-0 flex-1 text-foreground/85">{entry.message}</span>
-              </div>
-            );
-          })}
+          {journal.length === 0 ? (
+            /* v2.6：刚开机 journal 为空时的防呆占位（原空白容器像渲染失败） */
+            <p className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+              剧组动员中，第一帧日志即将就位…
+            </p>
+          ) : (
+            journal.map((entry, i) => {
+              /* §7.13 P0：journal 为 DB JSON 直读，role 键可能失效/缺失/脏数据 —— 防御式降级，禁止裸取 */
+              const roleName =
+                CREW_ROLES[entry.role as keyof typeof CREW_ROLES]?.name ?? "剧组";
+              return (
+                <div key={`${entry.at}-${i}`} className="flex items-start gap-2 text-xs">
+                  <span className="inline-block w-[52px] shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/70">
+                    {clockOf(entry.at)}
+                  </span>
+                  {/* v2.6 VLM 复审：角色词中性 chip 定宽成列，日志形成可纵向扫描的「角色列」 */}
+                  <span className="inline-block w-12 shrink-0 truncate rounded bg-secondary/70 px-1 text-center text-[10px] font-semibold leading-5 text-foreground/75">
+                    {roleName}
+                  </span>
+                  <span className="min-w-0 flex-1 text-foreground/85">{entry.message}</span>
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 
       {/* —— 操作区 —— */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="space-y-2.5">
+        {/* v2.6 VLM 复审：就绪说明独立成行（原与危险按钮同行 ml-auto 混排，
+            危险 CTA 视觉分量不足且两信息无分组关系） */}
+        {succeeded && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+            制作包已就绪：分镜表 · 资产定妆 · 镜头提示词 · 三轨 · 能量曲线，可导出交付
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
         {!run || succeeded ? (
           run ? (
             /* §7.13 v2.5.2：已有成片的重开 = 破坏性重写 → 危险描边 + 二次确认
@@ -293,27 +320,21 @@ export function CrewPipelinePanel() {
             全组拍摄中，请勿离开本页（断线重进可自动恢复观测）
           </p>
         )}
-        {succeeded && (
-          /* §7.13 色彩收敛：绿色仅保留给状态徽标，说明文字回归中性；
-             ml-auto 与左侧危险按钮拉开语义分组（VLM 终评 P0：危险操作与就绪提示过近） */
-          <p className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-            制作包已就绪：分镜表 · 资产定妆 · 镜头提示词 · 三轨 · 能量曲线，可导出交付
-          </p>
-        )}
         {failed && run?.error && (
           <p className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-rose-400">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate" title={run.error}>{run.error}</span>
           </p>
         )}
+        </div>
       </div>
 
       {/* —— 渲染任务中心 —— */}
       {tasks.length > 0 && (
         <div className="space-y-2 border-t border-border/60 pt-3">
           <div className="flex items-center gap-2">
-            <Video className="h-3.5 w-3.5 text-sky-400" />
+            {/* v2.6 VLM 复审：任务类型图标统一中性——颜色只区分状态（徽标），不区分类型 */}
+            <Video className="h-3.5 w-3.5 text-muted-foreground" />
             <p className="text-xs font-bold">渲染任务中心</p>
             {activeTasks.length > 0 && (
               <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400">
@@ -337,9 +358,9 @@ export function CrewPipelinePanel() {
                   >
                     <span className="min-w-0 flex-1 truncate font-semibold">
                       {task.kind === "portrait" ? (
-                        <Camera className="mr-1 inline h-3 w-3 text-amber-400" />
+                        <Camera className="mr-1 inline h-3 w-3 text-muted-foreground" />
                       ) : (
-                        <Video className="mr-1 inline h-3 w-3 text-sky-400" />
+                        <Video className="mr-1 inline h-3 w-3 text-muted-foreground" />
                       )}
                       {kind.label} · {targetName}
                     </span>

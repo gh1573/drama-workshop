@@ -469,16 +469,24 @@ export function FinalCutPanel() {
           </>
         ) : (
           <>
-            <span className="text-xs text-muted-foreground">
-              未设置 · 上传后合成时循环铺底并自动闪避对白
+            {/* v2.6 VLM 复审：「未设置」显式中性徽标，说明降为一句话（原警示语义混在灰文案里） */}
+            <Badge variant="outline" className="text-[10px] text-muted-foreground">
+              BGM 未设置
+            </Badge>
+            <span
+              className="text-xs text-muted-foreground/80"
+              title="上传后合成时循环铺底并自动闪避对白"
+            >
+              合成时循环铺底 · 自动闪避对白
             </span>
             <div className="ml-auto">
+              {/* v2.6 VLM 复审：BGM 上传降为中性描边（amber 实底/tint 仅留给保存类主 CTA） */}
               <Button
                 variant="outline"
                 size="sm"
                 disabled={bgmUploading}
                 onClick={() => bgmInputRef.current?.click()}
-                className="h-7 border-amber-500/40 bg-amber-500/10 px-2.5 text-xs font-semibold text-amber-400 hover:bg-amber-500/20"
+                className="h-7 border-border/60 px-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
               >
                 {bgmUploading ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -550,10 +558,9 @@ export function FinalCutPanel() {
         {finalVideoUrl && (
           <div className="flex flex-wrap items-center justify-center gap-2">
             <a href={finalVideoUrl} download target="_blank" rel="noreferrer">
-              <Button
-                variant="outline"
-                className="border-emerald-500/40 bg-emerald-500/10 font-semibold text-emerald-400 hover:bg-emerald-500/20"
-              >
+              {/* v2.6 VLM 复审：下载成片 = 全链路终点主操作，从 emerald 描边升级为
+                  品牌渐变实底（绿色仅限状态徽标，不承载操作） */}
+              <Button className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 font-bold text-white shadow-lg shadow-red-600/25 hover:opacity-90">
                 <Download className="h-4 w-4" />
                 下载成片 MP4
               </Button>
@@ -571,8 +578,9 @@ export function FinalCutPanel() {
               )}
               镜头有改动？重新合成
             </Button>
-            <p className="flex items-center gap-1 text-xs text-emerald-400">
-              <BadgeCheck className="h-3.5 w-3.5" />
+            {/* v2.6：绿色仅保留给 BadgeCheck 图标，说明文字回归中性（§7.13 语义色仅限状态） */}
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" />
               片头卡 + 转场 + 调色 + 字幕烧录 + 配音混音{bgm ? " + BGM" : ""} 已合入成片
             </p>
           </div>

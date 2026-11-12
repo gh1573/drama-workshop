@@ -19,13 +19,18 @@ export interface GenrePreset {
   musicMood: string;
   /** 英文影调 Prompt（AI 视频风格锚点） */
   tonePrompt: string;
-  /** UI 点缀色 */
-  gradient: string;
-  ring: string;
-  text: string;
   /** 示例梗概（一键填充） */
   sampleSynopsis: string;
 }
+
+/**
+ * §7.13 唯一品牌渐变（v2.6 收口）：全站仅此一条彩色渐变，
+ * 用于 logo / 主 CTA / 题材选中态 / 题材徽标。
+ * 题材身份 = 图标 + 文案，不再持有各自配色
+ * （v2.5 前每题材一套渐变，8 套色卡是首页色彩失控主源头）。
+ */
+export const BRAND_GRADIENT =
+  "from-red-600 via-rose-600 to-amber-500";
 
 export interface ModelConfig {
   videoModel: string;
@@ -355,7 +360,9 @@ export function downloadFile(filename: string, content: string, mime: string) {
 // 让普通用户不慬运镜/景别/轴线，也能产出专业级制作包。
 // ============================================================
 
-/** 剧组角色（产品语言，贯穿流水线日志与前端进度面板） */
+/** 剧组角色（产品语言，贯穿流水线日志与前端进度面板）
+ *  §7.13 v2.6：删除 color 字段——岗位色在 v2.5.1 已降级为“仅数据不渲染”，
+ *  零消费点却持续诱导组件层误用（P0 白屏事故源头），干脆移除 */
 export type CrewRoleKey =
   | "producer"
   | "screenwriter"
@@ -364,39 +371,30 @@ export type CrewRoleKey =
   | "supervisor"
   | "post";
 
-export const CREW_ROLES: Record<
-  CrewRoleKey,
-  { name: string; duty: string; color: string }
-> = {
+export const CREW_ROLES: Record<CrewRoleKey, { name: string; duty: string }> = {
   producer: {
     name: "制片主任",
     duty: "立项统筹 · 下发题材战术手册",
-    color: "text-amber-400",
   },
   screenwriter: {
     name: "编剧",
     duty: "黄金 3 秒钩子 · 三幕剧本",
-    color: "text-rose-400",
   },
   casting: {
     name: "选角定妆",
     duty: "角色/场景/道具资产锁定",
-    color: "text-fuchsia-400",
   },
   director: {
     name: "导演",
     duty: "一幕拆多镜 · 正反打节奏",
-    color: "text-sky-400",
   },
   supervisor: {
     name: "场记",
     duty: "锚定组装 · 一致性校验",
-    color: "text-teal-400",
   },
   post: {
     name: "后期",
     duty: "三轨落轨 · 情绪能量曲线",
-    color: "text-emerald-400",
   },
 };
 
