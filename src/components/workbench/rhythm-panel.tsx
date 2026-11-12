@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Clapperboard, Film, Gauge, ListChecks, TrendingUp } from "lucide-react";
+import { Activity, Clapperboard, Film, Gauge, ListChecks, TrendingUp, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   CAMERA_MOVEMENTS,
@@ -39,11 +39,15 @@ function Meter({
   value,
   hint,
   good,
+  action,
 }: {
   label: string;
   value: number;
   hint: string;
   good: boolean;
+  /** v2.9.2 分析→行动闭环：未达标项不止于提示，直接给出修复入口
+      （VLM 产品走查 P1：分析只读、发现「建议加强」后无处可改） */
+  action?: { label: string; onClick: () => void };
 }) {
   return (
     <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
@@ -64,11 +68,28 @@ function Meter({
         />
       </div>
       <p className="mt-1 text-[10px] leading-tight text-muted-foreground">{hint}</p>
+      {!good && action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="mt-1.5 flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300 transition hover:bg-amber-500/20"
+        >
+          <Wrench className="h-3 w-3" />
+          {action.label}
+        </button>
+      )}
     </div>
   );
 }
 
-export function RhythmPanel({ onJumpToCut }: { onJumpToCut?: () => void }) {
+export function RhythmPanel({
+  onJumpToCut,
+  onJumpToBoard,
+}: {
+  onJumpToCut?: () => void;
+  /** v2.9.2：未达标项的修复入口——分镜剧本页签（拆镜/逐镜景别运镜/台词） */
+  onJumpToBoard?: () => void;
+}) {
   const beats = useWorkbench((s) => s.session?.beats ?? []);
   const clips = useWorkbench((s) => s.session?.clips ?? []);
   const finalVideoUrl = useWorkbench((s) => s.session?.finalVideoUrl ?? null);
@@ -263,24 +284,28 @@ export function RhythmPanel({ onJumpToCut }: { onJumpToCut?: () => void }) {
             value={densityGood ? 100 : (shotCount / 6) * 100}
             hint="真实短剧每集 10~20 分镜、单镜 3~6 秒；可用「AI 拆解分镜」加密打点"
             good={densityGood}
+            action={{ label: "去 AI 拆解分镜", onClick: () => onJumpToBoard?.() }}
           />
           <Meter
             label={`景别多样性 · ${sizeSet.size} 种`}
             value={sizeScore * 100}
             hint="正反打要求远景/全景/中景/近景/特写交替；已达 4 种为佳"
             good={sizeScore >= 1}
+            action={{ label: "去分镜表切换景别", onClick: () => onJumpToBoard?.() }}
           />
           <Meter
             label={`运镜多样性 · ${movementSet.size} 种`}
             value={movementScore * 100}
             hint="场次梯级调度 + 分镜表内逐镜切换可继续提升"
             good={movementScore >= 1}
+            action={{ label: "去分镜表切换运镜", onClick: () => onJumpToBoard?.() }}
           />
           <Meter
             label="金句卡点覆盖"
             value={quoteGood ? 100 : 66}
             hint="每一场都应有可直接上屏的封神台词"
             good={quoteGood}
+            action={{ label: "去剧本改台词", onClick: () => onJumpToBoard?.() }}
           />
         </div>
       </div>

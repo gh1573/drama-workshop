@@ -36,7 +36,7 @@ const beats = [
     description:
       "豪门寿宴大厅，宾客觥筹交错。林晚秋当众撕碎婚书砸在陈锋脸上，菜汤泼洒，全场哗然。陈锋低着头，指尖捏紧半张碎纸，眼神一点点冷下来。",
     dialogueSubtitle: "「陈锋，你连给我提鞋都不配——滚出林家！」",
-    cameraMovement: "slowPushIn",
+    cameraMovement: "push",
     promptGuidance: "开场即冲突顶点，逆光剪藏主角面部情绪，特写碎纸落地的慢镜",
     energyStart: 72,
     energyEnd: 88,
@@ -49,7 +49,7 @@ const beats = [
     description:
       "寿宴大门轰然洞开，玄甲卫士列阵涌入。为首统帅单膝跪地呈上虎符，十万将士山呼海啸。林晚秋手中的酒杯坠地粉碎，全场死寂。",
     dialogueSubtitle: "「北境统帅陈锋，今日——清账。」",
-    cameraMovement: "whipPan",
+    cameraMovement: "whip_pan",
     promptGuidance: "大门破光切入，跪拜用大远景俯拍，反打林晚秋僵住的面部大特写",
     energyStart: 88,
     energyEnd: 100,
@@ -62,7 +62,7 @@ const beats = [
     description:
       "陈锋接过虎符却不看它，只是缓缓抬眼扫过满堂宾客，最后停在脸色惨白的林晚秋身上。他弹了弹袖口的汤渍，唇角勾起。",
     dialogueSubtitle: "「三年前泼我冷水的账……今天，连本带利。」",
-    cameraMovement: "static",
+    cameraMovement: "static_close",
     promptGuidance: "一镜到底环绕推近，结尾定格微笑特写，画面压黑收束",
     energyStart: 95,
     energyEnd: 78,
@@ -73,16 +73,21 @@ const shotPlan = [
   // sub = 镜头台词（配音 + 烧录字幕的单一来源；空串 = 无台词静默镜头）。
   // 台词分布纪律（v2.9.1）：每幕至多一句有声台词，落点在叙事拍点；大特写静默处理更有张力；
   // 配音源文件 voice_demo_*.wav 已 ASR 回验与台词逐字一致（场记核对纪律）。
-  { beat: 1, name: "寿宴全景", shotSize: "远景", cam: "craneDown", energy: 68, desc: "豪门寿宴大厅全景，水晶灯下宾客举杯寒暄，热闹表象下暗流涌动", sfx: "宴会环境音渐起", sub: "「陈锋，你连给我提鞋都不配——滚出林家！」", voice: "voice_demo_hook.wav" },
-  { beat: 1, name: "撕婚书特写", shotSize: "特写", cam: "static", energy: 82, desc: "林晚秋纤手撕碎婚书，纸屑纷飞砸向镜头，慢镜中纸片如雪", sfx: "纸张撕裂声放大" },
+  /* v2.9.2 运镜协议规范化：cam 必须是 CAMERA_MOVEMENTS 池内键
+     （push/whip_pan/static_close/pan_horizontal/handheld/low_angle_tracking/top_down/orbit…）。
+     历史版本自造驼峰名（slowPushIn/craneDown/orbitRight…）不在池内，
+     导致节奏页运镜多样性统计把 8 种算成 1 种——演示数据必须与
+     真实流水线同协议（breakdown-service 拆镜协议零容错，种子同样零容错）。 */
+  { beat: 1, name: "寿宴全景", shotSize: "远景", cam: "pan_horizontal", energy: 68, desc: "豪门寿宴大厅全景，水晶灯下宾客举杯寒暄，热闹表象下暗流涌动", sfx: "宴会环境音渐起", sub: "「陈锋，你连给我提鞋都不配——滚出林家！」", voice: "voice_demo_hook.wav" },
+  { beat: 1, name: "撕婚书特写", shotSize: "特写", cam: "static_close", energy: 82, desc: "林晚秋纤手撕碎婚书，纸屑纷飞砸向镜头，慢镜中纸片如雪", sfx: "纸张撕裂声放大" },
   { beat: 1, name: "泼汤羞辱", shotSize: "近景", cam: "handheld", energy: 88, desc: "菜汤泼在陈锋胸口，汤汁顺着衣襟滴落，周围宾客窃笑指点", sfx: "液体泼洒+窃笑声" },
-  { beat: 1, name: "眼神转冷", shotSize: "大特写", cam: "slowPushIn", energy: 90, desc: "陈锋垂眸的睫毛颤动，抬眼瞬间瞳孔里最后一点温度熄灭", sfx: "心跳低频渐强" },
-  { beat: 2, name: "大门轰开", shotSize: "全景", cam: "whipPan", energy: 92, desc: "寿宴大门轰然洞开，逆光中玄甲卫士列阵涌入，宾客惊退", sfx: "金属破门轰鸣" },
-  { beat: 2, name: "统帅跪呈", shotSize: "中景", cam: "dollyIn", energy: 96, desc: "为首统帅单膝跪地，双手呈上鎏金虎符，甲胄铿锵", sfx: "甲胄碰撞+闷雷" },
-  { beat: 2, name: "万人齐呼", shotSize: "远景", cam: "craneUp", energy: 100, desc: "俯拍大远景，门外将士单膝跪地齐呼龙王，声浪震彻云霄", sfx: "山呼海啸齐诵", sub: "「北境统帅陈锋，今日——清账。」", voice: "voice_demo_climax.wav" },
-  { beat: 2, name: "酒杯坠地", shotSize: "特写", cam: "static", energy: 97, desc: "林晚秋指尖松开，高脚杯坠地炸裂，酒液溅上她的裙摆", sfx: "玻璃碎裂+死寂" },
-  { beat: 3, name: "环视全场", shotSize: "中景", cam: "orbitRight", energy: 95, desc: "陈锋接过虎符却不看，缓缓起身环视满堂噤声的宾客", sfx: "衣料摩擦+静默", sub: "「三年前泼我冷水的账……今天，连本带利。」", voice: "voice_demo_cliffhanger.wav" },
-  { beat: 3, name: "意味深长一笑", shotSize: "大特写", cam: "slowPushIn", energy: 92, desc: "陈锋弹去袖口汤渍，唇角缓缓勾起，眼底寒光一闪，画面压黑", sfx: "低频收束音" },
+  { beat: 1, name: "眼神转冷", shotSize: "大特写", cam: "push", energy: 90, desc: "陈锋垂眸的睫毛颤动，抬眼瞬间瞳孔里最后一点温度熄灭", sfx: "心跳低频渐强" },
+  { beat: 2, name: "大门轰开", shotSize: "全景", cam: "whip_pan", energy: 92, desc: "寿宴大门轰然洞开，逆光中玄甲卫士列阵涌入，宾客惊退", sfx: "金属破门轰鸣" },
+  { beat: 2, name: "统帅跪呈", shotSize: "中景", cam: "low_angle_tracking", energy: 96, desc: "为首统帅单膝跪地，双手呈上鎏金虎符，甲胄铿锵", sfx: "甲胄碰撞+闷雷" },
+  { beat: 2, name: "万人齐呼", shotSize: "远景", cam: "top_down", energy: 100, desc: "俯拍大远景，门外将士单膝跪地齐呼龙王，声浪震彻云霄", sfx: "山呼海啸齐诵", sub: "「北境统帅陈锋，今日——清账。」", voice: "voice_demo_climax.wav" },
+  { beat: 2, name: "酒杯坠地", shotSize: "特写", cam: "static_close", energy: 97, desc: "林晚秋指尖松开，高脚杯坠地炸裂，酒液溅上她的裙摆", sfx: "玻璃碎裂+死寂" },
+  { beat: 3, name: "环视全场", shotSize: "中景", cam: "orbit", energy: 95, desc: "陈锋接过虎符却不看，缓缓起身环视满堂噤声的宾客", sfx: "衣料摩擦+静默", sub: "「三年前泼我冷水的账……今天，连本带利。」", voice: "voice_demo_cliffhanger.wav" },
+  { beat: 3, name: "意味深长一笑", shotSize: "大特写", cam: "push", energy: 92, desc: "陈锋弹去袖口汤渍，唇角缓缓勾起，眼底寒光一闪，画面压黑", sfx: "低频收束音" },
 ];
 
 async function main() {
@@ -91,9 +96,26 @@ async function main() {
     await db.project.deleteMany({ where: { title: { contains: "演示" } } });
   }
 
+  /* v2.9.2：演示项目直接建为系列第 1 集（对齐连载生产线叙事）——
+     历史版本只建独立项目，系列归属依赖后续 next-episode 自动 adopt，
+     重播种后项目库系列分组/信息卡连载徽标全部消失，验证脚本前置也随之失效 */
+  const series =
+    (await db.series.findFirst({ where: { title: "战神逆袭" } })) ??
+    (await db.series.create({
+      data: {
+        title: "战神逆袭",
+        synopsis: "赘婿战神打脸逆袭系列：三年隐忍，一朝亮剑",
+        genreId: "shuangwen",
+        genreName: "战神逆袭 · 龙王归来",
+        genreBadge: "高燃打脸 · 爽感爆棚",
+      },
+    }));
+
   const project = await db.project.create({
     data: {
       title: "战神逆袭 · 演示第一集",
+      seriesId: series.id,
+      episodeNo: 1,
       status: "inProduction",
       genreId: "shuangwen",
       genreName: "战神逆袭 · 龙王归来",

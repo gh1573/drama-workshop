@@ -804,6 +804,8 @@ export interface ProjectSummary {
   seriesId: string | null;
   seriesTitle: string | null;
   episodeNo: number | null;
+  /** v2.9.2：成片直出地址（可空 = 未合成）——项目库交付入口依据 */
+  finalVideoUrl: string | null;
 }
 
 /** —— 系列（v2.3 多剧集连载容器） —— */

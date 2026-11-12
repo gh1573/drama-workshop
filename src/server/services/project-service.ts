@@ -108,6 +108,9 @@ export async function listProjects(): Promise<ProjectSummary[]> {
     seriesId: r.seriesId,
     seriesTitle: r.series?.title ?? null,
     episodeNo: r.episodeNo,
+    /* v2.9.2：交付可达性——项目库不只有「进入再生产」，成片已合成的项目
+       直接给出成片/制作包入口（库即交付中枢，VLM 产品走查 P0） */
+    finalVideoUrl: r.finalVideoUrl,
   }));
 }
 

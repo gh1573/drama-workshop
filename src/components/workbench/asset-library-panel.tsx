@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   Camera,
+  Film,
   Loader2,
   Pencil,
   RefreshCw,
@@ -120,7 +121,7 @@ function AssetCard({
   );
 }
 
-export function AssetLibraryPanel() {
+export function AssetLibraryPanel({ onJumpToCut }: { onJumpToCut?: () => void }) {
   const { toast } = useToast();
   const session = useWorkbench((s) => s.session);
   const tasks = useWorkbench((s) => s.tasks);
@@ -214,6 +215,24 @@ export function AssetLibraryPanel() {
 
   return (
     <section className="space-y-3 rounded-xl border bg-card p-5">
+      {/* v2.9.2 成片可达性（VLM 产品走查 P1：资产页全是定妆/锚点，
+          主交付物不可见——与节奏页同一入口条语言） */}
+      {session?.finalVideoUrl && (
+        <button
+          type="button"
+          onClick={onJumpToCut}
+          className="flex w-full items-center gap-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-left transition hover:bg-emerald-500/15"
+        >
+          <Film className="h-4 w-4 shrink-0 text-emerald-400" />
+          <span className="text-xs font-semibold text-emerald-300">
+            本集成片已就绪
+          </span>
+          <span className="text-xs text-muted-foreground">
+            播放 / 下载成片与制作包
+          </span>
+          <span className="ml-auto text-xs font-semibold text-emerald-300">去成片 →</span>
+        </button>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <Users className="h-4 w-4 text-amber-400" />
         <h3 className="text-sm font-bold tracking-wide">资产库 · 一致性锚定</h3>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FolderOpen, Layers, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Download, FolderOpen, Layers, Loader2, Package, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -196,6 +196,30 @@ export function ProjectLibraryDrawer() {
           </span>
         </div>
         <div className="mt-2 flex items-center gap-1.5">
+          {/* v2.9.2 交付可达性：成片已合成的项目在卡上直接给成片/制作包入口——
+              项目库不只服务「进入再生产」，也服务「取回已产出」（VLM P0：
+              「用户最值钱的产出物在库里不可见、不可回访、不可分发」） */}
+          {p.finalVideoUrl && (
+            <a
+              href={p.finalVideoUrl}
+              download
+              onClick={(e) => e.stopPropagation()}
+              className="flex h-7 items-center gap-1 rounded-md border border-border/70 bg-transparent px-2 text-xs transition-colors hover:bg-secondary/60"
+            >
+              <Download className="h-3 w-3" />
+              成片
+            </a>
+          )}
+          {p.finalVideoUrl && (
+            <a
+              href={`/api/projects/${p.id}/package`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex h-7 items-center gap-1 rounded-md border border-border/70 bg-transparent px-2 text-xs transition-colors hover:bg-secondary/60"
+            >
+              <Package className="h-3 w-3" />
+              制作包
+            </a>
+          )}
           <Button
             variant="outline"
             size="sm"

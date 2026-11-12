@@ -698,14 +698,17 @@ export default function Home() {
                     value="assets"
                     className="mt-0 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-200"
                   >
-                    <AssetLibraryPanel />
+                    <AssetLibraryPanel onJumpToCut={() => setTab("cut")} />
                   </TabsContent>
 
                   <TabsContent
                     value="rhythm"
                     className="mt-0 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-200"
                   >
-                    <RhythmPanel onJumpToCut={() => setTab("cut")} />
+                    <RhythmPanel
+                      onJumpToCut={() => setTab("cut")}
+                      onJumpToBoard={() => setTab("script")}
+                    />
                   </TabsContent>
 
                   <TabsContent
