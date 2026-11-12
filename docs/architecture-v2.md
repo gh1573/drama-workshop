@@ -455,6 +455,13 @@ export function composeVideoPrompt(input: PromptInput): PromptOutput;
 4. 剧本与拆镜两处 LLM 提示词带「运镜执行规范」硬约束，并遵守 180° 轴线规则（正反打不得跳轴）；
 5. 景别（SHOT_SIZES 中文行话）经 `SHOT_SIZE_PROMPTS` 确定性映射为英文电影术语（extreme long shot / close-up / extreme close-up…）后才进提示词——中文景别直拼英文 prompt 基模无法消费。
 
+**各部门专业纪律（v2.8.3 · 全部门审计）**：按真实剧组分工逐部门对齐专业标准——
+1. **场记（状态连续性闭环）**：拆镜 LLM 按场记单职责输出 `characterStates`（角色名→状态词，如「陈锋」→「负伤」），绑定引用时写入 `ShotRef.stateNote`；锚定组装时经 `STATE_NOTE_PROMPTS` 确定性译为英文（wounded / blood-stained / changed into military uniform…）注入提示词——服化道/伤效的跨镜头状态连续性由数据闭环保证，不再依赖模型记忆；
+2. **灯光/美术（时段光效连续性）**：编剧 description 必须写明场次时段与内外景（「夜·内 宴会厅」）→ 选角阶段场景 visualAnchor 必须含时段与主光源（at night, warm chandelier glow, interior）→ 拆镜规则约束镜头光效与本场时段及光源方向一致、同场不得日夜跳变——三级联动消灭同场镜头光效穿帮；
+3. **摄影（景深随景别）**：景深随景别走是摄影铁律——`SHOT_SIZE_PROMPTS` 每档景别同时携带 framing 与 depth（特写=shallow depth of field、中景=medium、全景/远景=deep focus），确定性注入技术段；
+4. **剪辑（动接动）**：拆镜规则要求剪点优先落在动作进行中（伸手/转身/掷物瞬间），避免静态跳切堆叠；对话正反打遵守 180° 轴线；
+5. **录音（轨道定位诚实化）**：成片混音 = 配音轨 + BGM（EBU R128 响度归一 + 对白侧链闪避）；音效轨（sfxHint 拟音提示）定位为随制作包交付、由后期拟音执行——与现实剧组拟音师分工一致，阶段报告如实区分「成片烧录/混音」与「制作包交付」。
+
 ### 7.3 异步任务管线（C4/C5）
 
 **状态机**：

@@ -71,11 +71,17 @@ for (const [fn, pool] of Object.entries(ACT_MOVEMENT_POOLS)) {
 // 3) 景别映射完备性
 console.log("\n== 3) SHOT_SIZE_PROMPTS 景别英文映射审计 ==");
 for (const size of SHOT_SIZES) {
-  const en = SHOT_SIZE_PROMPTS[size];
-  check(!!en && /^[a-z][a-z\s-]*$/.test(en), `景别「${size}」缺英文映射或非纯英文: ${en}`);
-  console.log(`  ${size} → ${en}`);
+  const m = SHOT_SIZE_PROMPTS[size];
+  check(
+    !!m?.framing && /^[a-z][a-z\s-]*$/.test(m.framing),
+    `景别「${size}」缺英文 framing 或非纯英文: ${m?.framing}`
+  );
+  console.log(`  ${size} → ${m.framing} · ${m.depth}`);
 }
-check(Object.keys(SHOT_SIZE_PROMPTS).length === SHOT_SIZES.length, "景别映射表与景别库数量不一致");
+check(
+  Object.keys(SHOT_SIZE_PROMPTS).length === SHOT_SIZES.length,
+  "景别映射表与景别库数量不一致"
+);
 
 // 4) 端到端合成：全运镜 × 全景别抽样，验证最终提示词
 console.log("\n== 4) composeVideoPrompt 端到端审计 ==");
@@ -99,11 +105,13 @@ for (const key of Object.keys(CAMERA_MOVEMENTS)) {
       resolution: "1080P",
     });
     n++;
-    // 技术段必须是英文电影术语（无中文景别残留）
+    // 技术段必须是英文电影术语（无中文景别残留）+ 命中新结构化映射
     const cjk = out.segments.technical.match(/[\u4e00-\u9fff]/);
     check(!cjk, `[${key}/${size}] 技术段残留中文: ${out.segments.technical}`);
     check(
-      out.segments.technical.includes(`${SHOT_SIZE_PROMPTS[size]} framing`),
+      out.segments.technical.includes(
+        `${SHOT_SIZE_PROMPTS[size].framing} framing`
+      ),
       `[${key}/${size}] 技术段未命中景别英文映射`
     );
     check(
@@ -144,9 +152,125 @@ check(
   "技术尾巴缺 intentional camera movement（专业运镜纪律核心词）"
 );
 
+// 7) 场记状态注记映射 + 景深维度（v2.8.3 全部门专业化）
+console.log("\n== 7) 场记状态注记 & 景深维度审计 ==");
+import { STATE_NOTE_PROMPTS } from "../src/lib/drama";
+{
+  const entries = Object.entries(STATE_NOTE_PROMPTS);
+  check(entries.length >= 15, `状态注记映射表过小（${entries.length} 项）`);
+  for (const [zh, en] of entries) {
+    check(
+      /^[a-z][a-z\s,.-]*$/.test(en),
+      `状态「${zh}」英文映射非法: ${en}`
+    );
+  }
+  // 端到端：命中映射 → 英文注入；未命中 → 中文保留
+  const compose = (state: string | null) =>
+    composeVideoPrompt({
+      shot: {
+        visualDesc: "陈锋按住伤口抬头",
+        visualPrompt: "Chen Feng presses his wound and looks up",
+        cameraMovement: "push",
+        shotSize: "特写",
+        subtitle: "",
+      },
+      characters: [
+        { name: "陈锋", visualAnchor: "Chinese male in his 30s", stateNote: state },
+      ],
+      scene: null,
+      props: [],
+      tonePrompt: "cinematic drama",
+      aspectRatio: "9:16",
+      plannedMs: 4000,
+      resolution: "1080P",
+    }).finalPrompt;
+  const hit = compose("负伤");
+  check(hit.includes("wounded, visible injuries"), `命中映射未译为英文: ${hit}`);
+  const miss = compose("满头银发");
+  check(miss.includes("满头银发"), `未命中映射未保留原文: ${miss}`);
+  const none = compose(null);
+  check(!none.includes("(") || !none.includes("负伤"), "无状态注记时不应有状态括注");
+  console.log(`  命中样例: ${hit.slice(0, 120)}…`);
+  console.log(`  映射表 ${entries.length} 项全英文 ✓`);
+
+  // 景深维度
+  const DEPTH_EXPECT: Record<string, RegExp> = {
+    远景: /deep focus/,
+    全景: /deep focus/,
+    中景: /medium depth of field/,
+    近景: /shallow depth of field/,
+    特写: /shallow depth of field/,
+    大特写: /extremely shallow depth of field/,
+  };
+  for (const [size, m] of Object.entries(SHOT_SIZE_PROMPTS)) {
+    check(!!m.framing && !!m.depth, `景别「${size}」缺 framing/depth`);
+    check(
+      /depth of field|deep focus/.test(m.depth),
+      `景别「${size}」景深词不专业: ${m.depth}`
+    );
+    check(
+      DEPTH_EXPECT[size]?.test(m.depth) ?? false,
+      `景别「${size}」景深与景别不匹配: ${m.depth}`
+    );
+  }
+  // 端到端景深注入
+  const e2e = composeVideoPrompt({
+    shot: {
+      visualDesc: "黑卡特写",
+      visualPrompt: "matte black card close-up",
+      cameraMovement: "static_close",
+      shotSize: "大特写",
+      subtitle: "",
+    },
+    characters: [],
+    scene: null,
+    props: [{ name: "黑卡", visualAnchor: "matte black metal card" }],
+    tonePrompt: "cinematic drama",
+    aspectRatio: "9:16",
+    plannedMs: 4000,
+    resolution: "1080P",
+  });
+  check(
+    e2e.segments.technical.includes("extreme close-up framing, extremely shallow depth of field"),
+    `景深未随景别注入: ${e2e.segments.technical}`
+  );
+}
+
+// 8) 剧组提示词源码断言（时段/轴线/动接动/状态注记/音效定位）
+console.log("\n== 8) 剧组各部门提示词纪律（源码断言）==");
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+{
+  const src = (p: string) =>
+    readFileSync(join(process.cwd(), "src", p), "utf8");
+  const breakdown = src("server/services/breakdown-service.ts");
+  check(breakdown.includes("动接动"), "拆镜规则缺「动接动」剪点纪律");
+  check(breakdown.includes("180° 轴线"), "拆镜规则缺 180° 轴线规则");
+  check(breakdown.includes("characterStates"), "拆镜规则缺 characterStates 场记产出");
+  check(
+    breakdown.includes("光效必须与本场时段"),
+    "拆镜规则缺光效时段一致性约束"
+  );
+  const casting = src("server/services/run-service.ts");
+  check(
+    casting.includes("必须含时段与主光源"),
+    "选角提示词缺场景时段/主光源要求"
+  );
+  check(
+    casting.includes("随制作包交付"),
+    "后期 summary 音效轨定位未诚实化"
+  );
+  const screenplay = src("server/services/screenplay.ts");
+  check(
+    screenplay.includes("必须写明该场时段与内外景"),
+    "编剧提示词缺时段/内外景要求"
+  );
+  console.log("  时段光效/轴线/动接动/场记状态/音效定位 全部在位 ✓");
+}
+
 console.log(
   fail === 0
-    ? "\n✅ 全部通过：运镜专业语义保留 + 执行设备声明 + 受控限定 + 景别英文映射"
+    ? "\n✅ 全部通过：运镜专业 + 景深景别映射 + 场记状态闭环 + 时段光效连续性 + 剪辑/轴线纪律"
     : `\n❌ ${fail} 项未通过`
 );
 process.exit(fail === 0 ? 0 : 1);
