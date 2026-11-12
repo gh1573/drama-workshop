@@ -531,7 +531,7 @@ export default function Home() {
                     </div>
                     <div className="pointer-events-none absolute right-2.5 top-5 z-10 flex items-center gap-1 rounded bg-black/50 px-1.5 py-0.5">
                       <Play className="h-2.5 w-2.5 shrink-0 text-white/70" />
-                      <span className="font-mono text-[9px] text-white/70">示例 · 实产</span>
+                      <span className="font-mono text-[9px] text-white/70">示例实产 · 第 1 集</span>
                     </div>
                     {/* v2.9 信任实据（VLM 产品走查 P0：占位 mockup → 流水线实产示例成片，
                         点击即播——把「产品承诺」变成「可验证的演示」；
@@ -548,9 +548,13 @@ export default function Home() {
                       className="absolute inset-0 h-full w-full bg-black object-cover"
                     />
                   </div>
-                  {/* §7.13：预览语境化 —— 从孤立装饰变为产品承诺 */}
+                  {/* §7.13：预览语境化 —— 从孤立装饰变为产品承诺；
+                      v2.9.4：连载身份补表达——EP.01 徽标背后的「已是系列第 1 集、
+                      可一键续集」必须在转化现场说出来（亮点卡讲能力，语境条讲身份） */}
                   <p className="text-center text-[10px] leading-relaxed text-muted-foreground">
-                    示例成片可直接播放 · 开机后你的剧集同样直出
+                    示例成片可直接播放 · 流水线实产系列第 1 集
+                    <br />
+                    开机后你的剧集同样直出，并可一键续写下一集
                     <br />
                     <span className="font-mono text-muted-foreground/70">
                       片头卡 / 字幕 / 配音 / 转场 / 调色
