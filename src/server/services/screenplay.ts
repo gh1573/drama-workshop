@@ -96,7 +96,7 @@ export function buildScreenplayMessages(
 - climax（排场/压迫类）：${poolDesc("climax")}
 - cliffhanger（炫技/悬念类）：${poolDesc("cliffhanger")}
 每场只能从本功能推荐池中选择 cameraMovement，且相邻场次之间不得重复。
-【运镜稳定硬约束】所有机位一律按稳定器（gimbal/steadicam）平顺执行，画面必须平稳；promptGuidance 禁止出现手持晃动、镜头抖动、模糊甩动类描述。
+【运镜执行规范（摄影组专业纪律）】所有运镜均为有意图的调度（intentional camera movement）：推拉走轨道、升降用摇臂、环绕用稳定器；手持仅限需要临场紧迫感的场次且为受控手持（幅度轻微、不出画）。严禁无意图的画面抖动、糊甩与随机漂移；promptGuidance 只写构图/微表情/道具/光效，不描写抖动。
 
 【写作要求】
 1. 情节画面 description：40~80 字，完全可视化——人物在做什么、穿着、环境、冲突焦点，禁止抽象抒情

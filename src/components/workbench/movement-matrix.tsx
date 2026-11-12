@@ -95,7 +95,7 @@ export function MovementMatrix({
           })}
         </div>
         <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-          切换后立即生效，英文机位指令将随导出工程注入视频生成 Prompt。
+          机位指令含执行设备（轨道/摇臂/稳定器/三脚架），风格化机位（手持/甩镜）为受控执行；切换后立即生效，随导出工程注入视频生成 Prompt。
         </p>
       </PopoverContent>
     </Popover>
