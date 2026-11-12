@@ -29,7 +29,6 @@ export function ModelConfigPanel() {
 
   return (
     <StepCard
-      step="03"
       title="模型配置"
       icon={<MonitorPlay className="h-4 w-4" />}
     >

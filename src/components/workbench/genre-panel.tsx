@@ -22,7 +22,7 @@ export function GenrePanel() {
   const [toneOpen, setToneOpen] = useState(false);
 
   return (
-    <StepCard step="01" title="选择题材" icon={<Lightbulb className="h-4 w-4" />}>
+    <StepCard title="选择题材" icon={<Lightbulb className="h-4 w-4" />}>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-2">
         {GENRES.map((g) => {
           const active = g.id === genreId;
@@ -33,11 +33,10 @@ export function GenrePanel() {
               onClick={() => selectGenre(g.id)}
               aria-pressed={active}
               className={`group flex flex-col gap-1.5 rounded-xl p-2.5 text-left transition-all duration-200 ${
-                /* §7.13 v2.6（VLM 复审修订）：选中态从大面积品牌渐变降级为 amber 描边浅底
-                   ——全页最大彩色面积必须让渡给「全组开机」主 CTA，渐变仅存于
-                   logo / 主 CTA / 题材徽标；题材辨识 = 图标 + 文案 */
+              /* v2.8 VLM 复审：选中态从四重强调（描边+浅底+阴影+图标染色+文案染色）
+                   精简为两重（描边 + 勾选）——题材辨识靠图标与文案，彩色面积让位主 CTA */
                 active
-                  ? "border border-amber-500/60 bg-amber-500/[0.08] shadow-lg shadow-amber-500/10"
+                  ? "border border-amber-500/60 bg-secondary/40"
                   : "border border-border/80 bg-secondary/40 hover:border-muted-foreground/40 hover:bg-secondary/60"
               }`}
             >
@@ -45,7 +44,7 @@ export function GenrePanel() {
                 <span
                   className={`flex h-7 w-7 items-center justify-center rounded-lg ${
                     active
-                      ? "bg-amber-500/15 text-amber-400"
+                      ? "bg-secondary/80 text-foreground"
                       : "bg-secondary/80 text-muted-foreground"
                   }`}
                 >
@@ -61,9 +60,7 @@ export function GenrePanel() {
                 {g.short}
               </span>
               <span
-                className={`text-[10px] leading-snug ${
-                  active ? "text-amber-300/90" : "text-muted-foreground"
-                }`}
+                className="text-[10px] leading-snug text-muted-foreground"
               >
                 {g.badge}
               </span>

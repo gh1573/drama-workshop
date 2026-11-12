@@ -297,7 +297,8 @@ export function FinalCutPanel() {
         ) : allReady ? (
           <Badge
             variant="outline"
-            className="border-sky-500/40 bg-sky-500/10 text-[10px] text-sky-400"
+            /* v2.8 色彩纪律：「待合成」属中性待办，sky 色相出局走灰阶 */
+            className="border-border/70 bg-secondary/40 text-[10px] text-muted-foreground"
           >
             镜头就绪 · 待合成
           </Badge>
@@ -422,10 +423,11 @@ export function FinalCutPanel() {
         </div>
       )}
 
-      {/* —— 后期风格（v2.5 §7.11）：转场策略 + 调色预设，重合成后生效 —— */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
-        <Wand2 className="h-3.5 w-3.5 shrink-0 text-sky-400" />
-        <span className="text-xs font-semibold">后期风格</span>
+      {/* —— 后期风格（v2.5 §7.11）：转场策略 + 调色预设，重合成后生效 ——
+          v2.8 P1：降为次级面板观感（去 amber 图标/降对比），保「下载成片」为成片页唯一最高权重动作 */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/40 bg-secondary/20 px-3 py-2">
+        <Wand2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="text-xs font-semibold text-muted-foreground">后期风格</span>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <Select
             value={transitionMode}
@@ -468,10 +470,10 @@ export function FinalCutPanel() {
         </p>
       </div>
 
-      {/* —— BGM 管理行（v2.4.4）：上传/回显/清除，合成时循环铺底 + 对白自动闪避 —— */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
-        <Music className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-        <span className="text-xs font-semibold">背景音乐</span>
+      {/* —— BGM 管理行（v2.4.4）：上传/回显/清除，合成时循环铺底 + 对白自动闪避（v2.8 P1 同步降为次级） —— */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/40 bg-secondary/20 px-3 py-2">
+        <Music className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="text-xs font-semibold text-muted-foreground">背景音乐</span>
         {bgm ? (
           <>
             <span className="min-w-0 max-w-[220px] truncate text-xs text-muted-foreground">
@@ -578,7 +580,7 @@ export function FinalCutPanel() {
             variant="outline"
             disabled={composing}
             onClick={handleCompose}
-            className="border-sky-500/40 bg-sky-500/10 font-semibold text-sky-400 hover:bg-sky-500/20"
+            className="border-amber-500/40 bg-amber-500/10 font-semibold text-amber-400 hover:bg-amber-500/20"
           >
             {composing ? (
               <Loader2 className="h-4 w-4 animate-spin" />

@@ -7,6 +7,7 @@ import {
   NARRATIVE_META,
   type NarrativeFunction,
 } from "@/lib/drama";
+import { FN_TONE } from "@/lib/ui/tokens";
 import { useWorkbench } from "@/store/workbench";
 
 /**
@@ -57,7 +58,7 @@ function Meter({
       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-background">
         <div
           className={`h-full rounded-full bg-gradient-to-r ${
-            good ? "from-emerald-500 to-teal-400" : "from-amber-500 to-orange-500"
+            good ? "from-emerald-500 to-emerald-400" : "from-amber-500 to-orange-500"
           }`}
           style={{ width: `${Math.min(100, Math.max(6, value))}%` }}
         />
@@ -132,17 +133,12 @@ export function RhythmPanel() {
         <div className="flex h-7 overflow-hidden rounded-lg border border-border/60">
           {sorted.map((b, i) => {
             const pct = (actMs[i] / totalMs) * 100;
-            const colors: Record<NarrativeFunction, string> = {
-              hook: "bg-gradient-to-r from-amber-500 to-orange-500",
-              buildup: "bg-gradient-to-r from-sky-500 to-blue-500",
-              twist: "bg-gradient-to-r from-fuchsia-500 to-purple-500",
-              climax: "bg-gradient-to-r from-rose-500 to-red-500",
-              cliffhanger: "bg-gradient-to-r from-emerald-500 to-teal-500",
-            };
+            /* v2.8 色彩纪律：与 act-card 同源引用 FN_TONE（此前两处五色虹彩各自定义、口径漂移） */
+            const tone = FN_TONE[b.narrativeFunction];
             return (
               <div
                 key={b.index}
-                className={`flex items-center justify-center text-[10px] font-bold text-white ${colors[b.narrativeFunction]}`}
+                className={`flex items-center justify-center text-[10px] font-bold text-white ${tone.barCls}`}
                 style={{ width: `${pct}%` }}
                 title={`${NARRATIVE_META[b.narrativeFunction].tag}：${Math.round(pct)}%（${Math.round(actMs[i] / 100) / 10}s）`}
               >

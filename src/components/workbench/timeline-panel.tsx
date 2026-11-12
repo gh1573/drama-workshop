@@ -270,11 +270,11 @@ export function TimelinePanel() {
                     className="flex w-full flex-wrap items-center gap-2 bg-secondary/40 px-3 py-2.5 text-left transition-colors hover:bg-secondary/60"
                   >
                     {expanded ? (
-                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-amber-400" />
                     ) : (
                       <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     )}
-                    <Layers className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+                    <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <p className="text-xs font-bold">
                       第 {String(beat.index).padStart(2, "0")} 场 ·{" "}
                       {beat.actTitle.split("：")[1] ?? beat.actTitle}
@@ -311,7 +311,7 @@ export function TimelinePanel() {
                         {clip.shotSize && (
                           <Badge
                             variant="outline"
-                            className="shrink-0 border-sky-500/40 bg-sky-500/10 text-sky-400 text-[10px]"
+                            className="shrink-0 border-border/60 text-[10px] text-muted-foreground"
                           >
                             {clip.shotSize}
                           </Badge>
@@ -484,7 +484,8 @@ export function TimelinePanel() {
               size="sm"
               disabled={busy}
               onClick={handleConfirmReady}
-              className="bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:opacity-90"
+              /* v2.8 色彩纪律：成功语义用单色 emerald，去 teal 渐变（引入第二色相无必要） */
+              className="bg-emerald-600 text-white hover:bg-emerald-500"
             >
               标记为已生成
             </Button>

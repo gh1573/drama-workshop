@@ -19,10 +19,12 @@ const BASE = "http://localhost:3000";
     results.push(`${pass ? "PASS" : "FAIL"}  ${name}${detail ? "  | " + detail : ""}`);
 
   // 1. 空态：主 CTA 不再禁用（梗概为空也保持品牌渐变醒目态）
+  //    v2.8：双开机入口——左栏品牌渐变主 CTA + 右栏导览 amber 次 CTA（VLM P3：空态视线落点缺显式开机入口）
   await page.goto(BASE, { waitUntil: "networkidle", timeout: 60000 });
   await page.waitForTimeout(1200);
   const cta = page.getByRole("button", { name: /全组开机/ });
-  log("cta-visible", (await cta.count()) === 1);
+  log("cta-visible", (await cta.count()) >= 1);
+  log("cta-dual-entry", (await cta.count()) === 2, "左栏主 CTA + 右栏导览次 CTA");
   const ctaDisabled = await cta.first().isDisabled();
   log("cta-not-disabled-by-synopsis", !ctaDisabled, "空梗概下仍可点击，校验交给 toast");
   await page.screenshot({ path: `${SHOTS}/01-empty-cta.png` });

@@ -8,48 +8,20 @@ import {
   CAMERA_MOVEMENTS,
   NARRATIVE_META,
   cameraLabel,
-  type NarrativeFunction,
   type StoryBeat,
 } from "@/lib/drama";
 import { useWorkbench } from "@/store/workbench";
 import { MovementMatrix } from "@/components/workbench/movement-matrix";
-
-export const FN_STYLE: Record<
-  NarrativeFunction,
-  { badgeCls: string; barCls: string; quoteCls: string }
-> = {
-  hook: {
-    badgeCls: "border-amber-500/40 bg-amber-500/10 text-amber-400",
-    barCls: "from-amber-500 to-orange-500",
-    quoteCls: "border-amber-400/70 bg-amber-500/10",
-  },
-  buildup: {
-    badgeCls: "border-sky-500/40 bg-sky-500/10 text-sky-400",
-    barCls: "from-sky-500 to-blue-500",
-    quoteCls: "border-sky-400/70 bg-sky-500/10",
-  },
-  twist: {
-    badgeCls: "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-400",
-    barCls: "from-fuchsia-500 to-purple-500",
-    quoteCls: "border-fuchsia-400/70 bg-fuchsia-500/10",
-  },
-  climax: {
-    badgeCls: "border-rose-500/40 bg-rose-500/10 text-rose-400",
-    barCls: "from-rose-500 to-red-500",
-    quoteCls: "border-rose-400/70 bg-rose-500/10",
-  },
-  cliffhanger: {
-    badgeCls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
-    barCls: "from-emerald-500 to-teal-500",
-    quoteCls: "border-emerald-400/70 bg-emerald-500/10",
-  },
-};
+/* v2.8 色彩纪律：叙事功能配色统一从设计令牌引用（品牌暖色轴五档，
+   此前 amber/sky/fuchsia/rose/emerald 五色虹彩被 VLM 走查判失控；
+   与 rhythm-panel 同源，禁止两处各自定义） */
+import { FN_TONE } from "@/lib/ui/tokens";
 
 /** 单场分镜卡：内容展示 + 台词复制 + 运镜调度矩阵 + AI 拆解分镜 + 加入镜头轨 */
 export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
   const { toast } = useToast();
   const fn = NARRATIVE_META[beat.narrativeFunction];
-  const style = FN_STYLE[beat.narrativeFunction];
+  const style = FN_TONE[beat.narrativeFunction];
   const dbId = useWorkbench((s) => s.session?.dbId ?? null);
   const addClip = useWorkbench((s) => s.addClip);
   const setBeatMovement = useWorkbench((s) => s.setBeatMovement);
@@ -100,12 +72,16 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
       <div className={`h-1 bg-gradient-to-r ${style.barCls}`} />
       <div className="space-y-4 p-5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="bg-gradient-to-r from-red-500 to-amber-500 bg-clip-text text-sm font-black tracking-wider text-transparent">
+          {/* v2.8：场次定位号从渐变字改为单色 amber（卡顶已有 FN 能量条，避免同卡双渐变）；
+              标签格式「【第 NN 场】」为 v2.7 场次化契约（runtime-verify 断言），不随样式调整 */}
+          <span className="font-mono text-xs font-black tracking-wider text-amber-400">
             【第 {String(beat.index).padStart(2, "0")} 场】
           </span>
           <h3 className="text-base font-bold">{beat.actTitle}</h3>
           <Badge variant="outline" className={`ml-auto ${style.badgeCls}`}>
-            {fn.tag}
+            {/* v2.8 P1 降噪：徽标只显中文功能名（英文后缀保留在数据层/导出契约，
+                VLM：单屏彩色焦点过多，双语标签徒增密度） */}
+            {fn.tag.split(" ")[0]}
           </Badge>
         </div>
 
@@ -120,7 +96,7 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
         </div>
 
         <div
-          className={`flex items-start gap-2.5 rounded-lg border-l-4 p-3 ${style.quoteCls}`}
+          className={`flex items-start gap-2.5 rounded-lg border-l-4 bg-secondary/30 p-3 ${style.quoteCls}`}
         >
           <Quote className="mt-0.5 h-4 w-4 shrink-0 opacity-70" />
           <p className="flex-1 text-base font-bold leading-snug">
@@ -173,14 +149,16 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
                 : `待出片 ${actClipCount - actReadyCount} 镜`}
             </Badge>
           )}
+          {/* v2.8 色彩纪律：场次内主操作（AI 拆解分镜）用品牌 amber 交互色，
+              次操作（加入镜头轨）降为灰阶描边；原 sky/emerald 双色相出局 */}
           <button
             type="button"
             onClick={handleBreakdown}
             disabled={breakingDown !== null}
             className={`ml-auto inline-flex cursor-pointer items-center gap-1 rounded-md border border-dashed px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-wait disabled:opacity-60 ${
               dbId
-                ? "border-sky-500/50 text-sky-400 hover:bg-sky-500/10"
-                : "border-border/70 text-muted-foreground hover:border-sky-500/50 hover:text-sky-400"
+                ? "border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
+                : "border-border/70 text-muted-foreground hover:border-amber-500/50 hover:text-amber-400"
             }`}
           >
             {busy ? (
@@ -201,11 +179,7 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
             tabIndex={0}
             onClick={handleAdd}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            className={`cursor-pointer border-dashed text-xs transition-colors ${
-              dbId
-                ? "border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
-                : "border-border/70 text-muted-foreground hover:border-rose-500/50 hover:text-rose-400"
-            }`}
+            className="cursor-pointer border-dashed border-border/70 text-xs text-muted-foreground transition-colors hover:border-amber-500/50 hover:text-amber-400"
           >
             <Plus className="mr-1 h-3 w-3" />
             加入镜头轨

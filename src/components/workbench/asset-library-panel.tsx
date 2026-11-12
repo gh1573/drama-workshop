@@ -86,7 +86,8 @@ function AssetCard({
           {asset.lockedAppearance}
         </p>
         <p className="line-clamp-2 font-mono text-[10px] leading-relaxed text-muted-foreground" title={asset.visualAnchor}>
-          <span className="font-sans font-semibold text-sky-400">锚点：</span>
+          {/* v2.8 色彩纪律：锚点属技术元数据，走灰阶；定妆保留 amber（品牌强调位） */}
+          <span className="font-sans font-semibold text-foreground/70">锚点：</span>
           {asset.visualAnchor}
         </p>
         <div className="flex items-center gap-1.5 pt-0.5">
@@ -220,7 +221,7 @@ export function AssetLibraryPanel() {
           角色 {byKind.character.length} · 场景 {byKind.scene.length} · 道具 {byKind.prop.length}
         </Badge>
         <span className="ml-auto hidden items-center gap-1 text-[10px] text-muted-foreground sm:flex">
-          <ShieldCheck className="h-3 w-3 text-teal-400" />
+          <ShieldCheck className="h-3 w-3 text-emerald-400" />
           锚点冻结机制：改动被引用的资产需解冻确认
         </span>
       </div>

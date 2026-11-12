@@ -244,7 +244,7 @@ export default function Home() {
                   variant="outline"
                   className="hidden border-amber-500/40 text-amber-400 sm:inline-flex"
                 >
-                  DRAMA STUDIO v2.6.0
+                  DRAMA STUDIO v2.8.0
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -426,18 +426,28 @@ export default function Home() {
             )}
 
             {!generating && !session && (
-              <section className="flex min-h-[520px] flex-col gap-4 rounded-2xl border border-border/70 bg-card/50 p-5 sm:p-6">
+              <section className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-card/50 p-5 sm:p-6">
                 {/* —— 导览头部 —— */}
                 <div className="flex items-start gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-red-600 to-amber-500 shadow-lg shadow-red-600/20">
                     <Clapperboard className="h-4.5 w-4.5 text-white" />
                   </span>
                   <div>
-                    <h2 className="text-lg font-bold tracking-wide">
-                      AI 剧组 · 五阶段流水线
-                    </h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-bold tracking-wide">
+                        AI 剧组 · 五阶段流水线
+                      </h2>
+                      {/* v2.8：双编号系统被 VLM 判混淆（左栏输入项 vs 本栏 01~05 阶段）——
+                          编号语义唯一化后，再用徽标明确「左边是你配置，这边 AI 接手」 */}
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-500/40 bg-emerald-500/5 text-[10px] text-emerald-400"
+                      >
+                        全组开机后 AI 自动执行
+                      </Badge>
+                    </div>
                     <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                      左侧选择题材、输入梗概并「全组开机」后，从一句创意到可下载的 9:16 成片全流程自动推进。
+                      左侧选择题材、输入梗概并「全组开机」，从一句创意到可下载的 9:16 成片全流程自动推进。
                     </p>
                   </div>
                 </div>
@@ -467,19 +477,34 @@ export default function Home() {
                   })}
                 </div>
 
-                {/* —— 成片预览手机模型 × 能力亮点 —— */}
-                <div className="grid flex-1 grid-cols-1 items-center gap-4 sm:grid-cols-[200px,1fr]">
+                {/* —— v2.8 P3（VLM 复审）：空态右栏缺显式开机入口，视线落点在预览器播放键上
+                    ——在导览正下方补一枚次级开机 CTA（amber 实底，让位左栏品牌渐变主 CTA） —— */}
+                <button
+                  type="button"
+                  onClick={handleStartPipeline}
+                  disabled={generating || pipelineRunning || pipelineStarting}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-sm font-bold text-amber-950 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <Clapperboard className="h-4 w-4" />
+                  全组开机 · 让 AI 剧组接管 01~05
+                  <span className="font-mono text-[10px] font-medium opacity-70">
+                    左侧选题材 · 输梗概即可
+                  </span>
+                </button>
+
+                {/* —— 成片预览手机模型 × 能力亮点 ——
+                    v2.8：去掉 grid flex-1 拉伸（VLM：右栏「上密—中空—下密」断层，
+                    中段 300px+ 空洞源于 flex-1 把内容顶高、手机模型居中悬空） */}
+                <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[200px,1fr]">
                   <div className="mx-auto flex w-full max-w-[200px] flex-col items-center gap-2.5">
                   <div className="relative flex aspect-[9/16] max-h-[380px] w-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black shadow-2xl">
                     {/* 弱光晕场景底 */}
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(239,68,68,0.18),transparent_60%)]" />
                     <div className="absolute left-1/2 top-2 h-1 w-14 -translate-x-1/2 rounded-full bg-white/10" />
                     <div className="absolute left-2.5 top-5 flex gap-1.5">
+                      {/* v2.8：EP.01 / 1080p / PREVIEW 三组标签被 VLM 判冗余——只留 EP.01 */}
                       <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[9px] text-white/80">
                         EP.01
-                      </span>
-                      <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[9px] text-white/60">
-                        1080p
                       </span>
                     </div>
                     {/* v2.6 VLM 复审：REC 呼吸点语义混杂（预览 mockup 非真录制态）
@@ -534,17 +559,18 @@ export default function Home() {
                   </div>
 
                   <div className="grid content-center gap-2.5">
+                    {/* v2.8 P1：分组标签区隔「产品能力」与上方 01~05 流程步骤（VLM：样式雷同易误读为第 06~09 步） */}
+                    <p className="flex items-center gap-2 text-[10px] font-semibold tracking-widest text-muted-foreground/70">
+                      产品能力 · 开机即得
+                      <span className="h-px flex-1 bg-border/60" />
+                    </p>
                     {VALUE_PROPS.map((v) => (
                       <div
                         key={v.title}
-                        className={`flex items-start gap-3 rounded-xl border p-3.5 ${
-                          /* v2.6 VLM 复审：accent 卡从「描边微亮」升级为唯一实底图标位 +
-                              加重描边/底色，与普通功能行拉开明显层级（原几乎等权被指 P0） */
-                          v.accent
-                            ? "border-amber-500/50 bg-amber-500/10 shadow-lg shadow-amber-500/10"
-                            : "border-border/60 bg-card"
-                        }`}
+                        className="flex items-start gap-3 rounded-xl border border-border/60 bg-card p-3.5"
                       >
+                        {/* v2.8 VLM 复审：accent 卡降权——取消卡级 amber 描边/浅底/阴影
+                            （三重叠加被指压过五阶段导览），层级改由实底图标位 + 标题色承担 */}
                         <span
                           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
                             v.accent
@@ -558,9 +584,7 @@ export default function Home() {
                           <p className={`text-xs font-semibold ${v.accent ? "text-amber-300" : ""}`}>
                             {v.title}
                           </p>
-                          <p className={`mt-0.5 text-[11px] leading-relaxed ${
-                            v.accent ? "text-foreground/80" : "text-muted-foreground"
-                          }`}>
+                          <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
                             {v.desc}
                           </p>
                         </div>
@@ -569,7 +593,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* —— 数据规模尾条 —— */}
+                {/* —— 数据规模尾条（v2.8：删尾部版本号——与顶栏徽标重复被 VLM 判冗余） —— */}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/60 pt-3 text-[10px] text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Sparkles className="h-3 w-3 text-amber-400/80" />
@@ -583,7 +607,6 @@ export default function Home() {
                     <Users className="h-3 w-3 text-amber-400/80" />
                     {Object.keys(CREW_ROLES).length} 个剧组岗位
                   </span>
-                  <span className="ml-auto font-mono">DRAMA STUDIO v2.6</span>
                 </div>
               </section>
             )}
