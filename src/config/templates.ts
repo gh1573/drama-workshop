@@ -88,12 +88,12 @@ export const PROMPT_TECHNICAL_TAIL = "cinematic quality";
 
 /**
  * 拆镜规格（导演阶段提示词参数，决定单集总时长档位）。
- * 精简档（v2.4 默认）：每幕 3~4 镜 × 4~5s ≈ 整集约 40~60s（含片头卡），
+ * 精简档（v2.4 默认）：每场 3~4 镜 × 4~5s ≈ 整集约 40~60s（含片头卡），
  * 镜头量约 9~12 个，单集真实生成可在分钟级跑通。
  * 调整档位只改这里，提示词与解析上限自动跟随。
  */
 export const BREAKDOWN_SPEC = {
-  /** 每幕镜头数下限/上限 */
+  /** 每场镜头数下限/上限 */
   shotsPerActMin: 3,
   shotsPerActMax: 4,
   /** 单镜时长（毫秒）下限/上限 */

@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "剧集智能创编工坊 DRAMA STUDIO — 微短剧分镜智能创作平台",
   description:
-    "专注于微短剧与影视作品的剧本推演、镜头编排与成片合成工作台。选题材、输入梗概，AI 实时推演黄金三幕分镜，一键导出 JSON 工程与制作清单。",
+    "专注于微短剧与影视作品的剧本推演、镜头编排与成片合成工作台。选题材、输入梗概，AI 实时推演场次化剧本与分镜，一键导出 JSON 工程与制作清单。",
   keywords: [
     "短剧",
     "分镜",

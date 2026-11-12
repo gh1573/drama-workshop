@@ -63,9 +63,9 @@ v2 的功能清单来自对业界头部「创编一体」AI 视频创作平台�
 | # | 流水线阶段 | 剧组角色 | 用户做的事 | 技术实现 |
 | --- | --- | --- | --- | --- |
 | 0 | 制片立项 | 制片主任 | 选题材、给梗概、定参数 | 项目创建 + 题材预设库（配置数据） |
-| 1 | 剧本创作 | 编剧 | 确认/改写三幕剧本 | TextProvider 三幕推演 |
+| 1 | 剧本创作 | 编剧 | 确认/改写场次剧本 | TextProvider 场次化推演（v2.7：3~6 场弹性，首场 hook、末场 cliffhanger） |
 | 2 | 选角定妆 | 选角定妆 | 过目定妆图、微调外观描述 | 资产提取 + ImageProvider 定妆 |
-| 3 | 导演拆镜 | 导演 | 浏览分镜、拖拽修正 | 幕级拆镜（含能量值/音效标注） |
+| 3 | 导演拆镜 | 导演 | 浏览分镜、拖拽修正 | 场次级拆镜（含能量值/音效标注） |
 | 4 | 锚定组装 | 场记 | 无需参与（自动） | prompt-engine 确定性组装 + 锚点指纹 |
 | 5 | 后期成包 | 后期 | 验收制作包（定妆图/字幕/音效/配乐/曲线） | 三轨落轨 + 能量曲线聚合 + 缺图资产自动提交定妆任务（幂等去重） |
 
@@ -311,7 +311,7 @@ model TrackItem {
 Series (v2.3)
   └── Project（= 剧集，v2.3 加 seriesId/episodeNo）
         ├── Asset（角色/场景/道具 × N，含 lockedAppearance + visualAnchor + 定妆图）
-        ├── StoryBeat × 3（幕节拍，含 energyStart/energyEnd）
+        ├── StoryBeat × 3~6（场次，含 narrativeFunction 5 类与 energyStart/energyEnd）
         ├── TimelineClip × N（镜头，含 finalPrompt / energy / sfxHint）
         │     └── ShotRef × N ──→ Asset（引用 + 镜内状态注记）
         ├── RenderTask × N（breakdown / portrait / video / voiceover）
@@ -368,7 +368,7 @@ export interface EnergyCurvePoint { clipId: string; order: number; energy: numbe
 
 ```
 ┌──────────────────── UI 层（src/app + src/components + src/store） ────────────────────┐
-│  /              工作台首页（题材 → 梗概 → 生成三幕 → 拆镜 → 镜头轨）                    │
+│  /              工作台首页（题材 → 梗概 → 生成场次剧本 → 拆镜 → 镜头轨）                 │
 │  /project/[id]  剧集工作区：故事板视图 / 时间线视图 / 资产库面板 / 任务中心            │
 │  /library       项目库（系列分组、状态筛选）                                          │
 │  store: workbench（会话） + project-store（数据缓存与乐观更新）                       │

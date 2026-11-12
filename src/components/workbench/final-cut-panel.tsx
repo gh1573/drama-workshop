@@ -431,7 +431,7 @@ export function FinalCutPanel() {
           </Select>
         </div>
         <p className="w-full text-[10px] leading-relaxed text-muted-foreground/70">
-          智能矩阵：片头卡溶解入戏 · 同幕硬切保节奏 · 悬念幕压黑收束（§7.11）；调色在字幕烧录前作用，白字不偏色
+          智能矩阵：片头卡溶解入戏 · 同场硬切保节奏 · 悬念场压黑收束（§7.11）；调色在字幕烧录前作用，白字不偏色
         </p>
       </div>
 

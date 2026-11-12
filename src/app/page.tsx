@@ -70,8 +70,8 @@ import type { LucideIcon } from "lucide-react";
 const LOADING_STEPS = [
   "解析题材调性与钩子策略",
   "推演黄金 3 秒冲突开场",
-  "编排中段绝地反转",
-  "设计 12 秒悬念卡点",
+  "编排中段冲突升级与反转",
+  "设计末场卡点留钩",
   "打磨台词金句与画面提示",
 ];
 
@@ -184,7 +184,7 @@ export default function Home() {
     const ok = await generate();
     if (ok) {
       setTab("script");
-      toast({ title: "分镜推演完成", description: "三幕结构已生成，可保存到项目库或导出" });
+      toast({ title: "分镜推演完成", description: "场次剧本已生成，可保存到项目库或导出" });
     } else {
       toast({
         title: "生成失败",
@@ -365,7 +365,7 @@ export default function Home() {
                   )}
                 </Button>
 
-                {/* 副路径：仅快速推演三幕（不立项） */}
+                {/* 副路径：仅快速推演场次剧本（不立项） */}
                 <p className="text-center text-xs text-muted-foreground">
                   只想先试试剧本？
                   <button
@@ -373,7 +373,7 @@ export default function Home() {
                     disabled={generating || pipelineRunning}
                     className="mx-1 underline underline-offset-2 transition-colors hover:text-foreground disabled:opacity-40"
                   >
-                    仅快速推演三幕剧本（不立项）
+                    仅快速推演场次剧本（不立项）
                   </button>
                 </p>
 
@@ -731,7 +731,7 @@ export default function Home() {
       <footer className="mt-auto border-t border-border/60 bg-background/60 lg:hidden">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-1.5 px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:px-6">
           <p>制作团队：剧集智能创编工坊 (DRAMA STUDIO) · 本页为该工具的复刻实现，仅用于剧本创意推演</p>
-          <p>三幕结构：Hook 黄金开头 → Clash 绝地反转 → Cliffhanger 卡点留钩</p>
+          <p>场次结构：首场黄金钩子 → 中段升级/反转/顶点 → 末场卡点留钩</p>
         </div>
       </footer>
     </div>

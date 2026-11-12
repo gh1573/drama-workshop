@@ -106,7 +106,7 @@ export function ProjectInfoCard() {
           /* v2.6 VLM 复审：原 7 格 2+2+2+1 孤行断裂栅格——合并为一格收口成 2×3 */
           {
             label: "分镜规模",
-            value: `${session.beats.length} 幕 · ${session.clips.length} 镜`,
+            value: `${session.beats.length} 场 · ${session.clips.length} 镜`,
           },
         ].map((s) => (
           <div
@@ -150,7 +150,7 @@ export function ProjectInfoCard() {
           <Button
             onClick={exportJson}
             variant="outline"
-            title="导出完整工程 JSON（含三幕/镜头/锚点）"
+            title="导出完整工程 JSON（含场次/镜头/锚点）"
             className="h-9 border-border/70 px-2 text-xs font-semibold hover:bg-secondary/50"
           >
             <FileJson className="h-3.5 w-3.5 shrink-0" />

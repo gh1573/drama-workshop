@@ -10,21 +10,25 @@ import {
 import { useWorkbench } from "@/store/workbench";
 
 /**
- * 单集结构节奏分析 —— 对齐真实短剧工业化打点标准：
- * - 三幕时间占比（黄金 12 秒：0-3s / 4-8s / 9-12s）
- * - 情绪能量曲线（蓄力 → 爆发 → 悬念，按叙事位置的标准能量模型）
+ * 单集结构节奏分析 —— 对齐真实短剧工业化打点标准（v2.7 场次化剧本）：
+ * - 场次时间占比（首场黄金 3 秒钩子，整集时长由拆镜档位决定）
+ * - 情绪能量曲线（钩子蓄力 → 冲突爬升 → 反转/顶点爆发 → 高位留钩，按叙事功能的标准能量模型）
  * - 打点密度（真实短剧平均每镜头 3~6 秒、每 15~20 秒一次翻转）
  * - 工业达标清单（分镜密度 / 景别多样性 / 运镜多样性 / 金句卡点）
  */
 
 const GOLDEN_MS: Record<NarrativeFunction, number> = {
   hook: 3000,
+  buildup: 5000,
+  twist: 4500,
   climax: 5000,
   cliffhanger: 4000,
 };
 
 const ENERGY: Record<NarrativeFunction, { v: number; label: string; note: string }> = {
-  hook: { v: 55, label: "蓄力", note: "憋屈值蓄满，冲突压到临界" },
+  hook: { v: 55, label: "蓄力", note: "黄金 3 秒拉满情绪张力" },
+  buildup: { v: 70, label: "爬升", note: "冲突层层加码，压迫感上行" },
+  twist: { v: 85, label: "反转", note: "身份揭晓颠覆局势，预期落空" },
   climax: { v: 100, label: "爆发", note: "身份揭晓 / 打脸顶点，爽感拉满" },
   cliffhanger: { v: 78, label: "高位悬念", note: "不落地、留缺口，逼出下一集" },
 };
@@ -97,7 +101,7 @@ export function RhythmPanel() {
   const sizeScore = sizeSet.size / 4; // 达标线：4 种景别
   const movementScore = movementSet.size / 5; // 达标线：5 种运镜
 
-  // —— 金句卡点：每幕都有非空台词 ——
+  // —— 金句卡点：每一场都有非空台词 ——
   const quoteGood = sorted.every((b) => b.dialogueSubtitle.trim().length > 0);
 
   // —— 能量曲线（SVG，宽度 100% viewBox 240x64） ——
@@ -123,13 +127,15 @@ export function RhythmPanel() {
       <div>
         <p className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
           <TrendingUp className="h-3 w-3" />
-          三幕时间占比（总计 {totalSec}s）
+          场次时间占比（总计 {totalSec}s）
         </p>
         <div className="flex h-7 overflow-hidden rounded-lg border border-border/60">
           {sorted.map((b, i) => {
             const pct = (actMs[i] / totalMs) * 100;
             const colors: Record<NarrativeFunction, string> = {
               hook: "bg-gradient-to-r from-amber-500 to-orange-500",
+              buildup: "bg-gradient-to-r from-sky-500 to-blue-500",
+              twist: "bg-gradient-to-r from-fuchsia-500 to-purple-500",
               climax: "bg-gradient-to-r from-rose-500 to-red-500",
               cliffhanger: "bg-gradient-to-r from-emerald-500 to-teal-500",
             };
@@ -146,9 +152,9 @@ export function RhythmPanel() {
           })}
         </div>
         <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-          {sorted.map((b) => (
+          {sorted.map((b, i) => (
             <span key={b.index}>
-              第{b.index}幕 {Math.round(actMs[sorted.indexOf(b)] / 100) / 10}s
+              第{b.index}场 {Math.round(actMs[i] / 100) / 10}s
             </span>
           ))}
         </div>
@@ -182,7 +188,7 @@ export function RhythmPanel() {
         <div className="flex justify-between text-[10px] leading-tight text-muted-foreground">
           {sorted.map((b) => (
             <span key={b.index} className="max-w-[32%] text-center">
-              第{b.index}幕：{ENERGY[b.narrativeFunction].note}
+              第{b.index}场：{ENERGY[b.narrativeFunction].note}
             </span>
           ))}
         </div>
@@ -252,13 +258,13 @@ export function RhythmPanel() {
           <Meter
             label={`运镜多样性 · ${movementSet.size} 种`}
             value={movementScore * 100}
-            hint="三幕梯级调度 + 分镜表内逐镜切换可继续提升"
+            hint="场次梯级调度 + 分镜表内逐镜切换可继续提升"
             good={movementScore >= 1}
           />
           <Meter
             label="金句卡点覆盖"
             value={quoteGood ? 100 : 66}
-            hint="每一幕都应有可直接上屏的封神台词"
+            hint="每一场都应有可直接上屏的封神台词"
             good={quoteGood}
           />
         </div>

@@ -16,9 +16,9 @@ export const maxDuration = 300;
 type Ctx = { params: Promise<{ id: string; beatIndex: string }> };
 
 /**
- * AI 分镜拆解（导演手工补拍单幕）：
+ * AI 分镜拆解（导演手工补拍单场）：
  * 拆解 → 回写镜头轨（v2 协议：能量/音效/英文动作提示词）→
- * 自动绑定资产引用 → 该幕镜头重新锚定组装 → 三轨确定性重铺。
+ * 自动绑定资产引用 → 该场镜头重新锚定组装 → 三轨确定性重铺。
  * 与流水线「导演拆镜」阶段共用同一套执行单元。
  */
 export async function POST(_req: NextRequest, ctx: Ctx) {
@@ -26,13 +26,13 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
     const { id, beatIndex } = await ctx.params;
     const idx = Number(beatIndex);
     if (!Number.isInteger(idx) || idx < 1 || idx > 99) {
-      return fail("非法的幕序号", 422);
+      return fail("非法的场次序号", 422);
     }
 
     const detail = await getProject(id);
     const target = detail.storyBeats.find((b) => b.index === idx);
     if (!target) {
-      throw new RouteError(`第 ${idx} 幕不存在，无法拆解`, 404);
+      throw new RouteError(`第 ${idx} 场不存在，无法拆解`, 404);
     }
 
     const shots = await breakdownAct({

@@ -144,7 +144,7 @@ export function ProjectLibraryDrawer() {
             {PROJECT_STATUS[p.status]}
           </Badge>
           <span>
-            {p.beatCount} 幕 · {p.clipCount} 片段
+            {p.beatCount} 场 · {p.clipCount} 片段
           </span>
           <span className="ml-auto">
             {new Date(p.updatedAt).toLocaleString("zh-CN", {

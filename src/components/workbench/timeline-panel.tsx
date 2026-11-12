@@ -42,7 +42,7 @@ import { MovementMatrix } from "@/components/workbench/movement-matrix";
 /**
  * 镜头轨素材排布 —— 工业级分镜表（Shot List）
  * 支持两种形态：
- * - AI 拆解后的分镜表：按幕分组，展示景别/运镜/画面/台词/时长，运镜可点选切换
+ * - AI 拆解后的分镜表：按场次分组，展示景别/运镜/画面/台词/时长，运镜可点选切换
  * - 手动片段：简单列表（状态流转 + 回填成片）
  */
 
@@ -65,7 +65,7 @@ export function TimelinePanel() {
   const [target, setTarget] = useState<ClipData | null>(null);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
-  // v2.4.1 §7.10：按幕折叠，默认全部收起（摘要行展示密度）
+  // v2.4.1 §7.10：按场次折叠，默认全部收起（摘要行展示密度）
   const [openActs, setOpenActs] = useState<ReadonlySet<number>>(new Set());
   const [renderingClipId, setRenderingClipId] = useState<string | null>(null);
 
@@ -240,13 +240,13 @@ export function TimelinePanel() {
         </h3>
         <Badge variant="outline" className="ml-auto text-xs">
           {sorted.length} 个片段
-          {hasBreakdown && ` · ${new Set(sorted.map((c) => c.beatIndex)).size} 幕分组`}
+          {hasBreakdown && ` · ${new Set(sorted.map((c) => c.beatIndex)).size} 场分组`}
         </Badge>
       </div>
 
       {sorted.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border/70 bg-secondary/30 p-4 text-center text-xs text-muted-foreground">
-          点击分镜卡上的「AI 拆解分镜」可将一幕拆为 3~5 个镜头组（对齐真实短剧
+          点击分镜卡上的「AI 拆解分镜」可将一场拆为 3~5 个镜头组（对齐真实短剧
           10~20 分镜/集的工业密度）；或用「加入镜头轨」手动追加片段。
           保存项目后即可管理顺序、运镜、状态与成片地址。
         </p>
@@ -276,7 +276,7 @@ export function TimelinePanel() {
                     )}
                     <Layers className="h-3.5 w-3.5 shrink-0 text-sky-400" />
                     <p className="text-xs font-bold">
-                      第 {String(beat.index).padStart(2, "0")} 幕 ·{" "}
+                      第 {String(beat.index).padStart(2, "0")} 场 ·{" "}
                       {beat.actTitle.split("：")[1] ?? beat.actTitle}
                     </p>
                     <Badge
@@ -400,7 +400,7 @@ export function TimelinePanel() {
                 </div>
               );
             })}
-          {/* 未关联到任何幕的片段（手动添加且幕已被重写） */}
+          {/* 未关联到任何场次的片段（手动添加且该场已被重写） */}
           {sorted
             .filter((c) => !beats.some((b) => b.index === c.beatIndex))
             .map((clip) => (
@@ -414,7 +414,7 @@ export function TimelinePanel() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-semibold">{clip.name}</p>
                   <p className="truncate text-[11px] text-muted-foreground">
-                    未关联幕（分镜已重写，可删除或保留作补拍素材）
+                    未关联场次（分镜已重写，可删除或保留作补拍素材）
                   </p>
                 </div>
                 <StatusBadge clip={clip} />
@@ -439,7 +439,7 @@ export function TimelinePanel() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold">{clip.name}</p>
                 <p className="truncate text-[11px] text-muted-foreground">
-                  第 {String(clip.beatIndex).padStart(2, "0")} 幕
+                  第 {String(clip.beatIndex).padStart(2, "0")} 场
                   {clip.subtitle ? ` · ${clip.subtitle}` : ""}
                 </p>
               </div>

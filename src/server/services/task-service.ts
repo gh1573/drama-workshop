@@ -79,7 +79,7 @@ export async function createTask(
       throw new RouteError("镜头不存在或不属于该项目", 404);
     }
     if (!clip.finalPrompt) {
-      throw new RouteError("镜头尚未锚定（无最终提示词）：请先运行流水线或重新拆解该幕", 409);
+      throw new RouteError("镜头尚未锚定（无最终提示词）：请先运行流水线或重新拆解该场", 409);
     }
   }
 

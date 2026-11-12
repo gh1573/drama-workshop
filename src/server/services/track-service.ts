@@ -6,7 +6,7 @@ import type { EnergyCurvePoint, TrackItemDTO, TrackKind } from "@/lib/drama";
  * 轨道服务 —— 字幕 / 音效 / 配乐三轨 + 情绪能量曲线。
  *
  * 产品语义：后期阶段的「确定性落轨」—— 不再靠人工对时间轴，
- * 拆镜产物（subtitle / sfxHint / 幕级能量）自动换算为时间轴轨道项；
+ * 拆镜产物（subtitle / sfxHint / 场次级能量）自动换算为时间轴轨道项；
  * 人工仍可增删改（三轨是数据，不是只读视图）。
  */
 
@@ -132,10 +132,10 @@ export async function deleteTrack(trackId: string): Promise<void> {
 /**
  * 确定性落轨（后期阶段核心，幂等）：
  * - 时间轴：按镜头轨 order 累计 plannedMs（缺省 2000ms/镜）；
- * - 字幕轨：有台词的镜头逐条落轨；金句镜头（含本幕 dialogueSubtitle）
+ * - 字幕轨：有台词的镜头逐条落轨；金句镜头（含本场 dialogueSubtitle）
  *   标记大字样式（scale xl + 居中）；
  * - 音效轨：sfxHint 非空的镜头在入点卡点（时长 600ms 封顶）；
- * - 配乐轨：按幕分段，情绪标签取题材配乐，强度取幕尾能量。
+ * - 配乐轨：按场次分段，情绪标签取题材配乐，强度取场尾能量。
  */
 export async function rebuildTracks(projectId: string): Promise<TrackItemDTO[]> {
   const [project, clips, beats] = await Promise.all([
@@ -232,7 +232,7 @@ export async function rebuildTracks(projectId: string): Promise<TrackItemDTO[]> 
     }
   }
 
-  // —— 配乐轨（按幕分段） ——
+  // —— 配乐轨（按场次分段） ——
   for (const beat of beatByIndex.values()) {
     const group = timeline.filter((t) => t.beatIndex === beat.index);
     if (group.length === 0) continue;

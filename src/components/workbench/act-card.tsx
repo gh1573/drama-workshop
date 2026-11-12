@@ -23,6 +23,16 @@ export const FN_STYLE: Record<
     barCls: "from-amber-500 to-orange-500",
     quoteCls: "border-amber-400/70 bg-amber-500/10",
   },
+  buildup: {
+    badgeCls: "border-sky-500/40 bg-sky-500/10 text-sky-400",
+    barCls: "from-sky-500 to-blue-500",
+    quoteCls: "border-sky-400/70 bg-sky-500/10",
+  },
+  twist: {
+    badgeCls: "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-400",
+    barCls: "from-fuchsia-500 to-purple-500",
+    quoteCls: "border-fuchsia-400/70 bg-fuchsia-500/10",
+  },
   climax: {
     badgeCls: "border-rose-500/40 bg-rose-500/10 text-rose-400",
     barCls: "from-rose-500 to-red-500",
@@ -35,7 +45,7 @@ export const FN_STYLE: Record<
   },
 };
 
-/** 单幕分镜卡：内容展示 + 台词复制 + 运镜调度矩阵 + AI 拆解分镜 + 加入镜头轨 */
+/** 单场分镜卡：内容展示 + 台词复制 + 运镜调度矩阵 + AI 拆解分镜 + 加入镜头轨 */
 export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
   const { toast } = useToast();
   const fn = NARRATIVE_META[beat.narrativeFunction];
@@ -62,7 +72,7 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
     toast({
       title: success ? "已加入镜头轨" : "加入失败",
       description: success
-        ? `第 ${String(beat.index).padStart(2, "0")} 幕已追加到时间轨末尾`
+        ? `第 ${String(beat.index).padStart(2, "0")} 场已追加到时间轨末尾`
         : "请先「保存到项目库」后再添加镜头片段",
       variant: success ? "default" : "destructive",
     });
@@ -75,7 +85,7 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
     } else {
       toast({
         title: "分镜拆解完成",
-        description: `第 ${String(beat.index).padStart(2, "0")} 幕已拆为多个镜头并写入镜头轨，可在下方分镜表微调`,
+        description: `第 ${String(beat.index).padStart(2, "0")} 场已拆为多个镜头并写入镜头轨，可在下方分镜表微调`,
       });
     }
   }
@@ -91,7 +101,7 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
       <div className="space-y-4 p-5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="bg-gradient-to-r from-red-500 to-amber-500 bg-clip-text text-sm font-black tracking-wider text-transparent">
-            【第 {String(beat.index).padStart(2, "0")} 幕】
+            【第 {String(beat.index).padStart(2, "0")} 场】
           </span>
           <h3 className="text-base font-bold">{beat.actTitle}</h3>
           <Badge variant="outline" className={`ml-auto ${style.badgeCls}`}>

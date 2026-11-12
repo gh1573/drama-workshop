@@ -124,11 +124,11 @@ interface WorkbenchState {
   removeClip: (clipId: string) => Promise<boolean>;
   moveClip: (clipId: string, dir: -1 | 1) => Promise<boolean>;
 
-  /** 切换某幕的运镜（本地即时生效；已入库项目异步同步） */
+  /** 切换某场的运镜（本地即时生效；已入库项目异步同步） */
   setBeatMovement: (beatIndex: number, movement: string) => void;
-  /** AI 分镜拆解：把一幕拆成 3~5 镜头写入镜头轨 */
+  /** AI 分镜拆解：把一场拆成 3~5 镜头写入镜头轨 */
   breakdownAct: (beatIndex: number) => Promise<string | null>;
-  /** 拆解进行中的幕序号（null = 无） */
+  /** 拆解进行中的场次序号（null = 无） */
   breakingDown: number | null;
 }
 
@@ -393,7 +393,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
             : s.session,
         }));
       } else {
-        // v2 契约：先立项草稿（题材快照 + 工程参数），再回写三幕分镜
+        // v2 契约：先立项草稿（题材快照 + 工程参数），再回写场次分镜
         const created = await api<ProjectDetail>("/api/projects", {
           method: "POST",
           body: JSON.stringify({

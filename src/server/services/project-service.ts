@@ -304,8 +304,8 @@ export async function updateBeatEnergy(
 /** —— 镜头轨管理 —— */
 
 /**
- * 分镜拆解回写：用 AI 拆解出的镜头组替换指定幕的全部片段。
- * 事务内：删旧 → 按幕分组重排插入新镜头 → 重写全局 order。
+ * 分镜拆解回写：用 AI 拆解出的镜头组替换指定场次的全部片段。
+ * 事务内：删旧 → 按场次分组重排插入新镜头 → 重写全局 order。
  * v2 协议：同步写入 energy / sfxHint / visualPrompt（锚定与落轨的数据来源）。
  */
 export async function replaceActClips(

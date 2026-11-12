@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { GENRES } from "@/lib/genres";
 import { fail, ok, handleRouteError } from "@/lib/api-utils";
 import { getTextProvider } from "@/server/providers";
+import type { StoryBeat } from "@/lib/drama";
 import {
   buildScreenplayMessages,
   parseScreenplayBeats,
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
     });
 
     const provider = getTextProvider();
-    let beats = null;
+    let beats: StoryBeat[] | null = null;
     let lastRaw = "";
     for (let attempt = 0; attempt < 2 && !beats; attempt++) {
       try {

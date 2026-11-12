@@ -16,11 +16,13 @@ import {
 /**
  * 运镜调度选择矩阵 —— 吸收原版 Flow 工具的交互式矩阵设计：
  * 点击运镜徽标弹出机位库网格，实时切换并显示英文生成 Prompt；
- * 本幕推荐池内机位高亮标注（★），池外可选但给出弱化样式。
+ * 本场推荐池内机位高亮标注（★），池外可选但给出弱化样式。
  */
 
 const FN_STAR: Record<NarrativeFunction, string> = {
   hook: "锁定/冲击",
+  buildup: "跟拍/压迫",
+  twist: "揭示/颠覆",
   climax: "排场/压迫",
   cliffhanger: "炫技/悬念",
 };
@@ -32,7 +34,7 @@ export function MovementMatrix({
   compact,
 }: {
   current: string;
-  /** 所属幕（决定推荐池）；镜头级传 null 表示全部等权 */
+  /** 所属场（决定推荐池）；镜头级传 null 表示全部等权 */
   fn: NarrativeFunction | null;
   onSelect: (movement: string) => void;
   compact?: boolean;
@@ -59,7 +61,7 @@ export function MovementMatrix({
           <p className="text-xs font-bold tracking-wide">运镜机位调度矩阵</p>
           {fn && (
             <span className="text-[10px] text-muted-foreground">
-              ★ 本幕推荐（{FN_STAR[fn]}）
+              ★ 本场推荐（{FN_STAR[fn]}）
             </span>
           )}
         </div>

@@ -16,7 +16,7 @@ import type { WorkbenchSession } from "@/store/workbench";
  * 对流水线位置零感知，只能靠左列折叠条上的百分比数字想象。
  * 导轨把 01-05 阶段变成可点击的「生产进度条 + 快捷导航」：
  * - pending 灰点 / running amber 呼吸 / succeeded emerald 勾 / failed 红叉
- * - 已完成阶段展示产物计数（3 幕 / 8 资产 / 24 镜…），抽象阶段变成可验证产出
+ * - 已完成阶段展示产物计数（3 场 / 8 资产 / 24 镜…），抽象阶段变成可验证产出
  * - 点击阶段直达其产物页签；运行中阶段点击 → 剧组进程看实时日志
  *
  * 无 run（仅快速推演后保存的项目）时导轨全灰待开机，仍可作页签快捷导航。
@@ -43,7 +43,7 @@ export function stageArtifact(
   switch (stageKey) {
     case "screenwriting": {
       const n = session.beats.length;
-      return n > 0 ? `${n} 幕` : null;
+      return n > 0 ? `${n} 场` : null;
     }
     case "casting": {
       const n = session.assets.length;
