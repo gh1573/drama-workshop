@@ -79,6 +79,9 @@ export function ProjectLibraryDrawer() {
     try {
       const detail = await api<ProjectDetail>(`/api/projects/${id}`);
       loadProject(detail);
+      /* 载入成功即收起抽屉——与「续写创建后自动关闭」同语言：
+         用户点项目卡的意图就是回到工作台看它，不应再手动关一层抽屉 */
+      setOpen(false);
       toast({ title: "项目已载入", description: detail.title });
     } catch (e) {
       toast({
