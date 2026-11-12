@@ -118,13 +118,14 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
           </p>
           <button
             aria-label="复制台词"
+            title="复制台词"
             onClick={() =>
               navigator.clipboard
                 ?.writeText(beat.dialogueSubtitle)
                 .then(() => toast({ title: "已复制到剪贴板" }))
                 .catch(() => toast({ title: "复制失败", variant: "destructive" }))
             }
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
+            className="rounded-md p-1.5 text-foreground/70 transition-colors hover:bg-background/60 hover:text-foreground"
           >
             <Copy className="h-3.5 w-3.5" />
           </button>

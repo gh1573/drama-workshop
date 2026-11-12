@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Gauge, ListChecks, TrendingUp } from "lucide-react";
+import { Activity, Clapperboard, Gauge, ListChecks, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   CAMERA_MOVEMENTS,
@@ -187,6 +187,48 @@ export function RhythmPanel() {
           ))}
         </div>
       </div>
+
+      {/* 镜头级节奏带（v2.5.2 VLM 审计 P1）：宽=计划时长、高=情绪能量、
+          pending 降饱和虚线——让「上重下空」的节奏页签有镜级可扫读层 */}
+      {clips.length > 0 && (
+        <div>
+          <p className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+            <Clapperboard className="h-3 w-3" />
+            镜头级节奏带（宽＝时长 · 高＝能量 · 共 {clips.length} 镜）
+          </p>
+          <div className="flex h-24 items-stretch gap-1 rounded-lg border border-border/60 bg-secondary/20 px-3 py-2">
+            {[...clips]
+              .sort((a, b) => a.order - b.order)
+              .map((c) => {
+                const ms = c.plannedMs ?? 4000;
+                const energy = c.energy ?? 50;
+                const ready = c.status === "ready";
+                return (
+                  <div
+                    key={c.id}
+                    className="flex min-w-0 flex-col justify-end"
+                    style={{ flex: `${ms} 1 0%` }}
+                    title={`${c.name} · ${c.shotSize ?? "—"} · ${
+                      Math.round(ms / 100) / 10
+                    }s · 能量 ${energy}${ready ? "" : " · 待生成"}`}
+                  >
+                    <div
+                      className={`w-full rounded-sm ${
+                        ready
+                          ? "bg-gradient-to-t from-amber-500/25 to-amber-400"
+                          : "border border-dashed border-border/80 bg-muted/20"
+                      }`}
+                      style={{ height: `${Math.max(14, energy)}%` }}
+                    />
+                    <p className="mt-1 truncate text-center font-mono text-[9px] leading-3 text-muted-foreground">
+                      {String(c.order + 1).padStart(2, "0")}
+                    </p>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
 
       {/* 工业达标清单 */}
       <div>

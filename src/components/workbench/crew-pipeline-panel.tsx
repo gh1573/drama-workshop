@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   Ban,
@@ -16,6 +16,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -64,6 +74,8 @@ export function CrewPipelinePanel() {
   const retryPipeline = useWorkbench((s) => s.retryPipeline);
   const retryTask = useWorkbench((s) => s.retryTask);
   const cancelTask = useWorkbench((s) => s.cancelTask);
+  // §7.13 v2.5.2：已有 run 时的重开为破坏性重写，需二次确认
+  const [rerunConfirmOpen, setRerunConfirmOpen] = useState(false);
 
   const assetNameById = useMemo(
     () => new Map((session?.assets ?? []).map((a) => [a.id, a.name])),
@@ -184,7 +196,7 @@ export function CrewPipelinePanel() {
             const roleName = CREW_ROLES[entry.role as keyof typeof CREW_ROLES]?.name ?? "剧组";
             return (
               <div key={`${entry.at}-${i}`} className="flex items-start gap-2 text-xs">
-                <span className="shrink-0 font-mono text-[10px] text-muted-foreground/70">
+                <span className="inline-block w-[52px] shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/70">
                   {clockOf(entry.at)}
                 </span>
                 <span className="shrink-0 font-semibold text-foreground/75">
@@ -200,15 +212,70 @@ export function CrewPipelinePanel() {
       {/* —— 操作区 —— */}
       <div className="flex flex-wrap items-center gap-2">
         {!run || succeeded ? (
-          <Button
-            size="sm"
-            onClick={handleStart}
-            disabled={pipelineStarting || running}
-            className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 font-bold text-white hover:opacity-90"
-          >
-            {pipelineStarting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clapperboard className="h-4 w-4" />}
-            {run ? "重新开机（重写剧本与分镜）" : "全组开机 · 从梗概到制作包"}
-          </Button>
+          run ? (
+            /* §7.13 v2.5.2：已有成片的重开 = 破坏性重写 → 危险描边 + 二次确认
+               （VLM 审计 P0：与保存同视觉语言易误触）；首次开机保留品牌渐变 */
+            <>
+              <Button
+                size="sm"
+                onClick={() => setRerunConfirmOpen(true)}
+                disabled={pipelineStarting || running}
+                className="border border-red-500/40 bg-transparent font-bold text-red-300 shadow-none hover:bg-red-500/10 hover:text-red-200"
+              >
+                {pipelineStarting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4" />
+                )}
+                重新开机（重写剧本与分镜）
+              </Button>
+              <AlertDialog
+                open={rerunConfirmOpen}
+                onOpenChange={setRerunConfirmOpen}
+              >
+                <AlertDialogContent className="border-t-2 border-t-red-500/70">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
+                      确认重新开机？
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      将重写当前项目的剧本、分镜与锚点，资产定妆与引用关系会被重建；
+                      已合成成片与任务历史保留。此操作不可撤销。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>再想想</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setRerunConfirmOpen(false);
+                        void handleStart();
+                      }}
+                      className="bg-red-600 text-white hover:bg-red-500"
+                    >
+                      <Clapperboard className="h-4 w-4" />
+                      重写并开机
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              onClick={handleStart}
+              disabled={pipelineStarting || running}
+              className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 font-bold text-white hover:opacity-90"
+            >
+              {pipelineStarting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Clapperboard className="h-4 w-4" />
+              )}
+              全组开机 · 从梗概到制作包
+            </Button>
+          )
         ) : null}
         {failed && (
           <Button
@@ -227,8 +294,9 @@ export function CrewPipelinePanel() {
           </p>
         )}
         {succeeded && (
-          /* §7.13 色彩收敛：绿色仅保留给状态徽标，说明文字回归中性 */
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          /* §7.13 色彩收敛：绿色仅保留给状态徽标，说明文字回归中性；
+             ml-auto 与左侧危险按钮拉开语义分组（VLM 终评 P0：危险操作与就绪提示过近） */
+          <p className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
             制作包已就绪：分镜表 · 资产定妆 · 镜头提示词 · 三轨 · 能量曲线，可导出交付
           </p>
@@ -269,11 +337,17 @@ export function CrewPipelinePanel() {
                   >
                     <span className="min-w-0 flex-1 truncate font-semibold">
                       {task.kind === "portrait" ? (
-                        <Camera className="mr-1 inline h-3 w-3 text-fuchsia-400" />
+                        <Camera className="mr-1 inline h-3 w-3 text-amber-400" />
                       ) : (
                         <Video className="mr-1 inline h-3 w-3 text-sky-400" />
                       )}
                       {kind.label} · {targetName}
+                    </span>
+                    <span
+                      className="font-mono text-[10px] text-muted-foreground/70"
+                      title={task.createdAt}
+                    >
+                      {clockOf(task.createdAt)}
                     </span>
                     {task.attempts > 1 && (
                       <span className="font-mono text-[10px] text-muted-foreground">

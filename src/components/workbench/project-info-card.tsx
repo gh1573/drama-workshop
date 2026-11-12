@@ -62,6 +62,18 @@ export function ProjectInfoCard() {
         <Badge variant="outline" className="border-amber-500/40 text-amber-400">
           {PROJECT_STATUS[session.status]}
         </Badge>
+        {/* §7.13 v2.5.2：成片产出为关键状态而非可调参数，从参数格上提至标题行
+            （VLM 三轮复审反复指出状态与参数混排层级不清） */}
+        <Badge
+          variant="outline"
+          className={
+            session.finalVideoUrl
+              ? "border-emerald-500/40 text-emerald-400"
+              : "border-border/60 text-muted-foreground"
+          }
+        >
+          {session.finalVideoUrl ? "成片已合成" : "成片未合成"}
+        </Badge>
       </div>
 
       <p className="text-sm font-semibold">{session.title}</p>
@@ -70,60 +82,80 @@ export function ProjectInfoCard() {
         {session.synopsis}
       </p>
 
-      <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+      {/* §7.13 v2.5.2：参数格「标签上/值下」两行栅格。VLM 二轮复审：4 列太窄导致
+          "Omni 1.2 Flash""5s · 1080p" 截断——改 2 列宽格，值完整可读（高频修复点）；
+          状态值（开启/已合成）用语义徽标与可调参数区分 */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
         {[
-          ["画幅", detail.aspectRatio, true],
-          ["视频基模", session.modelConfig.videoModel, true],
-          ["单镜", `${session.modelConfig.durationSeconds}s / ${session.modelConfig.resolution}`, true],
-          ["思考深度", session.modelConfig.scriptThinkingLevel, true],
-          ["提示词增强", session.modelConfig.enablePromptEnhance ? "开启" : "关闭", session.modelConfig.enablePromptEnhance],
-          ["分镜幕数", `${session.beats.length} 幕`, true],
-          ["镜头片段", `${session.clips.length} 个`, true],
-          ["产出状态", exportData.statistics.hasSynthesizedOutput ? "已合成" : "待生成", exportData.statistics.hasSynthesizedOutput],
-        ].map(([k, v, positive]) => (
+          { label: "画幅", value: detail.aspectRatio },
+          { label: "视频基模", value: session.modelConfig.videoModel },
+          { label: "单镜", value: `${session.modelConfig.durationSeconds}s · ${session.modelConfig.resolution}` },
+          { label: "思考深度", value: session.modelConfig.scriptThinkingLevel },
+          {
+            label: "提示词增强",
+            value: session.modelConfig.enablePromptEnhance ? "开启" : "关闭",
+            tone: session.modelConfig.enablePromptEnhance ? "on" : "off",
+          },
+          { label: "分镜幕数", value: `${session.beats.length} 幕` },
+          { label: "镜头片段", value: `${session.clips.length} 个` },
+        ].map((s) => (
           <div
-            key={k as string}
-            className="flex items-baseline justify-between gap-1 rounded-lg border border-border/60 bg-secondary/40 px-2.5 py-1.5"
+            key={s.label}
+            title={`${s.label}：${s.value}`}
+            className="min-w-0 rounded-lg border border-border/60 bg-secondary/40 px-2.5 py-1.5"
           >
-            <p className="shrink-0 text-muted-foreground">{k as string}</p>
-            <p
-              className={`text-right ${
-                positive ? "font-semibold" : "font-normal text-muted-foreground"
-              }`}
-            >
-              {v as string}
-            </p>
+            <p className="truncate text-[10px] leading-4 text-muted-foreground">{s.label}</p>
+            {s.tone ? (
+              <span
+                className={`mt-0.5 inline-block rounded px-1 py-px text-[10px] font-semibold leading-4 ${
+                  s.tone === "on"
+                    ? "bg-emerald-500/15 text-emerald-400"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {s.value}
+              </span>
+            ) : (
+              <p className="mt-0.5 truncate font-semibold leading-4 tabular-nums text-foreground">
+                {s.value}
+              </p>
+            )}
           </div>
         ))}
       </div>
 
-      {/* 色彩纪律：主操作唯一实底，导出降为描边次级 */}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      {/* 色彩纪律 §7.13：保存 = 唯一 amber 实底主 CTA（渐变仅留给零态开机钮）；
+          导出降为单行描边次级，文案不折行 */}
+      <div className="space-y-2">
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="h-auto bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 px-2 py-2 text-xs font-bold leading-snug text-white shadow-lg shadow-red-600/20 hover:opacity-90"
+          className="h-10 w-full bg-amber-500 text-xs font-bold text-amber-950 shadow-lg shadow-amber-500/20 hover:bg-amber-400"
         >
           {saving ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <Save className="h-4 w-4 shrink-0" />}
           {/* §7.13：语义明确化 —— 用户能预知点击后发生什么 */}
-          <span className="whitespace-normal">{session.dbId ? "保存本次修改到项目库" : "保存到项目库"}</span>
+          {session.dbId ? "保存本次修改到项目库" : "保存到项目库"}
         </Button>
-        <Button
-          onClick={exportJson}
-          variant="outline"
-          className="h-auto border-border/70 px-2 py-2 text-xs font-semibold leading-snug hover:bg-secondary/50"
-        >
-          <FileJson className="h-4 w-4 shrink-0" />
-          <span className="whitespace-normal">导出 JSON 工程</span>
-        </Button>
-        <Button
-          onClick={exportMd}
-          variant="outline"
-          className="h-auto border-border/70 px-2 py-2 text-xs font-semibold leading-snug hover:bg-secondary/50"
-        >
-          <FileText className="h-4 w-4 shrink-0" />
-          <span className="whitespace-normal">导出 MD 清单</span>
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            onClick={exportJson}
+            variant="outline"
+            title="导出完整工程 JSON（含三幕/镜头/锚点）"
+            className="h-9 border-border/70 px-2 text-xs font-semibold hover:bg-secondary/50"
+          >
+            <FileJson className="h-3.5 w-3.5 shrink-0" />
+            导出 JSON
+          </Button>
+          <Button
+            onClick={exportMd}
+            variant="outline"
+            title="导出 Markdown 制作清单"
+            className="h-9 border-border/70 px-2 text-xs font-semibold hover:bg-secondary/50"
+          >
+            <FileText className="h-3.5 w-3.5 shrink-0" />
+            导出 MD 清单
+          </Button>
+        </div>
       </div>
     </div>
   );

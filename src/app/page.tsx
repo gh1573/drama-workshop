@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  AlertTriangle,
   Anchor,
   BadgeCheck,
   Check,
@@ -26,6 +27,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Collapsible,
   CollapsibleContent,
@@ -120,6 +131,8 @@ export default function Home() {
   // 工作台页签：流水线运行中自动切「剧组进程」，成功后自动切「成片」
   // （订阅状态迁移而非渲染期同步 setState，仅切换瞬间生效，用户手动切页不被覆盖）
   const [tab, setTab] = useState<WorkbenchTab>("cut");
+  // §7.13 v2.5.2：重新开机为破坏性重写，需二次确认（VLM 审计 P1：与保存同视觉语言易误触）
+  const [rerunConfirmOpen, setRerunConfirmOpen] = useState(false);
   useEffect(() => {
     const unsub = useWorkbench.subscribe((s, prev) => {
       const next = s.activeRun?.status ?? null;
@@ -230,7 +243,7 @@ export default function Home() {
                   variant="outline"
                   className="hidden border-amber-500/40 text-amber-400 sm:inline-flex"
                 >
-                  DRAMA STUDIO v2.5.0
+                  DRAMA STUDIO v2.5.2
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -300,11 +313,13 @@ export default function Home() {
                   <GenrePanel />
                   <SynopsisPanel />
                   <ModelConfigPanel />
+                  {/* §7.13 v2.5.2：破坏性重写 = 危险描边 + AlertDialog 二次确认，
+                      与 amber 保存主 CTA 拉开语义（VLM 审计 P0） */}
                   <Button
                     size="lg"
                     disabled={pipelineRunning || pipelineStarting || synopsis.trim().length < 10}
-                    onClick={handleStartPipeline}
-                    className="h-12 w-full bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 text-sm font-bold text-white shadow-lg shadow-red-600/25 hover:opacity-90"
+                    onClick={() => setRerunConfirmOpen(true)}
+                    className="h-12 w-full border border-red-500/40 bg-transparent text-sm font-bold text-red-300 shadow-none hover:bg-red-500/10 hover:text-red-200"
                   >
                     {pipelineRunning || pipelineStarting ? (
                       <>
@@ -318,6 +333,9 @@ export default function Home() {
                       </>
                     )}
                   </Button>
+                  <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+                    重新开机将重写当前项目的剧本、分镜与锚点（成片与任务记录保留）
+                  </p>
                 </CollapsibleContent>
               </Collapsible>
             )}
@@ -387,9 +405,13 @@ export default function Home() {
           </div>
 
           {/* ===== 右列：工作台页签（一次聚焦一个环节，内容内滚） ===== */}
+          {/* §7.13 v2.5.2：会话态右列整体作为「工作区底板」（全高圆角表面）——
+              内容短于视口时不再是悬空卡片下的纯黑空洞，而是有边界的空工作面（IDE 惯例） */}
           <div
             ref={workColRef}
-            className="lg:col-span-8 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pl-1"
+            className={`lg:col-span-8 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pl-1 ${
+              session ? "lg:rounded-2xl lg:border lg:border-border/50 lg:bg-card/20 lg:p-3" : ""
+            }`}
           >
             {generating && (
               <div className="space-y-4">
@@ -571,26 +593,46 @@ export default function Home() {
                   className="space-y-4"
                 >
                   <TabsList className="h-10 w-full justify-start gap-1 overflow-x-auto rounded-xl bg-secondary/40 p-1">
-                    <TabsTrigger value="cut" className="gap-1.5 px-3 text-xs">
+                    {/* §7.13 v2.5.2：激活页签用深底反白片（VS Code 式）强化选中态，
+                        绿点加 tooltip 说明成片就绪语义（VLM 审计 P1/P2） */}
+                    <TabsTrigger
+                      value="cut"
+                      className="relative gap-1.5 px-3 text-xs after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
+                    >
                       <Film className="h-3.5 w-3.5" />
                       成片
                       {session.finalVideoUrl && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                        <span
+                          title="成片已就绪，可下载"
+                          className="h-1.5 w-1.5 rounded-full bg-emerald-400"
+                        />
                       )}
                     </TabsTrigger>
-                    <TabsTrigger value="script" className="gap-1.5 px-3 text-xs">
+                    <TabsTrigger
+                      value="script"
+                      className="relative gap-1.5 px-3 text-xs after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
+                    >
                       <Layers className="h-3.5 w-3.5" />
                       分镜剧本
                     </TabsTrigger>
-                    <TabsTrigger value="assets" className="gap-1.5 px-3 text-xs">
+                    <TabsTrigger
+                      value="assets"
+                      className="relative gap-1.5 px-3 text-xs after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
+                    >
                       <Users className="h-3.5 w-3.5" />
                       资产定妆
                     </TabsTrigger>
-                    <TabsTrigger value="rhythm" className="gap-1.5 px-3 text-xs">
+                    <TabsTrigger
+                      value="rhythm"
+                      className="relative gap-1.5 px-3 text-xs after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
+                    >
                       <Gauge className="h-3.5 w-3.5" />
                       节奏轨道
                     </TabsTrigger>
-                    <TabsTrigger value="pipeline" className="gap-1.5 px-3 text-xs">
+                    <TabsTrigger
+                      value="pipeline"
+                      className="relative gap-1.5 px-3 text-xs after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-400 after:opacity-0 after:transition-opacity data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:after:opacity-100"
+                    >
                       <Workflow className="h-3.5 w-3.5" />
                       剧组进程
                       {pipelineRunning && (
@@ -629,6 +671,36 @@ export default function Home() {
       </main>
 
       <ProjectLibraryDrawer />
+
+      {/* §7.13 v2.5.2：重新开机二次确认——破坏性重写不可一键误触 */}
+      <AlertDialog open={rerunConfirmOpen} onOpenChange={setRerunConfirmOpen}>
+        <AlertDialogContent className="border-t-2 border-t-red-500/70">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
+              确认按新配置重新开机？
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              将以当前题材与梗概重写剧本、分镜与锚点，现有资产定妆与引用关系会被重建；
+              已合成成片与任务历史保留。此操作不可撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>再想想</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                setRerunConfirmOpen(false);
+                void handleStartPipeline();
+              }}
+              className="bg-red-600 text-white hover:bg-red-500"
+            >
+              <Clapperboard className="h-4 w-4" />
+              重写并开机
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* 页脚（移动端展示；桌面端锁定视口布局下隐藏，见 §7.10） */}
       <footer className="mt-auto border-t border-border/60 bg-background/60 lg:hidden">

@@ -71,18 +71,14 @@ function AssetCard({
             {meta.label}
           </Badge>
           {asset.source === "manual" ? (
-            <Badge variant="outline" className="text-[10px] border-zinc-500/40 text-zinc-400">
-              手工建档
-            </Badge>
+            <span className="text-[10px] text-zinc-400">手工建档</span>
           ) : (
-            <Badge variant="outline" className="text-[10px] border-teal-500/40 text-teal-400">
-              剧组建档
-            </Badge>
+            <span className="text-[10px] text-muted-foreground">剧组建档</span>
           )}
           {asset.refCount > 0 && (
-            <Badge variant="outline" className="text-[10px] border-sky-500/40 text-sky-400">
-              {asset.refCount} 镜引用
-            </Badge>
+            <span className="text-[10px] text-muted-foreground">
+              · {asset.refCount} 镜引用
+            </span>
           )}
         </div>
         <p className="line-clamp-2 text-[11px] leading-relaxed text-foreground/85" title={asset.lockedAppearance}>
@@ -107,7 +103,7 @@ function AssetCard({
             size="sm"
             variant="outline"
             disabled={portraitBusy}
-            className="h-7 border-fuchsia-500/40 px-2.5 text-[11px] text-fuchsia-300 hover:bg-fuchsia-500/10"
+            className="h-7 border-border/70 px-2.5 text-[11px] text-foreground/80 hover:bg-secondary/50 hover:text-foreground"
             onClick={() => onPortrait(asset)}
           >
             {portraitBusy ? (
@@ -218,7 +214,7 @@ export function AssetLibraryPanel() {
   return (
     <section className="space-y-3 rounded-xl border bg-card p-5">
       <div className="flex flex-wrap items-center gap-2">
-        <Users className="h-4 w-4 text-fuchsia-400" />
+        <Users className="h-4 w-4 text-amber-400" />
         <h3 className="text-sm font-bold tracking-wide">资产库 · 一致性锚定</h3>
         <Badge variant="outline" className="text-xs">
           角色 {byKind.character.length} · 场景 {byKind.scene.length} · 道具 {byKind.prop.length}
@@ -273,7 +269,7 @@ export function AssetLibraryPanel() {
                   本项目暂无{ASSET_KIND_META[kind].label}资产
                 </p>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {byKind[kind].map((asset) => (
                     <AssetCard
                       key={asset.id}
