@@ -112,23 +112,28 @@ export interface AssetExportItem {
   refCount?: number;
 }
 
-/** 运镜库（枚举值 → 中文机位说明 + 英文生成 Prompt），比原版单一 push 更丰富 */
+/**
+ * 运镜库（枚举值 → 中文机位说明 + 英文生成 Prompt）。
+ * v2.8.1 防抖铁律：视频基模对「handheld/whip/destabilized」等词是字面执行的——
+ * 全部机位一律用稳定器正向词汇（smooth/steadicam/gimbal/steady）表述，
+ * 动感来自推拉速度与构图，不来自画面晃动；key 保持不变以兼容存量项目数据。
+ */
 export const CAMERA_MOVEMENTS: Record<
   string,
   { label: string; prompt: string }
 > = {
-  push: { label: "快速推近特写", prompt: "rapid push-in to close-up, aggressive framing" },
-  pull: { label: "极速拉远全景", prompt: "fast pull-back revealing full scene scale" },
-  handheld: { label: "手持跟拍", prompt: "handheld tracking shot, urgent and immersive" },
-  whip_pan: { label: "闪电甩镜", prompt: "whip pan, lightning-fast camera swing" },
-  dolly_zoom: { label: "希区柯克变焦", prompt: "dolly zoom, vertigo effect, background warps while subject locked" },
-  crane_up: { label: "升降上摇", prompt: "crane up, rising overhead reveal" },
-  orbit: { label: "360°环绕运镜", prompt: "360 degree dynamic circular orbit around subject" },
-  low_angle_tracking: { label: "低角度仰拍跟拍", prompt: "low-angle ground shot tracking forward, dominant and imposing" },
-  top_down: { label: "俯瞰全景", prompt: "top-down bird's eye view, god-like overview" },
-  dutch_tilt: { label: "荷兰倾斜", prompt: "dutch tilt angle, destabilized off-kilter framing" },
+  push: { label: "快速推近特写", prompt: "smooth rapid push-in to close-up, aggressive framing, stabilized gimbal" },
+  pull: { label: "极速拉远全景", prompt: "smooth fast pull-back revealing full scene scale, stabilized gimbal" },
+  handheld: { label: "稳定跟拍", prompt: "steadicam tracking shot, gliding smoothly alongside subject, urgent and immersive" },
+  whip_pan: { label: "快速平摇", prompt: "fast clean pan transition, smooth stabilized camera sweep" },
+  dolly_zoom: { label: "希区柯克变焦", prompt: "smooth dolly zoom, vertigo effect, background warps while subject locked steady" },
+  crane_up: { label: "升降上摇", prompt: "smooth crane up, rising overhead reveal, stabilized" },
+  orbit: { label: "360°环绕运镜", prompt: "smooth 360 degree circular orbit around subject, gimbal stabilized" },
+  low_angle_tracking: { label: "低角度仰拍跟拍", prompt: "low-angle ground shot gliding forward smoothly on stabilized dolly, dominant and imposing" },
+  top_down: { label: "俯瞰全景", prompt: "steady top-down bird's eye view, god-like overview" },
+  dutch_tilt: { label: "荷兰倾斜", prompt: "subtle dutch tilt angle, steady locked framing, dramatic tension" },
   static_close: { label: "固定特写", prompt: "locked-off static close-up, tense stillness" },
-  pan_horizontal: { label: "凌厉横摇", prompt: "crisp horizontal pan scanning across the crowd" },
+  pan_horizontal: { label: "凌厉横摇", prompt: "smooth crisp horizontal pan scanning across the crowd, stabilized" },
 };
 
 /** 运镜中文说明（兼容旧引用） */
@@ -143,12 +148,13 @@ export function cameraLabel(movement: string): string {
  * - twist：揭示/颠覆类，配合身份反转的尺度变化
  * - climax：排场/压迫类，展现顶点的震撞力
  * - cliffhanger：炫技/悬念类，制造意犹未尽的离场感
+ * 池首位即「LLM 给错时的回退默认位」，必须放该功能最稳的机位（v2.8.1 防抖）。
  */
 export const ACT_MOVEMENT_POOLS: Record<NarrativeFunction, string[]> = {
-  hook: ["push", "whip_pan", "dutch_tilt", "static_close", "handheld"],
-  buildup: ["handheld", "push", "pan_horizontal", "low_angle_tracking"],
+  hook: ["push", "static_close", "dutch_tilt", "whip_pan", "handheld"],
+  buildup: ["push", "pan_horizontal", "handheld", "low_angle_tracking"],
   twist: ["pull", "top_down", "dutch_tilt", "whip_pan"],
-  climax: ["low_angle_tracking", "pull", "top_down", "pan_horizontal", "orbit"],
+  climax: ["pull", "low_angle_tracking", "top_down", "pan_horizontal", "orbit"],
   cliffhanger: ["dolly_zoom", "crane_up", "orbit", "top_down"],
 };
 

@@ -83,8 +83,13 @@ export const PROMPT_SEGMENT_LABELS = {
   technical: "Technical",
 } as const;
 
-/** 技术段固定尾缀（画质锚点） */
-export const PROMPT_TECHNICAL_TAIL = "cinematic quality";
+/**
+ * 技术段固定尾缀（画质锚点 + 全局防抖兜底）。
+ * v2.8.1：视频基模只吃正向提示词，稳定器语义（smooth/steady/gimbal）
+ * 必须正向注入——这是每镜必带的全局兜底，即便运镜段被改写也不会晃。
+ */
+export const PROMPT_TECHNICAL_TAIL =
+  "cinematic quality, smooth stabilized camera work, steady gimbal movement";
 
 /**
  * 拆镜规格（导演阶段提示词参数，决定单集总时长档位）。
