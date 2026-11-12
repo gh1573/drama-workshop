@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Clapperboard, Gauge, ListChecks, TrendingUp } from "lucide-react";
+import { Activity, Clapperboard, Film, Gauge, ListChecks, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   CAMERA_MOVEMENTS,
@@ -68,9 +68,10 @@ function Meter({
   );
 }
 
-export function RhythmPanel() {
+export function RhythmPanel({ onJumpToCut }: { onJumpToCut?: () => void }) {
   const beats = useWorkbench((s) => s.session?.beats ?? []);
   const clips = useWorkbench((s) => s.session?.clips ?? []);
+  const finalVideoUrl = useWorkbench((s) => s.session?.finalVideoUrl ?? null);
   if (beats.length === 0) return null;
 
   const sorted = [...beats].sort((a, b) => a.index - b.index);
@@ -116,6 +117,24 @@ export function RhythmPanel() {
 
   return (
     <section className="space-y-3 rounded-xl border bg-card p-5">
+      {/* v2.9 成片可达性：节奏分析都是给成片做注脚的——本页必须一眼能看到
+          成片已就绪（VLM 产品走查 P0：节奏页全是分析数据，主交付物不可见） */}
+      {finalVideoUrl && (
+        <button
+          type="button"
+          onClick={onJumpToCut}
+          className="flex w-full items-center gap-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-left transition hover:bg-emerald-500/15"
+        >
+          <Film className="h-4 w-4 shrink-0 text-emerald-400" />
+          <span className="text-xs font-semibold text-emerald-300">
+            本集成片已就绪
+          </span>
+          <span className="text-xs text-muted-foreground">
+            播放 / 下载成片与制作包
+          </span>
+          <span className="ml-auto text-xs font-semibold text-emerald-300">去成片 →</span>
+        </button>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <Gauge className="h-4 w-4 text-amber-400" />
         <h3 className="text-sm font-bold tracking-wide">单集结构节奏分析</h3>

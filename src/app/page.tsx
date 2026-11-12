@@ -14,6 +14,7 @@ import {
   Layers,
   Film,
   Loader2,
+  Package,
   PenLine,
   Play,
   ScanFace,
@@ -95,9 +96,19 @@ const VALUE_PROPS: Array<{
 }> = [
   {
     icon: Sparkles,
-    title: "一键成片 ffmpeg",
-    desc: "片头卡 + 字幕烧录 + 配音混音 + 转场调色，直出 9:16 MP4",
+    title: "一键成片 · 直出 MP4",
+    desc: "片头卡 + 字幕烧录 + 配音混音 + 转场调色，直出 9:16 竖屏成片",
     accent: true,
+  },
+  {
+    icon: Layers,
+    title: "系列连载 · 一键续集",
+    desc: "续写下一集只需一句梗概，角色定妆与世界观跨集沿用",
+  },
+  {
+    icon: Package,
+    title: "制作包一键下载",
+    desc: "成片 + 镜头素材 + 定妆图 + 分镜表 + 字幕 + 配音，ZIP 打包交付",
   },
   {
     icon: ScanFace,
@@ -108,11 +119,6 @@ const VALUE_PROPS: Array<{
     icon: History,
     title: "断点恢复 · 限流自愈",
     desc: "阶段幂等推进，中断原地进行接力；429 指数退避错峰重试",
-  },
-  {
-    icon: Users,
-    title: "六岗位剧组协作",
-    desc: "制片/编剧/选角/导演/场记/后期按阶段接力，全链路可观测",
   },
 ];
 
@@ -705,7 +711,7 @@ export default function Home() {
                     value="rhythm"
                     className="mt-0 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-200"
                   >
-                    <RhythmPanel />
+                    <RhythmPanel onJumpToCut={() => setTab("cut")} />
                   </TabsContent>
 
                   <TabsContent
