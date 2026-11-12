@@ -60,3 +60,6 @@ server.log
 db/*.db
 # 工具调用过程产物（平台自动抓取的中间结果，非源码）
 tool-results/
+scripts/final_*.ass
+public/assets/voice_*.wav
+!public/assets/voice_demo_*.wav

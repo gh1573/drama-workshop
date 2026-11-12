@@ -66,6 +66,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useWorkbench } from "@/store/workbench";
 import { CREW_ROLES, RUN_STAGES, CAMERA_MOVEMENTS } from "@/lib/drama";
 import { GENRES } from "@/lib/genres";
+import { APP_VERSION } from "@/lib/ui/tokens";
 import type { LucideIcon } from "lucide-react";
 
 const LOADING_STEPS = [
@@ -250,7 +251,7 @@ export default function Home() {
                   variant="outline"
                   className="hidden border-amber-500/40 text-amber-400 sm:inline-flex"
                 >
-                  DRAMA STUDIO v2.8.0
+                  DRAMA STUDIO {APP_VERSION}
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -518,11 +519,12 @@ export default function Home() {
                       <span className="font-mono text-[9px] text-white/70">示例 · 实产</span>
                     </div>
                     {/* v2.9 信任实据（VLM 产品走查 P0：占位 mockup → 流水线实产示例成片，
-                        点击即播——把「产品承诺」变成「可验证的演示」） */}
+                        点击即播——把「产品承诺」变成「可验证的演示」；
+                        v2.9.1：示例成片已有配音与烧录字幕，不设 muted（无 autoplay 不受
+                        浏览器静音策略约束），用户点播即得完整声画体验 */}
                     <video
-                      src="/assets/final_cmwatz8k800wqpzia68d9lgbt.mp4"
+                      src="/assets/final_cmwd6bk9k0000sj35v6cg1a9j.mp4"
                       controls
-                      muted
                       playsInline
                       preload="metadata"
                       className="absolute inset-0 h-full w-full bg-black object-cover"

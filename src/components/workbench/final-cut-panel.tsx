@@ -357,6 +357,14 @@ export function FinalCutPanel() {
           s
         </span>
       </div>
+      {finalVideoUrl && !allReady && (
+        /* v2.9.1 交付语义（全局走查 P1）：「已合成」与「N/N 镜就绪」并存时
+            必须解释成片口径，否则用户必然追问「缺的那 1 镜去哪了」 */
+        <p className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          本版成片由 {readyCount} 个就绪镜头合成，{pendingCount} 镜未就绪未计入；
+          补拍完成后点「重新合成」即可入片，无需重拍已就绪镜头。
+        </p>
+      )}
 
       {/* —— 播放器 / 占位（镜头级进度网格让空态有生命感） —— */}
       <div className="flex justify-center">
