@@ -3,10 +3,11 @@ import { RouteError } from "@/lib/api-utils";
 import type {
   CreateEpisodePayload,
   CreateProjectDraftPayload,
+  ProjectDetail,
   SeriesDetail,
   SeriesSummary,
 } from "@/lib/drama";
-import { createProjectDraft } from "./project-service";
+import { createProjectDraft, getProject } from "./project-service";
 import { createTask } from "./task-service";
 
 /**
@@ -217,7 +218,132 @@ export async function addEpisode(
     clonedAssets = await cloneAssets(prev.id, detail.id);
   }
 
-  return { ...detail, seriesId: series.id, episodeNo, clonedAssets };
+  return {
+    ...detail,
+    seriesId: series.id,
+    seriesTitle: series.title,
+    episodeNo,
+    clonedAssets,
+  };
+}
+
+/* ============================================================
+ * 连载产品化（v2.9）—— 「续写下一集」一键动线
+ *
+ * 产品动机：连载是这个品类的留存引擎（日更/周更）。系列 API
+ * （建系列/加剧集/批量提交）v2.3 已就绪，但用户在界面上无法发起——
+ * 本节把「独立项目 → 连载系列 → 下一集」收敛为一次点击：
+ * - 独立项目自动升级（adopt）为系列第 1 集，零迁移、只回写两列；
+ * - 题材/模型参数缺省继承上一集，资产库可克隆（定妆图沿用）；
+ * - 返回新集全量详情，前端直接切会话续产。
+ * ============================================================ */
+
+/** 从项目标题提取系列名：「X · 第 N 集 / 演示第一集」→「X」 */
+function seriesTitleFromProjectTitle(title: string): string {
+  return title.split(" · ")[0].trim() || title.trim();
+}
+
+/**
+ * 独立项目升级为系列第 1 集（adopt）。
+ * 幂等：已属某系列时直接返回该系列，不重复建档。
+ */
+export async function adoptProjectAsSeriesEpisode1(
+  projectId: string,
+  opts?: { seriesTitle?: string }
+): Promise<SeriesSummary> {
+  const project = await db.project.findUnique({ where: { id: projectId } });
+  if (!project) throw new RouteError("项目不存在或已被删除", 404);
+
+  if (project.seriesId) {
+    const s = await db.series.findUnique({
+      where: { id: project.seriesId },
+      include: { _count: { select: { episodes: true } } },
+    });
+    if (s) {
+      return {
+        id: s.id,
+        title: s.title,
+        synopsis: s.synopsis,
+        genreName: s.genreName,
+        episodeCount: s._count.episodes,
+        updatedAt: s.updatedAt.toISOString(),
+      };
+    }
+  }
+
+  const series = await db.series.create({
+    data: {
+      title:
+        opts?.seriesTitle?.trim() ||
+        seriesTitleFromProjectTitle(project.title),
+      synopsis: project.synopsis,
+      genreId: project.genreId,
+      genreName: project.genreName,
+      genreBadge: project.genreBadge,
+      hookTactic: project.hookTactic,
+      musicMood: project.musicMood,
+      tonePrompt: project.tonePrompt,
+    },
+  });
+
+  await db.project.update({
+    where: { id: project.id },
+    data: { seriesId: series.id, episodeNo: 1 },
+  });
+
+  return {
+    id: series.id,
+    title: series.title,
+    synopsis: series.synopsis,
+    genreName: series.genreName,
+    episodeCount: 1,
+    updatedAt: series.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * 一键续写下一集：无系列先 adopt 当前项目为第 1 集，再追加第 N+1 集。
+ * 返回新集全量详情 + 继承元数据（前端切会话即续产）。
+ */
+export async function continueWithNextEpisode(
+  projectId: string,
+  input: { synopsis: string; title?: string; cloneAssets?: boolean }
+): Promise<
+  ProjectDetail & {
+    seriesId: string;
+    seriesTitle: string;
+    episodeNo: number;
+    clonedAssets: number;
+  }
+> {
+  const project = await db.project.findUnique({ where: { id: projectId } });
+  if (!project) throw new RouteError("项目不存在或已被删除", 404);
+
+  // 独立项目 → 连载第 1 集（幂等：已有系列则沿用）；
+  // 注意必须取 adopt 返回值——内存里的 project.seriesId 还是旧值
+  const seriesId =
+    project.seriesId ?? (await adoptProjectAsSeriesEpisode1(projectId)).id;
+
+  const created = await addEpisode(seriesId, {
+    synopsis: input.synopsis,
+    title: input.title,
+    // 连载铁律：默认沿用上一集资产库（同一角色跨集同一张脸）
+    cloneAssets: input.cloneAssets ?? true,
+  });
+
+  const series = await db.series.findUnique({
+    where: { id: created.seriesId },
+  });
+
+  // 重新取全量详情（含系列归属/聚合字段），前端直接切会话
+  const detail = await getProject(created.id);
+  return {
+    ...detail,
+    seriesId: created.seriesId,
+    seriesTitle: series?.title ?? "",
+    episodeNo: created.episodeNo,
+    clonedAssets: created.clonedAssets,
+  };
 }
 
 /**

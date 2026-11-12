@@ -188,6 +188,14 @@ export const createEpisodeSchema = z.object({
   modelConfig: modelConfigSchema.optional(),
 });
 
+/** 一键续写下一集（v2.9 连载产品化）：梗概必填（承接上一集剧情），
+ *  资产克隆默认开启——同一角色跨集同一张脸是连载的生命线 */
+export const nextEpisodeSchema = z.object({
+  synopsis: z.string().min(10).max(500),
+  title: z.string().max(80).optional(),
+  cloneAssets: z.boolean().default(true),
+});
+
 /** 系列级批量提交：video = 逐集渲染待拍镜头；portrait = 补全缺失定妆图；voiceover = 逐集补台词配音 */
 export const batchRenderSchema = z.object({
   kind: z.enum(["video", "portrait", "voiceover"]).default("video"),

@@ -10,6 +10,7 @@ import {
   Loader2,
   Music,
   Play,
+  Plus,
   RefreshCw,
   Trash2,
   Upload,
@@ -19,6 +20,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -47,6 +56,35 @@ export function FinalCutPanel() {
   const renderAll = useWorkbench((s) => s.renderAll);
   const composeEpisode = useWorkbench((s) => s.composeEpisode);
   const fetchTasks = useWorkbench((s) => s.fetchTasks);
+  // —— v2.9 连载：续写下一集（一键 adopt + 继承 + 切会话） ——
+  const creatingEpisode = useWorkbench((s) => s.creatingEpisode);
+  const createNextEpisode = useWorkbench((s) => s.createNextEpisode);
+  const seriesTitle = useWorkbench((s) => s.session?.seriesTitle ?? null);
+  const episodeNo = useWorkbench((s) => s.session?.episodeNo ?? null);
+  const [nextEpOpen, setNextEpOpen] = useState(false);
+  const [nextEpSynopsis, setNextEpSynopsis] = useState("");
+  const [nextEpError, setNextEpError] = useState<string | null>(null);
+
+  const handleCreateNextEpisode = async () => {
+    if (nextEpSynopsis.trim().length < 10) {
+      setNextEpError("请输入至少 10 个字的剧情梗概（承接上一集的钩子）");
+      return;
+    }
+    setNextEpError(null);
+    const res = await createNextEpisode({ synopsis: nextEpSynopsis.trim() });
+    if (res.ok) {
+      setNextEpOpen(false);
+      setNextEpSynopsis("");
+      toast({
+        title: `第 ${res.episodeNo} 集已创建`,
+        description: res.clonedAssets
+          ? `已继承 ${res.clonedAssets} 项资产定妆，题材与参数沿用上一集，可直接开机`
+          : "题材与参数已沿用上一集，可直接开机",
+      });
+    } else {
+      setNextEpError(res.error);
+    }
+  };
 
   const [composeError, setComposeError] = useState<string | null>(null);
   /** 视频通道是否真机（null = 未探明，按真机口径展示不误导） */
@@ -402,6 +440,24 @@ export function FinalCutPanel() {
               下载成片 MP4
             </Button>
           </a>
+          {/* v2.9 连载产品化：成片交付不是终点，续写下一集是连载生产线的主动线——
+              独立项目自动升级为系列第 1 集，资产定妆克隆（跨集同一张脸） */}
+          <Button
+            variant="outline"
+            disabled={creatingEpisode}
+            onClick={() => {
+              setNextEpError(null);
+              setNextEpOpen(true);
+            }}
+            className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10 hover:text-amber-200"
+          >
+            {creatingEpisode ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            续写下一集
+          </Button>
           <Button
             variant="outline"
             disabled={composing}
@@ -422,6 +478,61 @@ export function FinalCutPanel() {
           </p>
         </div>
       )}
+
+      {/* —— v2.9 连载：续写下一集 Dialog（梗概承接 + 继承说明） —— */}
+      <Dialog open={nextEpOpen} onOpenChange={setNextEpOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              续写下一集
+              {seriesTitle && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  {seriesTitle}
+                  {episodeNo ? ` · 现有第 ${episodeNo} 集` : ""}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              题材与模型参数自动沿用，资产库默认克隆——同一角色跨集同一张脸。
+              {seriesTitle
+                ? "新集将追加为本系列第 " + ((episodeNo ?? 0) + 1) + " 集。"
+                : "本项目将自动升级为系列第 1 集，新集为第 2 集。"}
+            </p>
+            <Textarea
+              value={nextEpSynopsis}
+              onChange={(e) => setNextEpSynopsis(e.target.value)}
+              placeholder="承接上一集结尾的钩子，写清本集剧情走向（至少 10 字）…"
+              className="min-h-[96px] border-border/60 text-sm"
+            />
+            {nextEpError && (
+              <p className="text-xs text-red-400">{nextEpError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setNextEpOpen(false)}
+              className="border-border/70"
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleCreateNextEpisode}
+              disabled={creatingEpisode || nextEpSynopsis.trim().length < 10}
+              className="bg-amber-600 font-semibold text-white hover:bg-amber-500"
+            >
+              {creatingEpisode ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              创建第 {(episodeNo ?? 0) + 1} 集
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* —— 后期风格（v2.5 §7.11）：转场策略 + 调色预设，重合成后生效 ——
           v2.8 P1：降为次级面板观感（去 amber 图标/降对比），保「下载成片」为成片页唯一最高权重动作 */}

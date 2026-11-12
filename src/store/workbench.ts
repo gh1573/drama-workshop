@@ -46,6 +46,10 @@ export interface WorkbenchSession {
   transitionMode: string;
   /** v2.5 §7.11：调色预设键（null = 跟随题材影调） */
   gradePreset: string | null;
+  /** v2.9 连载：系列归属（null = 独立项目，续写时自动升级为系列第 1 集） */
+  seriesId: string | null;
+  seriesTitle: string | null;
+  episodeNo: number | null;
 }
 
 interface WorkbenchState {
@@ -119,6 +123,19 @@ interface WorkbenchState {
   /** 合成进行中 */
   composing: boolean;
 
+  /** —— v2.9 连载产品化 —— */
+  /** 一键续写下一集：独立项目自动升级为系列第 1 集；题材/参数继承、资产克隆（定妆图沿用）。
+   *  成功后自动切会话到新集。seriesId 入口供项目库系列分组直发。 */
+  createNextEpisode: (input: {
+    synopsis: string;
+    seriesId?: string;
+  }) => Promise<
+    | { ok: true; episodeNo: number; clonedAssets: number; seriesTitle: string }
+    | { ok: false; error: string }
+  >;
+  /** 续写请求进行中 */
+  creatingEpisode: boolean;
+
   addClip: (beatIndex: number) => Promise<boolean>;
   patchClip: (clipId: string, patch: Partial<ClipData>) => Promise<boolean>;
   removeClip: (clipId: string) => Promise<boolean>;
@@ -181,6 +198,9 @@ function detailToSession(detail: ProjectDetail): WorkbenchSession {
     finalVideoUrl: detail.finalVideoUrl,
     transitionMode: detail.transitionMode,
     gradePreset: detail.gradePreset,
+    seriesId: detail.seriesId ?? null,
+    seriesTitle: detail.seriesTitle ?? null,
+    episodeNo: detail.episodeNo ?? null,
   };
 }
 
@@ -332,6 +352,9 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
         finalVideoUrl: session?.finalVideoUrl ?? null,
         transitionMode: session?.transitionMode ?? "auto",
         gradePreset: session?.gradePreset ?? null,
+        seriesId: session?.seriesId ?? null,
+        seriesTitle: session?.seriesTitle ?? null,
+        episodeNo: session?.episodeNo ?? null,
       },
       outputNonce: get().outputNonce + 1,
     });
@@ -804,6 +827,62 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       return err instanceof Error ? err.message : "成片合成失败";
     } finally {
       set({ composing: false });
+    }
+  },
+
+  // ============================================================
+  // v2.9 · 连载产品化（docs/architecture-v2.md §7.14）
+  // ============================================================
+
+  creatingEpisode: false,
+
+  createNextEpisode: async ({ synopsis, seriesId }) => {
+    if (get().creatingEpisode) return { ok: false, error: "正在创建下一集，请稍候" };
+    set({ creatingEpisode: true });
+    try {
+      // 系列入口（项目库分组）走系列端点；会话入口走项目一键端点（自动 adopt + 继承）
+      const detail = seriesId
+        ? await api<
+            ProjectDetail & {
+              seriesId: string;
+              episodeNo: number;
+              clonedAssets: number;
+            }
+          >(`/api/series/${seriesId}/episodes`, {
+            method: "POST",
+            body: JSON.stringify({ synopsis, cloneAssets: true }),
+          })
+        : await api<
+            ProjectDetail & {
+              seriesId: string;
+              seriesTitle: string;
+              episodeNo: number;
+              clonedAssets: number;
+            }
+          >(`/api/projects/${get().session?.dbId}/next-episode`, {
+            method: "POST",
+            body: JSON.stringify({ synopsis }),
+          });
+      // 切会话到新集（左栏同步题材/参数，立即续产）+ 刷新项目库分组
+      get().loadProject(detail);
+      void get().fetchLibrary();
+      const seriesTitle =
+        ("seriesTitle" in detail && detail.seriesTitle) ||
+        get().session?.seriesTitle ||
+        "";
+      return {
+        ok: true,
+        episodeNo: detail.episodeNo,
+        clonedAssets: detail.clonedAssets,
+        seriesTitle,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : "续写下一集失败",
+      };
+    } finally {
+      set({ creatingEpisode: false });
     }
   },
 }));

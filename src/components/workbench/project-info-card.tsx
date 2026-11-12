@@ -61,6 +61,15 @@ export function ProjectInfoCard() {
           {session.genre.name}
         </Badge>
         <Badge variant="outline">{session.genre.badge}</Badge>
+        {/* v2.9 连载：系列归属徽标（连载第 N 集）——会话内持续可见连载身份 */}
+        {session.seriesId && (
+          <Badge
+            variant="outline"
+            className="border-amber-500/40 text-[10px] text-amber-300"
+          >
+            {session.seriesTitle || "连载"} · 第 {session.episodeNo ?? "?"} 集
+          </Badge>
+        )}
         {/* v2.6 VLM 复审：finalVideoUrl 存在时项目状态徽标让位（「制作中」与
             「成片已合成」同屏语义冲突）——成片徽标即最强事实 */}
         {!session.finalVideoUrl && (

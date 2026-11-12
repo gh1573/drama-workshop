@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FolderOpen, Layers, Loader2, Pencil, Trash2 } from "lucide-react";
+import { FolderOpen, Layers, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
   SheetContent,
@@ -34,9 +35,17 @@ export function ProjectLibraryDrawer() {
   const loadProject = useWorkbench((s) => s.loadProject);
   const removeProject = useWorkbench((s) => s.removeProject);
   const renameProject = useWorkbench((s) => s.renameProject);
+  // —— v2.9 连载：系列分组「续写下一集」直发入口 ——
+  const createNextEpisode = useWorkbench((s) => s.createNextEpisode);
+  const creatingEpisode = useWorkbench((s) => s.creatingEpisode);
 
   const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [nextEp, setNextEp] = useState<
+    { seriesId: string; title: string; nextNo: number } | null
+  >(null);
+  const [nextEpSynopsis, setNextEpSynopsis] = useState("");
+  const [nextEpError, setNextEpError] = useState<string | null>(null);
 
   /** v2.3：按系列分组（系列内按集号排序，无系列项目独立展示） */
   const groups = useMemo(() => {
@@ -99,6 +108,33 @@ export function ProjectLibraryDrawer() {
       variant: ok ? "default" : "destructive",
     });
     if (ok) setRenaming(null);
+  }
+
+  /** v2.9：系列分组续写（题材/参数继承，资产克隆沿用定妆） */
+  async function handleNextEpisode() {
+    if (!nextEp) return;
+    if (nextEpSynopsis.trim().length < 10) {
+      setNextEpError("请输入至少 10 个字的剧情梗概（承接上一集的钩子）");
+      return;
+    }
+    setNextEpError(null);
+    const res = await createNextEpisode({
+      synopsis: nextEpSynopsis.trim(),
+      seriesId: nextEp.seriesId,
+    });
+    if (res.ok) {
+      setNextEp(null);
+      setNextEpSynopsis("");
+      setOpen(false);
+      toast({
+        title: `第 ${res.episodeNo} 集已创建`,
+        description: res.clonedAssets
+          ? `已继承 ${res.clonedAssets} 项资产定妆，可直接开机`
+          : "题材与参数已沿用，可直接开机",
+      });
+    } else {
+      setNextEpError(res.error);
+    }
   }
 
   function renderCard(p: ProjectSummary) {
@@ -224,6 +260,29 @@ export function ProjectLibraryDrawer() {
                   >
                     连载 {g.episodes.length} 集
                   </Badge>
+                  {/* v2.9 连载产品化：分组头部直发续写（连载是留存引擎，不该藏在菜单里） */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={creatingEpisode}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setNextEpError(null);
+                      setNextEp({
+                        seriesId: g.episodes[0].seriesId as string,
+                        title: g.title,
+                        nextNo: Math.max(...g.episodes.map((p) => p.episodeNo ?? 0)) + 1,
+                      });
+                    }}
+                    className="ml-auto h-6 gap-1 px-2 text-[11px] text-amber-300 hover:bg-amber-500/10 hover:text-amber-200"
+                  >
+                    {creatingEpisode ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Plus className="h-3 w-3" />
+                    )}
+                    续写
+                  </Button>
                 </div>
                 <ul className="space-y-2.5 border-l border-amber-500/20 pl-3">
                   {g.episodes.map((p) => (
@@ -261,6 +320,51 @@ export function ProjectLibraryDrawer() {
                 className="bg-gradient-to-r from-red-600 to-amber-500 text-white hover:opacity-90"
               >
                 保存
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* —— v2.9 连载：系列分组续写 Dialog —— */}
+        <Dialog open={!!nextEp} onOpenChange={(o) => !o && setNextEp(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                续写第 {nextEp?.nextNo ?? ""} 集
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  {nextEp?.title}
+                </span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                题材与模型参数自动沿用上一集，资产库默认克隆——同一角色跨集同一张脸。
+              </p>
+              <Textarea
+                value={nextEpSynopsis}
+                onChange={(e) => setNextEpSynopsis(e.target.value)}
+                placeholder="承接上一集结尾的钩子，写清本集剧情走向（至少 10 字）…"
+                className="min-h-[96px] border-border/60 text-sm"
+              />
+              {nextEpError && (
+                <p className="text-xs text-red-400">{nextEpError}</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNextEp(null)}>
+                取消
+              </Button>
+              <Button
+                onClick={handleNextEpisode}
+                disabled={creatingEpisode || nextEpSynopsis.trim().length < 10}
+                className="bg-amber-600 font-semibold text-white hover:bg-amber-500"
+              >
+                {creatingEpisode ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                创建第 {nextEp?.nextNo ?? ""} 集
               </Button>
             </DialogFooter>
           </DialogContent>
