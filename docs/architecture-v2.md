@@ -448,6 +448,12 @@ export function composeVideoPrompt(input: PromptInput): PromptOutput;
 组装顺序固定：`角色段 → 场景段 → 道具段 → 动作段 → 运镜段（CAMERA_MOVEMENTS.prompt）→ 影调段 → 技术段（比例/时长/画质）`。
 分段结构的意义：前端「提示词微调」只允许改段内容重新组装，不允许绕过管线手写全文——保证锚定不被破坏。
 
+**运镜防抖铁律（v2.8.1）**：视频基模只吃正向提示词，且对「handheld / whip pan / destabilized」等词汇按字面执行，会直接生成晃动镜头。因此：
+1. 运镜库全部 12 个机位一律用稳定器正向词汇（smooth / steadicam / gimbal / steady）表述，动感来自推拉速度与构图，不来自画面晃动；key 不变，兼容存量数据；
+2. 运镜池首位（`pool[0]`）是 LLM 给错时的回退默认位，必须放该功能最稳的机位；
+3. 技术段尾缀（`PROMPT_TECHNICAL_TAIL`）全局注入稳定器语义，构成每镜必带的兜底；
+4. 剧本与拆镜两处 LLM 提示词带「运镜稳定硬约束」，约束模型自产的 promptGuidance / visualPrompt 措辞。
+
 ### 7.3 异步任务管线（C4/C5）
 
 **状态机**：
