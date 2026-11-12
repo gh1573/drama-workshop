@@ -24,6 +24,9 @@ Project.transitionMode/gradePreset · L4）读取后经 CLI 传入，脚本自�
   - 字幕轨 track_items(kind='subtitle')（烧录 ASS，金句大字样式；字号随画幅等比缩放）
   - 叙事功能 story_beats.narrativeFunction（auto 转场矩阵的选型依据，§7.11）
   - 片头卡：剧名 + 集号（PIL 绘制 → 缓推动态；集号缺省时仅剧名）
+    · 排版纪律（v2.9.1）：剧名 fit-to-width——单行放不下按「·」分隔符拆两行，
+      仍放不下等比缩小至下限，病态超长截断加「…」兜底；装饰线宽度跟随标题实际宽度；
+    · 单一渲染源：片头卡视觉仅由 PIL 卡面承担，ASS 不再叠加同名白字（历史双重绘制已除）。
 
 输出：public/assets/final_{projectId}.mp4（H.264 + AAC 竖版，自包含）
 最后 stdout 行打印 JSON 结果：{"ok":true,"url":…,"clips":…,"durationSec":…,"withVoice":…,"withBgm":…,"transitions":…}
@@ -47,7 +50,7 @@ SUBTITLE_BASE_HEIGHT = 1280
 SUBTITLE_BASE_STYLES = {
     # name: (fontsize, outline, margin_v)
     "Jinju": (58, 3, 80),
-    "Card": (64, 3, 0),
+    # v2.9.1：Card 样式退役（片头卡视觉单一来源 = PIL 卡面，不再叠加 ASS 白字）
 }
 # 转场矩阵（§7.11 auto 模式）：返回 ffmpeg xfade transition 名，None = 硬切
 AUTO_MATRIX_CARD = "fade"  # 片头卡 → 第一镜：溶解入戏
@@ -119,6 +122,12 @@ def main() -> None:
         type=str,
         default="",
         help="全片调色 ffmpeg 滤镜串（L3 白名单透传）；空 = 不调色",
+    )
+    ap.add_argument(
+        "--x264-preset",
+        type=str,
+        default="medium",
+        help="末级成片 libx264 编码预设（速度/质量档，CRF 不变）；L2 配置下发",
     )
     ap.add_argument("--allow-missing", action="store_true")
     ap.add_argument("--loudnorm-i", type=float, default=None, help="响度归一目标（LUFS）；不传 = 不归一")
@@ -275,13 +284,9 @@ def main() -> None:
         return clip_shift[-1] if clip_shift else 0.0
 
     # —— ASS 字幕 ——
-    card_label = (
-        f"{title}\\N第 {episode_no} 集" if episode_no is not None else title
-    )
-    events = [
-        f"Dialogue: 0,{fmt_ass_ts(0.4)},{fmt_ass_ts(TITLE_CARD_SECONDS - 0.1)},Card,,0,0,0,,"
-        f"{{\\fad(300,300)}}{card_label}"
-    ]
+    # v2.9.1：片头卡不再叠加 ASS 白字（与 PIL 卡面双重绘制、且 WrapStyle:2 下长剧名溢出），
+    # 片头卡视觉单一来源 = draw_card 卡面；ASS 层只承担正片金句字幕。
+    events = []
     for start_ms, end_ms, text in subtitle_items:
         s = start_ms / 1000
         e = end_ms / 1000
@@ -326,7 +331,7 @@ def main() -> None:
             "-vf",
             f"scale={width}:{height}:force_original_aspect_ratio=increase,"
             f"crop={width}:{height},fps={fps}",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", a.x264_preset,
             "-an", str(seg),
         ])
         seg_files.append(seg)
@@ -401,7 +406,7 @@ def main() -> None:
             "ffmpeg", "-y", *inputs,
             "-filter_complex", chain,
             "-map", "[bodyv]",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", a.x264_preset,
             str(body),
         ])
 
@@ -530,7 +535,7 @@ def main() -> None:
         "ffmpeg", "-y", "-i", str(body),
         *audio_args,
         "-vf", vf,
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", a.x264_preset,
         "-crf", "21", "-movflags", "+faststart",
         str(out),
     ])
@@ -588,6 +593,45 @@ def measure_loudnorm(cmd: list[str]) -> dict[str, str] | None:
     return {k: str(data[k]) for k in keys}
 
 
+def layout_card_title(measure, series_title: str, base_size: float, floor_size: int, max_w: float):
+    """片头卡剧名排版决策（纯函数，可单测）。
+
+    纪律：单行优先（整数像素恰好放下，不截断）→ 跌破下限且含「·」拆两行（同字号）→
+    两行仍放不下回下限 + 截断「…」兜底（病态输入）。返回 (lines, font_size)。
+    """
+
+    def fit_exact(text: str, size: float) -> int:
+        s = max(8, round(size))
+        while s > 8 and measure(text, s) > max_w:
+            s -= 1
+        return s
+
+    def ellipsize(text: str, size: int) -> str:
+        if measure(text, size) <= max_w:
+            return text
+        while text and measure(text + "…", size) > max_w:
+            text = text[:-1]
+        return text + "…"
+
+    size1 = fit_exact(series_title, base_size)
+    if size1 < floor_size and "·" in series_title:
+        seps = [i for i, ch in enumerate(series_title) if ch == "·"]
+        mid = min(seps, key=lambda i: abs(i - len(series_title) / 2))
+        line_a = series_title[:mid].strip()
+        line_b = series_title[mid + 1 :].strip()
+        # 两行共同字号 = 各自 fit 需求的较小者（两行视觉同字号，专业排版纪律）
+        size2 = min(round(base_size), fit_exact(line_a, base_size), fit_exact(line_b, base_size))
+        if size2 > size1:
+            if size2 < floor_size:
+                return [ellipsize(line_a, floor_size), ellipsize(line_b, floor_size)], floor_size
+            return [line_a, line_b], size2
+        size1 = size1 if size1 >= floor_size else floor_size
+        return [ellipsize(series_title, size1)], size1
+    if size1 >= floor_size:
+        return [series_title], size1
+    return [ellipsize(series_title, floor_size)], floor_size
+
+
 def draw_card(path: str, series_title: str, episode_no: int | None, width: int, height: int) -> None:
     from PIL import Image, ImageDraw, ImageFilter
 
@@ -604,21 +648,46 @@ def draw_card(path: str, series_title: str, episode_no: int | None, width: int, 
             tuple(int(a + (b - a) * t) for a, b in zip(top, bottom)), (0, y, W, y + 1)
         )
     draw = ImageDraw.Draw(img)
-    # 中央金色剧名（字号随画幅等比缩放）
-    big = ImageFontFor(round(300 * W / base_w))
-    tw = draw.textlength(series_title, font=big)
-    draw.text(((W - tw) / 2, H * 0.40), series_title, font=big, fill=(224, 182, 106))
+
+    # —— 剧名排版（v2.9.1 fit-to-width：任何长度的剧名都不允许溢出画幅）——
+    max_w = W * 0.86  # 左右各留 7% 安全边
+    base_size = 300 * W / base_w
+    floor_size = 104 * W / base_w  # 下限：低于此字号改两行/截断（保证剧名永远是视觉主角）
+    scale_v = H / (1280 * SS)  # 纵向间距基准（与集号/装饰线原坐标体系一致）
+
+    def measure(text: str, size: float) -> float:
+        return draw.textlength(text, font=ImageFontFor(round(size)))
+
+    floor_int = round(floor_size)
+    # 剧名排版决策（纯函数 layout_card_title：单行优先 → 「·」拆两行 → 下限截断兜底）
+    title_lines, title_size = layout_card_title(measure, series_title, base_size, floor_int, max_w)
+    big = ImageFontFor(title_size)
+    line_gap = round(title_size * 1.18)  # 行距 1.18 倍（剧名卡双行纪律）
+    line_ws = [measure(t, title_size) for t in title_lines]
+    block_h = line_gap * (len(title_lines) - 1) + round(title_size * 1.08)
+    anchor_y = round(H * 0.40)
+    for li, text in enumerate(title_lines):
+        tw = line_ws[li]
+        draw.text(((W - tw) / 2, anchor_y + li * line_gap), text, font=big, fill=(224, 182, 106))
+
     if episode_no is not None:
         small = ImageFontFor(round(120 * W / base_w))
         label = f"第 {episode_no} 集"
         sw = draw.textlength(label, font=small)
-        draw.text(((W - sw) / 2, H * 0.40 + round(380 * H / (1280 * SS))), label, font=small, fill=(210, 210, 216))
-    # 装饰线
-    line_w = round(520 * W / base_w)
+        # 集号跟随标题块下沿（双行标题不再与集号重叠）
+        draw.text(
+            ((W - sw) / 2, anchor_y + block_h + round(120 * scale_v)),
+            label,
+            font=small,
+            fill=(210, 210, 216),
+        )
+    # 装饰线：宽度跟随标题实际宽度（短剧名不再被固定长线压过，长剧名收缩让位）
+    line_max = round(520 * W / base_w)
+    line_w = min(line_max, max(round(max(line_ws) * 0.72), round(180 * W / base_w)))
     line_h = max(2, round(10 * H / (1280 * SS)))
+    line_y = anchor_y - round(80 * scale_v)
     draw.rectangle(
-        [(W - line_w) / 2, H * 0.40 - round(80 * H / (1280 * SS)),
-         (W + line_w) / 2, H * 0.40 - round(80 * H / (1280 * SS)) + line_h],
+        [(W - line_w) / 2, line_y, (W + line_w) / 2, line_y + line_h],
         fill=(224, 182, 106),
     )
     img = img.resize((width, height), Image.LANCZOS).filter(ImageFilter.GaussianBlur(0.6))

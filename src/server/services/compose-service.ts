@@ -8,6 +8,7 @@ import {
   BGM_VOLUME,
   COMPOSE_FPS,
   COMPOSE_TIMEOUT_MS,
+  COMPOSE_X264_PRESET,
   LOUDNORM_I,
   LOUDNORM_LRA,
   LOUDNORM_TP,
@@ -104,6 +105,7 @@ export async function composeEpisode(projectId: string): Promise<ComposeResult> 
     "--loudnorm-lra", String(LOUDNORM_LRA),
     "--bgm-volume", String(BGM_VOLUME),
     "--bgm-duck-amount", String(BGM_DUCK_AMOUNT),
+    "--x264-preset", COMPOSE_X264_PRESET,
   ];
   const stdout = await new Promise<string>((resolve, reject) => {
     execFile(

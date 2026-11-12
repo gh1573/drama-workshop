@@ -85,10 +85,11 @@ export const RATE_LIMIT_MAX_BACKOFF_ATTEMPTS = envInt(
 
 /**
  * 成片合成超时（毫秒）：compose 调用 ffmpeg 合成整集的等待上限。
- * 十余镜头的整集合成通常数十秒完成；超时按失败处理（不写 finalVideoUrl）。
+ * v2.9.1 实测校准（2 核沙盒）：9 镜 1080p 整集约 10~12 分钟（逐段转场 + 末级重编码 + 响度归一）；
+ * 旧默认 4 分钟在本机 9 镜必超时。超时按失败处理（不写 finalVideoUrl）。
  * 覆盖变量：COMPOSE_TIMEOUT_MS
  */
-export const COMPOSE_TIMEOUT_MS = envInt("COMPOSE_TIMEOUT_MS", 4 * 60_000);
+export const COMPOSE_TIMEOUT_MS = envInt("COMPOSE_TIMEOUT_MS", 10 * 60_000);
 
 /**
  * 参考图公网回源基址（§7.1.4 参考图注入）：
@@ -111,6 +112,12 @@ function envFloat(name: string, fallback: number): number {
   if (!raw) return fallback;
   const parsed = Number.parseFloat(raw);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/** 环境变量字符串读取：缺失/空串时回退默认值 */
+function envStr(name: string, fallback: string): string {
+  const raw = process.env[name];
+  return raw && raw.trim() ? raw.trim() : fallback;
 }
 
 /**
@@ -165,6 +172,13 @@ export const BGM_MIME_EXT: Record<string, string> = {
 
 /** 成片帧率（fps，与视频生成通道 fps 对齐）。覆盖变量：COMPOSE_FPS */
 export const COMPOSE_FPS = envInt("COMPOSE_FPS", 30);
+
+/**
+ * 末级成片 x264 编码预设（v2.9.1 参数化，脚本零硬编码纪律）。
+ * 默认 medium（质量优先）；弱算力机器可用 veryfast/faster 换速度（CRF 不变，体积略增）。
+ * 覆盖变量：COMPOSE_X264_PRESET
+ */
+export const COMPOSE_X264_PRESET = envStr("COMPOSE_X264_PRESET", "medium");
 
 /**
  * 转场时长（秒，§7.11 v2.5）：xfade 交叉溶解 / 压黑的重叠时长。
