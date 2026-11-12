@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
-import { CAMERA_MOVEMENTS, SHOT_SIZE_PROMPTS } from "@/lib/drama";
+import {
+  CAMERA_MOVEMENTS,
+  SHOT_SIZE_PROMPTS,
+  STATE_NOTE_PROMPTS,
+} from "@/lib/drama";
 import {
   PROMPT_SEGMENT_LABELS,
   PROMPT_TECHNICAL_TAIL,
@@ -58,9 +62,16 @@ export interface PromptOutput {
   segments: PromptSegments;
 }
 
+/**
+ * 资产引用 → 提示词段：锚点 + 状态注记（v2.8.3 场记专业化）。
+ * stateNote（如「负伤」「换官服」）是中文行话，命中 STATE_NOTE_PROMPTS
+ * 高频状态表则确定性译为英文；未命中保留原文（双语基模可客）。
+ */
 function refToSegment(ref: PromptAssetRef): string {
   const state = ref.stateNote?.trim();
-  return state ? `${ref.visualAnchor} (${state})` : ref.visualAnchor;
+  if (!state) return ref.visualAnchor;
+  const en = STATE_NOTE_PROMPTS[state];
+  return en ? `${ref.visualAnchor} (${en})` : `${ref.visualAnchor} (${state})`;
 }
 
 /** 锚点指纹：资产锚点参与即计入（与引用顺序无关），叠加影调锚点 */
@@ -95,10 +106,16 @@ export function composeVideoPrompt(input: PromptInput): PromptOutput {
       `vertical ${input.aspectRatio} format`,
       input.plannedMs ? `${Math.round(input.plannedMs / 100) / 10}s duration` : null,
       input.resolution,
-      // 景别映射（v2.8.2）：中文景别是行话，基模只懂英文电影术语
-      shot.shotSize
-        ? `${SHOT_SIZE_PROMPTS[shot.shotSize as keyof typeof SHOT_SIZE_PROMPTS] ?? shot.shotSize} framing`
-        : null,
+      // 景别映射（v2.8.2/v2.8.3）：中文景别是行话，基模只懂英文电影术语；
+      // 景深随景别走（特写浅景深/全景深焦）是摄影专业铁律
+      (() => {
+        if (!shot.shotSize) return null;
+        const m =
+          SHOT_SIZE_PROMPTS[
+            shot.shotSize as keyof typeof SHOT_SIZE_PROMPTS
+          ];
+        return m ? `${m.framing} framing, ${m.depth}` : `${shot.shotSize} framing`;
+      })(),
       PROMPT_TECHNICAL_TAIL,
     ]
       .filter(Boolean)

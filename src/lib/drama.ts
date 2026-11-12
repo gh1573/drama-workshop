@@ -183,14 +183,55 @@ export type ShotSize = (typeof SHOT_SIZES)[number];
  * 景别 → 英文电影术语映射（v2.8.2）：SHOT_SIZES 是面向编剧/导演的中文
  * 行话，但视频基模只懂英文电影术语——中文景别直拼英文 prompt 基模
  * 无法消费，必须在此完成确定性映射（prompt-engine 消费）。
+ * v2.8.3 增添景深维度：景深随景别走是摄影专业铁律——特写浅景深
+ * 突出主体情绪，全景深焦交代空间关系；基模对 depth of field 类
+ * 词汇敏感，确定性注入提升电影感。
  */
-export const SHOT_SIZE_PROMPTS: Record<ShotSize, string> = {
-  远景: "extreme long shot",
-  全景: "wide full shot",
-  中景: "medium shot",
-  近景: "medium close-up",
-  特写: "close-up",
-  大特写: "extreme close-up",
+export const SHOT_SIZE_PROMPTS: Record<
+  ShotSize,
+  { framing: string; depth: string }
+> = {
+  远景: { framing: "extreme long shot", depth: "deep focus, expansive vista" },
+  全景: { framing: "wide full shot", depth: "deep focus" },
+  中景: { framing: "medium shot", depth: "medium depth of field" },
+  近景: { framing: "medium close-up", depth: "shallow depth of field" },
+  特写: { framing: "close-up", depth: "shallow depth of field" },
+  大特写: {
+    framing: "extreme close-up",
+    depth: "extremely shallow depth of field, macro detail",
+  },
+};
+
+/**
+ * 场记状态注记 → 英文映射（v2.8.3）：stateNote 是服化道/伤效等
+ * 「角色跨镜头可变状态」（场记单职责），中文直接拼进英文 prompt
+ * 基模读不到。命中未表期高频状态则确定性翻译；未命中保留原文
+ * （双语基模可客，不作丢弃）。导演拆镜产出 characterStates 时
+ * 应优先使用本表词汇（提示词已约束）。
+ */
+export const STATE_NOTE_PROMPTS: Record<string, string> = {
+  负伤: "wounded, visible injuries",
+  受伤: "wounded, visible injuries",
+  带伤: "wounded, visible injuries",
+  血迹: "blood-stained clothes",
+  染血: "blood-stained clothes",
+  湿身: "soaked wet clothes",
+  淋湿: "soaked wet clothes",
+  泪痕: "tear-streaked face",
+  疲惫: "exhausted, weary look",
+  醉态: "drunk, flushed face",
+  狼狈: "disheveled, dirt-streaked",
+  灰头土脸: "dust-covered face",
+  衣冠不整: "clothes torn and disheveled",
+  赤脚: "barefoot",
+  铐镣: "in shackles",
+  蒙眼: "blindfolded",
+  换军装: "changed into military uniform",
+  换官服: "changed into official court robe",
+  换西装: "changed into tailored suit",
+  换礼服: "changed into formal gown",
+  换囚服: "changed into prison garb",
+  换嫁衣: "changed into bridal dress",
 };
 
 /** 场次叙事功能 → 产品语言（tag 徽标 / label 短名；v2.7 不再持有 actNo——
@@ -428,19 +469,19 @@ export const CREW_ROLES: Record<CrewRoleKey, { name: string; duty: string }> = {
   },
   casting: {
     name: "选角定妆",
-    duty: "角色/场景/道具资产锁定",
+    duty: "定妆锁定 · 时段光源锚定",
   },
   director: {
     name: "导演",
-    duty: "一场拆多镜 · 正反打节奏",
+    duty: "一场拆多镜 · 正反打 · 180°轴线",
   },
   supervisor: {
     name: "场记",
-    duty: "锚定组装 · 一致性校验",
+    duty: "锚定组装 · 跨镜一致性 · 状态连续",
   },
   post: {
     name: "后期",
-    duty: "三轨落轨 · 情绪能量曲线",
+    duty: "转场矩阵 · 响度归一 · 三轨落轨",
   },
 };
 
@@ -739,6 +780,13 @@ export interface ShotBreakdownItem {
   scene: string;
   /** 关键道具名 */
   props: string[];
+  /**
+   * 角色状态注记（v2.8.3 场记自动化）：角色名 → 状态词（如「陈锋」→「负伤」）。
+   * 由导演拆镜产出，绑定引用时写入 ShotRef.stateNote，锚定时经
+   * STATE_NOTE_PROMPTS 译为英文注入提示词——服化道/伤效的跨镜头
+   * 状态连续性由此闭环（场记单职责的产品化）。
+   */
+  characterStates?: Record<string, string>;
 }
 
 /** 项目库列表项（摘要） */
