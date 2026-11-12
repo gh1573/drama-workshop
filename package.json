@@ -1,6 +1,6 @@
 {
-  "name": "nextjs_tailwind_shadcn_ts",
-  "version": "0.2.1",
+  "name": "drama-workshop",
+  "version": "2.9.2",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
@@ -90,5 +90,6 @@
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.5",
     "typescript": "^5"
-  }
+  },
+  "description": "AI 剧组生产流水线——真实剧组专业规范 + AI 手段执行：题材+一句话梗概 → 剧本/定妆/拆镜/组装/后期 → 9:16 成片与制作包，支持系列连载"
 }
