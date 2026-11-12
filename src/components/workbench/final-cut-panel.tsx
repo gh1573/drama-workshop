@@ -9,6 +9,7 @@ import {
   Info,
   Loader2,
   Music,
+  Package,
   Play,
   Plus,
   RefreshCw,
@@ -438,6 +439,20 @@ export function FinalCutPanel() {
             <Button className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 font-bold text-white shadow-lg shadow-red-600/25 hover:opacity-90">
               <Download className="h-4 w-4" />
               下载成片 MP4
+            </Button>
+          </a>
+          {/* v2.9 制作包交付：成片只是交付物之一——工作室二次剪辑/投流需要
+              镜头素材、定妆图、分镜表、字幕、配音的完整制作包 */}
+          <a
+            href={`/api/projects/${dbId}/package`}
+            title="成片 + 镜头素材 + 定妆图 + 分镜表 + 字幕 + 配音 + 工程档案（ZIP）"
+          >
+            <Button
+              variant="outline"
+              className="border-border/70 font-semibold hover:bg-secondary/40"
+            >
+              <Package className="h-4 w-4" />
+              下载制作包 ZIP
             </Button>
           </a>
           {/* v2.9 连载产品化：成片交付不是终点，续写下一集是连载生产线的主动线——
