@@ -93,7 +93,7 @@ ${rosterSection}
 【拆解规则（严格遵守）】
 1. 输出 ${BREAKDOWN_SPEC.shotsPerActMin}~${BREAKDOWN_SPEC.shotsPerActMax} 个镜头，每个镜头 ${Math.round(BREAKDOWN_SPEC.shotMsMin / 100) / 10}~${Math.round(BREAKDOWN_SPEC.shotMsMax / 100) / 10} 秒（plannedMs ${BREAKDOWN_SPEC.shotMsMin}~${BREAKDOWN_SPEC.shotMsMax}），支撑整集约 ${BREAKDOWN_SPEC.targetEpisodeSeconds} 秒的节奏
 2. 景别 shotSize 只能从：${SHOT_SIZES.join("/")} 中选择，相邻镜头景别必须不同（正反打优先：A 特写 → B 大特写 → 全景反应 → 主角近景）
-3. 运镜 cameraMovement 只能从本场推荐池中选择：${poolDesc}；同一场内尽量不重复
+3. 运镜 cameraMovement 只能从本场推荐池中选择：${poolDesc}；同一场内尽量不重复。所有运镜按稳定器（gimbal/steadicam）平顺执行，visualPrompt 禁止手持晃动/镜头抖动/模糊甩动类描述，画面必须平稳
 4. visualDesc：25~60 字中文，完全可视化（人物、动作、表情、环境、光效），禁止抽象抒情
 5. visualPrompt：与 visualDesc 同义的英文动作描述（15~25 words，供 AI 视频基模直接使用）
 6. subtitle：该镜头画面内字幕；普通镜头可为空字符串 ""，全场金句只出现 1 次
