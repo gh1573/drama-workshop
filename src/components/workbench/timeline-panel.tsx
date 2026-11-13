@@ -52,6 +52,20 @@ function fmtSec(ms: number | null): string {
   return `${Math.round(ms / 100) / 10}s`;
 }
 
+/* v2.9.12 用户视角走查：服务器返回非 JSON（代理错误页等）时，
+ * res.json() 抛 SyntaxError 会把英文技术报错泄漏进 toast——守卫解析统一人话。 */
+async function parseEnvelope(res: Response): Promise<{
+  ok: boolean;
+  error?: string;
+  data?: { sizeBytes?: number; durationAligned?: boolean; mediaDurationMs?: number | null };
+}> {
+  try {
+    return await res.json();
+  } catch {
+    throw new Error(`剧组服务器返回了无法识别的响应 (${res.status})——请稍后重试`);
+  }
+}
+
 export function TimelinePanel() {
   const { toast } = useToast();
   const clips = useWorkbench((s) => s.session?.clips ?? []);
@@ -155,10 +169,10 @@ export function TimelinePanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: trimmed }),
       });
-      const json = await res.json();
+      const json = await parseEnvelope(res);
       if (!json?.ok) throw new Error(json?.error ?? "入库失败");
       await refreshProject();
-      reportAttached(json.data, "下载");
+      reportAttached(json.data ?? {}, "下载");
       closeAttachDialog();
     } catch (e) {
       toast({
@@ -183,10 +197,10 @@ export function TimelinePanel() {
         method: "POST",
         body: fd,
       });
-      const json = await res.json();
+      const json = await parseEnvelope(res);
       if (!json?.ok) throw new Error(json?.error ?? "上传失败");
       await refreshProject();
-      reportAttached(json.data, "上传");
+      reportAttached(json.data ?? {}, "上传");
       closeAttachDialog();
     } catch (e) {
       toast({

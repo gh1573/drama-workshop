@@ -125,15 +125,23 @@ export const GENRES: GenrePreset[] = [
  * 剧组语言映射生成（单一来源），展示层不再出现裸工程值。
  */
 export const VIDEO_MODELS = [
-  { id: "Omni 1.2 Flash", label: videoModelCrewLabel("Omni 1.2 Flash") },
-  { id: "Omni 1.2 Pro", label: videoModelCrewLabel("Omni 1.2 Pro") },
+  {
+    id: "Omni 1.2 Flash",
+    label: videoModelCrewLabel("Omni 1.2 Flash"),
+    trigger: "快拍机组 · Flash",
+  },
+  {
+    id: "Omni 1.2 Pro",
+    label: videoModelCrewLabel("Omni 1.2 Pro"),
+    trigger: "主力机组 · Pro",
+  },
 ];
 
 export const DURATIONS = [3, 5, 8];
 export const RESOLUTIONS = ["540p", "720p", "1080p"];
 
 export const THINKING_LEVELS = [
-  { id: "low", label: thinkingLevelCrewLabel("low") },
-  { id: "medium", label: thinkingLevelCrewLabel("medium") },
-  { id: "high", label: thinkingLevelCrewLabel("high") },
+  { id: "low", label: thinkingLevelCrewLabel("low"), trigger: "初稿直拍（low）" },
+  { id: "medium", label: thinkingLevelCrewLabel("medium"), trigger: "两稿打磨（medium）" },
+  { id: "high", label: thinkingLevelCrewLabel("high"), trigger: "围读深磨（high）" },
 ];

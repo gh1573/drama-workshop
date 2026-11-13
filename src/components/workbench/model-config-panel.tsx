@@ -47,7 +47,12 @@ export function ModelConfigPanel() {
             onValueChange={handleVideoModelChange}
           >
             <SelectTrigger className="w-full border-border/70 bg-secondary/30">
-              <SelectValue />
+              {/* v2.9.12：触发器用短标签——完整剧组语言含括号规格说明，
+                  半宽触发器硬截出现「Flash (」残括号；完整释义保留在下拉选项里 */}
+              <SelectValue>
+                {VIDEO_MODELS.find((m) => m.id === modelConfig.videoModel)?.trigger ??
+                  modelConfig.videoModel}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {VIDEO_MODELS.map((m) => (
@@ -69,7 +74,11 @@ export function ModelConfigPanel() {
             }
           >
             <SelectTrigger className="w-full border-border/70 bg-secondary/30">
-              <SelectValue />
+              <SelectValue>
+                {THINKING_LEVELS.find(
+                  (t) => t.id === modelConfig.scriptThinkingLevel,
+                )?.trigger ?? modelConfig.scriptThinkingLevel}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {THINKING_LEVELS.map((t) => (

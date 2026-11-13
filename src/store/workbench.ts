@@ -173,15 +173,30 @@ interface WorkbenchState {
   breakingDown: number | null;
 }
 
-/** 统一请求器：解析 { ok, data | error } 封套 */
+/** 统一请求器：解析 { ok, data | error } 封套。
+ *  v2.9.12 用户视角走查：网络层失败（断线/服务器重启）此前裸抛
+ *  "Failed to fetch" 英文技术报错直出到 toast——统一人话化收口：
+ *  告知连接中断 + 明确「任务不会丢、重进可续看」，用户不必恐慌重开。 */
 export async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
-  const json = (await res.json()) as
-    | { ok: true; data: T }
-    | { ok: false; error: string };
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    });
+  } catch {
+    throw new Error(
+      "与剧组服务器的连接中断了——请检查网络后重试；已提交的拍摄任务不会丢失，重进页面可继续观测进度",
+    );
+  }
+  let json: { ok: true; data: T } | { ok: false; error: string };
+  try {
+    json = (await res.json()) as { ok: true; data: T } | { ok: false; error: string };
+  } catch {
+    throw new Error(
+      `剧组服务器返回了无法识别的响应 (${res.status})——请稍后重试；若反复出现请截图反馈`,
+    );
+  }
   if (!res.ok || !json.ok) {
     throw new Error(("error" in json && json.error) || `请求失败 (${res.status})`);
   }
