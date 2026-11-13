@@ -135,6 +135,9 @@ interface WorkbenchState {
   >;
   /** 续写请求进行中 */
   creatingEpisode: boolean;
+  /** v2.9.5：续写弹窗全局开合——从成片页签提升到会话层，任意页签可发起（信息卡/交付区共用） */
+  nextEpOpen: boolean;
+  setNextEpOpen: (open: boolean) => void;
 
   addClip: (beatIndex: number) => Promise<boolean>;
   patchClip: (clipId: string, patch: Partial<ClipData>) => Promise<boolean>;
@@ -312,6 +315,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
     enablePromptEnhance: true,
   },
   session: null,
+  nextEpOpen: false,
   generating: false,
   generatingStep: 0,
   saving: false,
@@ -486,6 +490,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   },
 
   setLibraryOpen: (libraryOpen) => set({ libraryOpen }),
+  setNextEpOpen: (nextEpOpen) => set({ nextEpOpen }),
 
   addClip: async (beatIndex) => {
     const { session } = get();

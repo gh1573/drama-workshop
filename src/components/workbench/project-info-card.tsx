@@ -1,6 +1,15 @@
 "use client";
 
-import { FileJson, FileText, Loader2, Save, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  FileJson,
+  FileText,
+  Layers,
+  Loader2,
+  Plus,
+  Save,
+  Sparkles,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -13,8 +22,10 @@ import {
   thinkingLevelCrewLabel,
   toExportData,
   videoModelCrewLabel,
+  type ProjectDetail,
+  type SeriesDetail,
 } from "@/lib/drama";
-import { sessionToDetail, useWorkbench } from "@/store/workbench";
+import { api, sessionToDetail, useWorkbench } from "@/store/workbench";
 import { GENRE_ICONS } from "./genre-icons";
 
 /** 工程信息卡：项目概览 + 保存到项目库 + 双格式导出 */
@@ -102,6 +113,10 @@ export function ProjectInfoCard() {
         {session.synopsis}
       </p>
 
+      {/* v2.9.5 系列连载区块（VLM 16 视图走查：8 视图复现「连载在会话态不可见」）——
+          剧集列表 + 跨页签续写入口，从「只有成片页签能续写」并级为会话级主动线 */}
+      {session.seriesId && <SeriesBlock />}
+
       {/* §7.13 v2.5.2：参数格「标签上/值下」两行栅格。VLM 二轮复审：4 列太窄导致
           截断——改 2 列宽格，值完整可读（高频修复点）；
           v2.9.3 用户语言化：值一律走 drama.ts 剧组语言映射（单一来源），
@@ -187,6 +202,121 @@ export function ProjectInfoCard() {
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 系列连载区块（v2.9.5）：会话内的连载生产线现场。
+ * - 剧集 chips：第 N 集 + 状态（成片已合成 = emerald 点；制作中 = amber 点），
+ *   当前集高亮；点击其他集直接切换会话——多集切换不再绕道项目库；
+ * - 续写下一集：开共享续写弹窗（上集回顾 + AI 接钩子在弹窗内）；
+ * - 数据源 GET /api/series/[id]，随 dbId/episodeNo 变化刷新（续写创建后即更新列表）。
+ */
+function SeriesBlock() {
+  const { toast } = useToast();
+  const session = useWorkbench((s) => s.session);
+  const loadProject = useWorkbench((s) => s.loadProject);
+  const setNextEpOpen = useWorkbench((s) => s.setNextEpOpen);
+  const creatingEpisode = useWorkbench((s) => s.creatingEpisode);
+  const [detail, setDetail] = useState<SeriesDetail | null>(null);
+  const [busyEp, setBusyEp] = useState<string | null>(null);
+
+  const seriesId = session?.seriesId ?? null;
+  useEffect(() => {
+    if (!seriesId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const d = await api<SeriesDetail>(`/api/series/${seriesId}`);
+        if (!cancelled) setDetail(d);
+      } catch {
+        /* 系列详情拉取失败不打断会话，区块静默降级（下次会话变化重试） */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // dbId/episodeNo 变化 = 载入了另一集或续写创建了新集 → 刷新剧集列表
+  }, [seriesId, session?.dbId, session?.episodeNo]);
+
+  if (!detail) return null;
+  const episodes = [...detail.episodes].sort((a, b) => a.episodeNo - b.episodeNo);
+
+  async function handleSwitch(episodeId: string, episodeNo: number, title: string) {
+    if (busyEp || episodeId === session?.dbId) return;
+    setBusyEp(episodeId);
+    try {
+      const d = await api<ProjectDetail>(`/api/projects/${episodeId}`);
+      loadProject(d);
+      toast({ title: `已切换到第 ${episodeNo} 集`, description: title });
+    } catch (e) {
+      toast({
+        title: "切换失败",
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setBusyEp(null);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2.5">
+      <div className="flex items-center gap-1.5">
+        <Layers className="h-3.5 w-3.5 shrink-0 text-amber-300/90" />
+        <p className="flex-1 truncate text-xs font-bold">
+          系列连载 · {detail.title}
+        </p>
+        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+          {episodes.length} 集
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {episodes.map((ep) => {
+          const current = ep.id === session?.dbId;
+          const composed = !!ep.finalVideoUrl;
+          return (
+            <button
+              key={ep.id}
+              onClick={() => handleSwitch(ep.id, ep.episodeNo, ep.title)}
+              disabled={!!busyEp}
+              title={`${ep.title} · ${composed ? "成片已合成" : PROJECT_STATUS[ep.status]}`}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                current
+                  ? "border-amber-500/50 bg-amber-500/15 text-amber-200"
+                  : "border-border/60 bg-secondary/40 text-foreground/80 hover:bg-secondary/70"
+              } disabled:opacity-50`}
+            >
+              {busyEp === ep.id ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                    composed ? "bg-emerald-400" : "bg-amber-400/70"
+                  }`}
+                />
+              )}
+              第 {ep.episodeNo} 集
+            </button>
+          );
+        })}
+      </div>
+      {/* 续写入口（与成片页签同款语言）：连载是主动线，不该只在交付页签可达 */}
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={creatingEpisode}
+        onClick={() => setNextEpOpen(true)}
+        className="mt-2.5 h-8 w-full border-amber-500/40 text-xs font-semibold text-amber-300 hover:bg-amber-500/10 hover:text-amber-200"
+      >
+        {creatingEpisode ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Plus className="h-3.5 w-3.5" />
+        )}
+        续写第 {(session?.episodeNo ?? 0) + 1} 集 · 沿用角色定妆
+      </Button>
     </div>
   );
 }

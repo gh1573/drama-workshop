@@ -63,6 +63,7 @@ import { AssetLibraryPanel } from "@/components/workbench/asset-library-panel";
 import { FinalCutPanel } from "@/components/workbench/final-cut-panel";
 import { ProjectInfoCard } from "@/components/workbench/project-info-card";
 import { ProjectLibraryDrawer } from "@/components/workbench/project-library-drawer";
+import { NextEpisodeDialog } from "@/components/workbench/next-episode-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkbench } from "@/store/workbench";
 import { CREW_ROLES, RUN_STAGES, CAMERA_MOVEMENTS } from "@/lib/drama";
@@ -165,6 +166,23 @@ export default function Home() {
   useEffect(() => {
     const unsub = useWorkbench.subscribe((s, prev) => {
       if (!prev.session && s.session) setConfigOpen(false);
+    });
+    return unsub;
+  }, []);
+
+  // v2.9.5 载入落点（VLM 走查 P1：载入已合成项目仍停在上次页签，主交付物藏在页签后）：
+  // 会话切换到另一集（项目库载入/连载区块切集/续写切新集）时，
+  // 已合成项目直接落「成片」页签——已完项目的终点是交付物；
+  // 未合成项目不动页签（用户可能正对齐参考另一集的剧本）
+  useEffect(() => {
+    const unsub = useWorkbench.subscribe((s, prev) => {
+      if (
+        s.session?.dbId &&
+        s.session.dbId !== prev.session?.dbId &&
+        s.session.finalVideoUrl
+      ) {
+        setTab("cut");
+      }
     });
     return unsub;
   }, []);
@@ -729,6 +747,8 @@ export default function Home() {
       </main>
 
       <ProjectLibraryDrawer />
+      {/* v2.9.5：续写弹窗提升会话层——信息卡连载区块与成片交付区共用（上集回顾 + AI 接钩子） */}
+      <NextEpisodeDialog />
 
       {/* §7.13 v2.5.2：重新开机二次确认——破坏性重写不可一键误触 */}
       <AlertDialog open={rerunConfirmOpen} onOpenChange={setRerunConfirmOpen}>

@@ -879,6 +879,8 @@ export interface SeriesEpisodeSummary {
   beatCount: number;
   /** 本集镜头计划总时长（毫秒，拆镜后汇总） */
   plannedMs: number;
+  /** v2.9.5：成片直出地址（可空 = 未合成）——信息卡连载区块各集状态徽标依据 */
+  finalVideoUrl: string | null;
   updatedAt: string;
 }
 

@@ -132,6 +132,12 @@ export function ModelConfigPanel() {
           onCheckedChange={(v) => patchModelConfig({ enablePromptEnhance: v })}
         />
       </div>
+      {/* v2.9.5（VLM 16 视图走查：多视图指出拍摄配置引发「必选项」认知焦虑——
+          与顶部「全组开机后 AI 自动执行」的心智打架）：明确这是可选的进阶微调，
+          默认配置即可直接开机；剧组语言保留（v2.9.3 原则），只补消除焦虑的一句 */}
+      <p className="text-left text-[11px] leading-relaxed text-muted-foreground">
+        进阶微调 · 拿不准就用默认机组直接开机，配置随时可改，不影响已生成内容
+      </p>
     </StepCard>
   );
 }

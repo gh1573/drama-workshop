@@ -9,6 +9,7 @@ import type {
 } from "@/lib/drama";
 import { createProjectDraft, getProject } from "./project-service";
 import { createTask } from "./task-service";
+import { getTextProvider } from "@/server/providers/factory";
 
 /**
  * 系列服务（v2.3）—— 多剧集连载的编排入口。
@@ -103,6 +104,7 @@ export async function getSeriesDetail(id: string): Promise<SeriesDetail> {
         (sum, c) => sum + (c.plannedMs ?? 0),
         0
       ),
+      finalVideoUrl: p.finalVideoUrl,
       updatedAt: p.updatedAt.toISOString(),
     })),
     createdAt: s.createdAt.toISOString(),
@@ -299,6 +301,63 @@ export async function adoptProjectAsSeriesEpisode1(
     episodeCount: 1,
     updatedAt: series.updatedAt.toISOString(),
   };
+}
+
+/**
+ * AI 接钩子（v2.9.5 连载降门槛）：编剧室根据本集剧本（尤其卡点留钩场）
+ * 与题材战术手册，起草下一集承接梗概（80~150 字）。
+ * - 目标用户是「不太会写剧情走向」的普通创作者——AI 先写一稿，
+ *   用户在续写弹窗里可改后开机（梗概框始终可编辑，AI 只是降门槛不是代笔）；
+ * - 文本通道（LLM）调用，零视频配额；思考档跟随项目编剧深度；
+ * - 输出纪律：只出梗概正文，承接上集钩子、不引入未铺垫的新设定、结尾留新钩子。
+ */
+export async function draftNextEpisodeSynopsis(projectId: string): Promise<string> {
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+    include: { beats: { orderBy: { index: "asc" } } },
+  });
+  if (!project) throw new RouteError("项目不存在或已被删除", 404);
+
+  const script = project.beats
+    .map(
+      (b) =>
+        `【场 ${b.index} · ${b.actTitle} · ${b.narrativeFunction}】\n画面：${b.description}\n金句：${b.dialogueSubtitle}`
+    )
+    .join("\n\n");
+
+  const provider = getTextProvider();
+  const { text } = await provider.complete({
+    messages: [
+      {
+        role: "system",
+        content: `你是竖屏短剧编剧室的资深主笔，正在为连载短剧写下一集的承接梗概。
+规则：
+- 只输出梗概正文（80~150 字，中文），不要标题、引号或任何解释；
+- 必须承接上一集结尾的钩子（卡点留钩场），延续人物与冲突，不引入上一集未铺垫的全新设定；
+- 按题材钩子战术推进爽点节奏：${project.hookTactic || "前 3 秒给冲突，结尾留钩"};
+- 结尾留新的钩子，驱动追更。`,
+      },
+      {
+        role: "user",
+        content: `题材：${project.genreName}
+上一集梗概：${project.synopsis}
+上一集剧本：
+${script}
+
+请写下一集承接梗概。`,
+      },
+    ],
+    thinking: { type: project.thinkingLevel === "high" ? "enabled" : "disabled" },
+  });
+
+  const draft = text
+    .trim()
+    .replace(/^["「『]/, "")
+    .replace(/["」』]$/, "");
+  if (draft.length < 10) {
+    throw new RouteError("AI 起草的梗概过短，请重试或手动填写", 502);
+  }
+  return draft;
 }
 
 /**
