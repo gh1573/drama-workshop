@@ -69,6 +69,19 @@ export function TimelinePanel() {
   const [target, setTarget] = useState<ClipData | null>(null);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState<"download" | "upload" | null>(null);
+  /* v2.9.10：行内小动作在途态（上移/下移/重置/删除——快操作但慢网下仍需
+     禁用防连点，删除片段连点会重复 DELETE） */
+  const [rowBusy, setRowBusy] = useState<Record<string, "move" | "reset" | "remove">>({});
+  const markRowBusy = (clipId: string, action: "move" | "reset" | "remove") => {
+    setRowBusy((r) => ({ ...r, [clipId]: action }));
+  };
+  const clearRowBusy = (clipId: string) => {
+    setRowBusy((r) => {
+      const next = { ...r };
+      delete next[clipId];
+      return next;
+    });
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
   const refreshProject = useWorkbench((s) => s.refreshProject);
   // v2.4.1 §7.10：按场次折叠，默认全部收起（摘要行展示密度）
@@ -214,29 +227,48 @@ export function TimelinePanel() {
   }
 
   async function handleReset(clip: ClipData) {
-    const ok = await patchClip(clip.id, { status: "pending", mediaUrl: null });
-    toast({
-      title: ok ? "已重置为待生成" : "操作失败",
-      variant: ok ? "default" : "destructive",
-    });
+    if (rowBusy[clip.id]) return;
+    markRowBusy(clip.id, "reset");
+    try {
+      const ok = await patchClip(clip.id, { status: "pending", mediaUrl: null });
+      toast({
+        title: ok ? "已重置为待生成" : "操作失败",
+        variant: ok ? "default" : "destructive",
+      });
+    } finally {
+      clearRowBusy(clip.id);
+    }
   }
 
   async function handleMove(clip: ClipData, dir: -1 | 1) {
-    const ok = await moveClip(clip.id, dir);
-    if (!ok) toast({ title: "移动失败", variant: "destructive" });
+    if (rowBusy[clip.id]) return;
+    markRowBusy(clip.id, "move");
+    try {
+      const ok = await moveClip(clip.id, dir);
+      if (!ok) toast({ title: "移动失败", variant: "destructive" });
+    } finally {
+      clearRowBusy(clip.id);
+    }
   }
 
   async function handleRemove(clip: ClipData) {
-    const ok = await removeClip(clip.id);
-    toast({
-      title: ok ? "片段已移出镜头轨" : "删除失败",
-      variant: ok ? "default" : "destructive",
-    });
+    if (rowBusy[clip.id]) return;
+    markRowBusy(clip.id, "remove");
+    try {
+      const ok = await removeClip(clip.id);
+      toast({
+        title: ok ? "片段已移出镜头轨" : "删除失败",
+        variant: ok ? "default" : "destructive",
+      });
+    } finally {
+      clearRowBusy(clip.id);
+    }
   }
 
-  /** 行内操作按钮组（v2.4.1：新增单镜渲染入口） */
+  /** 行内操作按钮组（v2.4.1：新增单镜渲染入口；v2.9.10 行内动作在途态） */
   const Actions = ({ clip, i, total }: { clip: ClipData; i: number; total: number }) => {
     const rendering = isClipRendering(clip.id);
+    const rowAct = rowBusy[clip.id];
     return (
     <div className="flex items-center gap-0.5">
       {clip.status !== "ready" && clip.finalPrompt && (
@@ -262,27 +294,40 @@ export function TimelinePanel() {
       )}
       <button
         aria-label="上移"
-        disabled={i === 0}
+        disabled={i === 0 || Boolean(rowAct)}
         onClick={() => handleMove(clip, -1)}
         className="rounded-md p-1.5 text-muted-foreground hover:bg-background/60 hover:text-foreground disabled:opacity-30"
       >
-        <ArrowUp className="h-3.5 w-3.5" />
+        {rowAct === "move" ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <ArrowUp className="h-3.5 w-3.5" />
+        )}
       </button>
       <button
         aria-label="下移"
-        disabled={i === total - 1}
+        disabled={i === total - 1 || Boolean(rowAct)}
         onClick={() => handleMove(clip, 1)}
         className="rounded-md p-1.5 text-muted-foreground hover:bg-background/60 hover:text-foreground disabled:opacity-30"
       >
-        <ArrowDown className="h-3.5 w-3.5" />
+        {rowAct === "move" ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <ArrowDown className="h-3.5 w-3.5" />
+        )}
       </button>
       {clip.status === "ready" ? (
         <button
           aria-label="重置为待生成"
+          disabled={Boolean(rowAct)}
           onClick={() => handleReset(clip)}
-          className="rounded-md p-1.5 text-muted-foreground hover:bg-background/60 hover:text-foreground"
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-background/60 hover:text-foreground disabled:opacity-30"
         >
-          <Film className="h-3.5 w-3.5" />
+          {rowAct === "reset" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Film className="h-3.5 w-3.5" />
+          )}
         </button>
       ) : (
         <button
@@ -298,10 +343,15 @@ export function TimelinePanel() {
       )}
       <button
         aria-label="删除片段"
+        disabled={Boolean(rowAct)}
         onClick={() => handleRemove(clip)}
-        className="rounded-md p-1.5 text-muted-foreground hover:bg-rose-500/10 hover:text-rose-400"
+        className="rounded-md p-1.5 text-muted-foreground hover:bg-rose-500/10 hover:text-rose-400 disabled:opacity-30"
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        {rowAct === "remove" ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Trash2 className="h-3.5 w-3.5" />
+        )}
       </button>
     </div>
     );

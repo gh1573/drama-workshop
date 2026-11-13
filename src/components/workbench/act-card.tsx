@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Clock, Copy, Loader2, Plus, Quote, Scissors, Timer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -38,16 +39,24 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
       ).length ?? 0
   );
   const busy = breakingDown === beat.index;
+  const [addingClip, setAddingClip] = useState(false);
+  const [switchingMovement, setSwitchingMovement] = useState(false);
 
   async function handleAdd() {
-    const success = await addClip(beat.index);
-    toast({
-      title: success ? "已加入镜头轨" : "加入失败",
-      description: success
-        ? `第 ${String(beat.index).padStart(2, "0")} 场已追加到时间轨末尾`
-        : "请先「保存到项目库」后再添加镜头片段",
-      variant: success ? "default" : "destructive",
-    });
+    if (addingClip) return; // v2.9.10 防重入：POST 在途可连点重复追加片段
+    setAddingClip(true);
+    try {
+      const success = await addClip(beat.index);
+      toast({
+        title: success ? "已加入镜头轨" : "加入失败",
+        description: success
+          ? `第 ${String(beat.index).padStart(2, "0")} 场已追加到时间轨末尾`
+          : "请先「保存到项目库」后再添加镜头片段",
+        variant: success ? "default" : "destructive",
+      });
+    } finally {
+      setAddingClip(false);
+    }
   }
 
   async function handleBreakdown() {
@@ -122,11 +131,21 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
             current={beat.cameraMovement}
             fn={beat.narrativeFunction}
             onSelect={(mv) => {
-              setBeatMovement(beat.index, mv);
-              toast({
-                title: "运镜已切换",
-                description: `${cameraLabel(mv)} · ${CAMERA_MOVEMENTS[mv]?.prompt ?? ""}`,
-              });
+              /* v2.9.10：本地立即生效（无转圈），入库同步结果决定播报口径——
+                  此前 fire-and-forget 却立即报「运镜已切换」，失败时是误导 */
+              if (switchingMovement) return;
+              setSwitchingMovement(true);
+              void setBeatMovement(beat.index, mv)
+                .then((ok) => {
+                  toast({
+                    title: ok ? "运镜已切换" : "切换未同步入库",
+                    description: ok
+                      ? `${cameraLabel(mv)} · ${CAMERA_MOVEMENTS[mv]?.prompt ?? ""}`
+                      : "本地已切换，但同步项目库失败——可稍后手动「保存」覆盖",
+                    variant: ok ? "default" : "destructive",
+                  });
+                })
+                .finally(() => setSwitchingMovement(false));
             }}
           />
           <Badge variant="outline" className="border-border/70 text-xs">
@@ -179,10 +198,19 @@ export function ActCard({ beat, delay }: { beat: StoryBeat; delay: number }) {
             tabIndex={0}
             onClick={handleAdd}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            className="cursor-pointer border-dashed border-border/70 text-xs text-muted-foreground transition-colors hover:border-amber-500/50 hover:text-amber-400"
+            aria-disabled={addingClip}
+            className={`cursor-pointer border-dashed text-xs transition-colors ${
+              addingClip
+                ? "border-border/70 text-muted-foreground/60"
+                : "border-border/70 text-muted-foreground hover:border-amber-500/50 hover:text-amber-400"
+            }`}
           >
-            <Plus className="mr-1 h-3 w-3" />
-            加入镜头轨
+            {addingClip ? (
+              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+            ) : (
+              <Plus className="mr-1 h-3 w-3" />
+            )}
+            {addingClip ? "加入中…" : "加入镜头轨"}
           </Badge>
         </div>
 

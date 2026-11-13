@@ -948,8 +948,14 @@ export default function Home() {
       {/* v2.9.5：续写弹窗提升会话层——信息卡连载区块与成片交付区共用（上集回顾 + AI 接钩子） */}
       <NextEpisodeDialog />
 
-      {/* §7.13 v2.5.2：重新开机二次确认——破坏性重写不可一键误触 */}
-      <AlertDialog open={rerunConfirmOpen} onOpenChange={setRerunConfirmOpen}>
+      {/* §7.13 v2.5.2：重新开机二次确认——破坏性重写不可一键误触；
+          v2.9.10 弹窗内等开机指令落定（点后立即关闭会有 1~2s 无反馈空档） */}
+      <AlertDialog
+        open={rerunConfirmOpen}
+        onOpenChange={(o) => {
+          if (!o && !pipelineStarting) setRerunConfirmOpen(false);
+        }}
+      >
         <AlertDialogContent className="border-t-2 border-t-red-500/70">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -962,17 +968,21 @@ export default function Home() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>再想想</AlertDialogCancel>
+            <AlertDialogCancel disabled={pipelineStarting}>再想想</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
-                e.preventDefault();
-                setRerunConfirmOpen(false);
-                void handleStartPipeline();
+                e.preventDefault(); // 等指令落定再关弹窗（成败 toast 由 handleStartPipeline 播报）
+                void handleStartPipeline().finally(() => setRerunConfirmOpen(false));
               }}
+              disabled={pipelineStarting}
               className="bg-red-600 text-white hover:bg-red-500"
             >
-              <Clapperboard className="h-4 w-4" />
-              重写并开机
+              {pipelineStarting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Clapperboard className="h-4 w-4" />
+              )}
+              {pipelineStarting ? "开机中…" : "重写并开机"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
