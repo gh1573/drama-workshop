@@ -371,8 +371,9 @@ export function CrewPipelinePanel() {
                 return (
                   <div
                     key={task.id}
-                    className="flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-secondary/20 px-2.5 py-1.5 text-xs"
+                    className="space-y-1 rounded-lg border border-border/50 bg-secondary/20 px-2.5 py-1.5 text-xs"
                   >
+                    <div className="flex flex-wrap items-center gap-2">
                     <span className="min-w-0 flex-1 truncate font-semibold">
                       {task.kind === "portrait" ? (
                         <Camera className="mr-1 inline h-3 w-3 text-muted-foreground" />
@@ -455,6 +456,15 @@ export function CrewPipelinePanel() {
                           <RotateCcw className="h-3.5 w-3.5" />
                         )}
                       </button>
+                    )}
+                    </div>
+                    {/* v2.9.17（用户视角走查实捕：失败原因藏在 hover Tooltip 里，
+                        用户不悬停就不知道为什么失败、怎么恢复——终态失败直接
+                        行内展开，指引可读；在途任务的临时错误仍走图标提示） */}
+                    {task.status === "failed" && task.error && (
+                      <p className="line-clamp-2 text-left text-[10px] leading-relaxed text-rose-400/90">
+                        {task.error}
+                      </p>
                     )}
                   </div>
                 );
