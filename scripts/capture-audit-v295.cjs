@@ -2,7 +2,7 @@
  * v2.9.5 全局产品走查截图采集——新用户空态动线 + 回访用户交付动线：
  * 空态首屏(左列题材+右列导览) → 右列中部(声明条/亮点卡) → 右列底部(示例成片/连载身份)
  * → 左列滚屏(剧本要素 → 拍摄配置[v2.9.3 语言化] → 机组下拉展开 → 全组开机 CTA)
- * → 项目库 → 载入会话(五页签) → 续写下一集 Dialog
+ * → 项目库 → 载入会话(五页签) → 创作下一集 Dialog
  * 用法：node scripts/capture-audit-v295.cjs
  */
 const { chromium } = require("playwright");
@@ -100,9 +100,9 @@ fs.mkdirSync(SHOTS, { recursive: true });
     }
   }
 
-  // ===== 续写下一集 Dialog（连载动线） =====
+  // ===== 创作下一集 Dialog（连续剧创作路径动线） =====
   try {
-    const cta = page.getByRole("button", { name: /续写下一集/ }).first();
+    const cta = page.getByRole("button", { name: /创作下一集/ }).first();
     await cta.scrollIntoViewIfNeeded({ timeout: 6000 });
     await page.waitForTimeout(300);
     await cta.click({ timeout: 6000 });

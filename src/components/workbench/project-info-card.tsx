@@ -76,13 +76,13 @@ export function ProjectInfoCard() {
           {session.genre.name}
         </Badge>
         <Badge variant="outline">{session.genre.badge}</Badge>
-        {/* v2.9 连载：系列归属徽标（连载第 N 集）——会话内持续可见连载身份 */}
+        {/* v2.9 连载：系列归属徽标（连续剧第 N 集）——会话内持续可见连续剧身份 */}
         {session.seriesId && (
           <Badge
             variant="outline"
             className="border-amber-500/40 text-[10px] text-amber-300"
           >
-            {session.seriesTitle || "连载"} · 第 {session.episodeNo ?? "?"} 集
+            {session.seriesTitle || "连续剧"} · 第 {session.episodeNo ?? "?"} 集
           </Badge>
         )}
         {/* v2.6 VLM 复审：finalVideoUrl 存在时项目状态徽标让位（「制作中」与
@@ -114,7 +114,7 @@ export function ProjectInfoCard() {
       </p>
 
       {/* v2.9.5 系列连载区块（VLM 16 视图走查：8 视图复现「连载在会话态不可见」）——
-          剧集列表 + 跨页签续写入口，从「只有成片页签能续写」并级为会话级主动线 */}
+          v2.9.15 叙事校准：区块语义 = 连续剧创作路径（剧集 chips 即路径现场） */}
       {session.seriesId && <SeriesBlock />}
 
       {/* §7.13 v2.5.2：参数格「标签上/值下」两行栅格。VLM 二轮复审：4 列太窄导致
@@ -207,11 +207,11 @@ export function ProjectInfoCard() {
 }
 
 /**
- * 系列连载区块（v2.9.5）：会话内的连载生产线现场。
+ * 连续剧区块（v2.9.5，v2.9.15 叙事校准）：会话内的连续剧创作路径现场。
  * - 剧集 chips：第 N 集 + 状态（成片已合成 = emerald 点；制作中 = amber 点），
  *   当前集高亮；点击其他集直接切换会话——多集切换不再绕道项目库；
- * - 续写下一集：开共享续写弹窗（上集回顾 + AI 接钩子在弹窗内）；
- * - 数据源 GET /api/series/[id]，随 dbId/episodeNo 变化刷新（续写创建后即更新列表）。
+ * - 创作下一集：开共享弹窗（上集回顾 + AI 接钩子在弹窗内）；
+ * - 数据源 GET /api/series/[id]，随 dbId/episodeNo 变化刷新（创建新集后即更新列表）。
  */
 function SeriesBlock() {
   const { toast } = useToast();
@@ -237,7 +237,7 @@ function SeriesBlock() {
     return () => {
       cancelled = true;
     };
-    // dbId/episodeNo 变化 = 载入了另一集或续写创建了新集 → 刷新剧集列表
+    // dbId/episodeNo 变化 = 载入了另一集或创作了新集 → 刷新剧集列表
   }, [seriesId, session?.dbId, session?.episodeNo]);
 
   if (!detail) return null;
@@ -266,7 +266,7 @@ function SeriesBlock() {
       <div className="flex items-center gap-1.5">
         <Layers className="h-3.5 w-3.5 shrink-0 text-amber-300/90" />
         <p className="flex-1 truncate text-xs font-bold">
-          系列连载 · {detail.title}
+          连续剧 · {detail.title}
         </p>
         <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
           {episodes.length} 集
@@ -302,7 +302,7 @@ function SeriesBlock() {
           );
         })}
       </div>
-      {/* 续写入口（与成片页签同款语言）：连载是主动线，不该只在交付页签可达 */}
+      {/* 创作下一集入口（与成片页签同款语言）：连续剧创作路径是主动线，不该只在交付页签可达 */}
       <Button
         variant="outline"
         size="sm"
@@ -315,7 +315,7 @@ function SeriesBlock() {
         ) : (
           <Plus className="h-3.5 w-3.5" />
         )}
-        续写第 {(session?.episodeNo ?? 0) + 1} 集 · 沿用角色定妆
+        创作第 {(session?.episodeNo ?? 0) + 1} 集 · 沿用角色定妆
       </Button>
     </div>
   );

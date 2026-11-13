@@ -45,7 +45,7 @@ export function ProjectLibraryDrawer() {
   const loadProject = useWorkbench((s) => s.loadProject);
   const removeProject = useWorkbench((s) => s.removeProject);
   const renameProject = useWorkbench((s) => s.renameProject);
-  // —— v2.9 连载：系列分组「续写下一集」直发入口 ——
+  // —— v2.9 连续剧：系列分组「创作下一集」直发入口 ——
   const createNextEpisode = useWorkbench((s) => s.createNextEpisode);
   const creatingEpisode = useWorkbench((s) => s.creatingEpisode);
 
@@ -94,7 +94,7 @@ export function ProjectLibraryDrawer() {
     try {
       const detail = await api<ProjectDetail>(`/api/projects/${id}`);
       loadProject(detail);
-      /* 载入成功即收起抽屉——与「续写创建后自动关闭」同语言：
+      /* 载入成功即收起抽屉——与「创建下一集后自动关闭」同语言：
          用户点项目卡的意图就是回到工作台看它，不应再手动关一层抽屉 */
       setOpen(false);
       toast({
@@ -149,7 +149,7 @@ export function ProjectLibraryDrawer() {
     }
   }
 
-  /** v2.9：系列分组续写（题材/参数继承，资产克隆沿用定妆） */
+  /** v2.9：系列分组创作下一集（题材/参数继承，资产克隆沿用定妆） */
   async function handleNextEpisode() {
     if (!nextEp) return;
     if (nextEpSynopsis.trim().length < 10) {
@@ -332,9 +332,9 @@ export function ProjectLibraryDrawer() {
                     variant="outline"
                     className="border-amber-500/40 text-[10px] text-amber-300"
                   >
-                    连载 {g.episodes.length} 集
+                    连续剧 {g.episodes.length} 集
                   </Badge>
-                  {/* v2.9 连载产品化：分组头部直发续写（连载是留存引擎，不该藏在菜单里） */}
+                  {/* v2.9 连载产品化：分组头部直发创作下一集（连续剧创作路径是留存主动线，不该藏在菜单里） */}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -355,7 +355,7 @@ export function ProjectLibraryDrawer() {
                     ) : (
                       <Plus className="h-3 w-3" />
                     )}
-                    续写
+                    下一集
                   </Button>
                 </div>
                 <ul className="space-y-2.5 border-l border-amber-500/20 pl-3">
@@ -441,12 +441,12 @@ export function ProjectLibraryDrawer() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* —— v2.9 连载：系列分组续写 Dialog —— */}
+        {/* —— v2.9 连续剧：系列分组创作下一集 Dialog —— */}
         <Dialog open={!!nextEp} onOpenChange={(o) => !o && setNextEp(null)}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>
-                续写第 {nextEp?.nextNo ?? ""} 集
+                创作第 {nextEp?.nextNo ?? ""} 集
                 <span className="ml-2 text-sm font-normal text-muted-foreground">
                   {nextEp?.title}
                 </span>

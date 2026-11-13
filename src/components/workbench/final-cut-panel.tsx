@@ -431,8 +431,8 @@ export function FinalCutPanel() {
               下载制作包 ZIP
             </Button>
           </a>
-          {/* v2.9 连载产品化：成片交付不是终点，续写下一集是连载生产线的主动线——
-              独立项目自动升级为系列第 1 集，资产定妆克隆（跨集同一张脸）。
+          {/* v2.9 连载产品化：成片交付不是终点，创作下一集是连续剧创作路径的主动线——
+              独立项目自动升级为连续剧第 1 集，资产定妆克隆（跨集同一张脸）。
               v2.9.5：弹窗提升会话层（上集回顾 + AI 接钩子在共享组件内） */}
           <Button
             variant="outline"
@@ -445,7 +445,7 @@ export function FinalCutPanel() {
             ) : (
               <Plus className="h-4 w-4" />
             )}
-            续写下一集
+            创作下一集
           </Button>
           <Button
             variant="outline"

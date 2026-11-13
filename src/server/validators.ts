@@ -197,8 +197,8 @@ export const createEpisodeSchema = z.object({
   modelConfig: modelConfigSchema.optional(),
 });
 
-/** 一键续写下一集（v2.9 连载产品化）：梗概必填（承接上一集剧情），
- *  资产克隆默认开启——同一角色跨集同一张脸是连载的生命线 */
+/** 创作下一集（v2.9 连续剧创作路径）：梗概必填（承接上一集剧情），
+ *  资产克隆默认开启——同一角色跨集同一张脸是连续剧的生命线 */
 export const nextEpisodeSchema = z.object({
   synopsis: z.string().min(10).max(500),
   title: z.string().max(80).optional(),

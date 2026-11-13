@@ -10,7 +10,7 @@ const { chromium } = require("playwright");
   await page.waitForTimeout(800);
   await page.screenshot({ path: "/tmp/snap-mockup.png" });
   // 亮点卡区
-  await page.getByText("系列连载 · 一键续集").first().scrollIntoViewIfNeeded({ timeout: 10000 });
+  await page.getByText("连续剧创作路径").first().scrollIntoViewIfNeeded({ timeout: 10000 });
   await page.waitForTimeout(800);
   await page.screenshot({ path: "/tmp/snap-props.png" });
   await browser.close();

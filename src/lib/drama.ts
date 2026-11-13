@@ -9,7 +9,7 @@
  * - buildup 冲突升级（中段可选）
  * - twist 身份反转（中段可选）
  * - climax 情绪顶点（中段可选；旧数据兼存）
- * - cliffhanger 卡点留钩（末场硬性要求，连载钩子）
+ * - cliffhanger 卡点留钩（末场硬性要求，连续剧跨集钩子）
  */
 export type NarrativeFunction =
   | "hook"
@@ -871,7 +871,7 @@ export interface ProjectSummary {
   interruptedRun?: boolean;
 }
 
-/** —— 系列（v2.3 多剧集连载容器） —— */
+/** —— 系列（v2.3 连续剧多集容器） —— */
 
 export interface SeriesSummary {
   id: string;
@@ -892,7 +892,7 @@ export interface SeriesEpisodeSummary {
   beatCount: number;
   /** 本集镜头计划总时长（毫秒，拆镜后汇总） */
   plannedMs: number;
-  /** v2.9.5：成片直出地址（可空 = 未合成）——信息卡连载区块各集状态徽标依据 */
+  /** v2.9.5：成片直出地址（可空 = 未合成）——信息卡连续剧区块各集状态徽标依据 */
   finalVideoUrl: string | null;
   updatedAt: string;
 }

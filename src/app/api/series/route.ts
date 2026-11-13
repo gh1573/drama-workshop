@@ -3,7 +3,7 @@ import { ok, fail, handleRouteError } from "@/lib/api-utils";
 import { createSeriesSchema, firstZodError } from "@/server/validators";
 import { createSeries, listSeries } from "@/server/services/series-service";
 
-/** 系列列表 / 创建（v2.3 多剧集连载容器） */
+/** 系列列表 / 创建（v2.3 连续剧多集容器） */
 export async function GET() {
   try {
     return ok(await listSeries());

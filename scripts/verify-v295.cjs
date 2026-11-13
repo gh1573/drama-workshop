@@ -48,17 +48,17 @@ const check = (ok, msg) => {
     "载入已合成项目默认落「成片」页签（交付物直达）"
   );
 
-  // 1) 信息卡系列连载区块
+  // 1) 信息卡连续剧区块
   const infoText = await page.locator("body").innerText();
-  check(infoText.includes("系列连载 · 战神逆袭"), "信息卡：系列连载区块（系列标题）");
+  check(infoText.includes("连续剧 · 战神逆袭"), "信息卡：连续剧区块（系列标题）");
   check(/\d\s*集$|\d\s*集\s|1 集/.test(infoText.replace(/\u00a0/g, " ")), "信息卡：集数统计");
   check(await page.locator("button", { hasText: "第 1 集" }).first().isVisible().catch(() => false), "信息卡：第 1 集 chip 可见");
 
-  // 2) 跨页签续写：切到剧本页签，信息卡续写按钮仍可用
+  // 2) 跨页签创作下一集：切到剧本页签，信息卡创作下一集按钮仍可用
   await page.getByRole("tab", { name: /剧本/ }).first().click({ timeout: 8000 });
   await page.waitForTimeout(900);
-  const contBtn = page.locator("button", { hasText: "续写第 2 集 · 沿用角色定妆" }).first();
-  check(await contBtn.isVisible().catch(() => false), "剧本页签：信息卡「续写第 2 集」入口可达（跨页签主动线）");
+  const contBtn = page.locator("button", { hasText: "创作第 2 集 · 沿用角色定妆" }).first();
+  check(await contBtn.isVisible().catch(() => false), "剧本页签：信息卡「创作第 2 集」入口可达（跨页签主动线）");
   await contBtn.click({ timeout: 8000 });
   await page.waitForSelector('[role="dialog"]', { timeout: 8000 });
   await page.waitForTimeout(800);
@@ -86,7 +86,7 @@ const check = (ok, msg) => {
     cutText.includes("制作包含：镜头素材 · 定妆图 · 分镜表 · 字幕 · 配音 · 工程档案"),
     "成片页签：制作包清单常显（ZIP 内容可见）"
   );
-  check(cutText.includes("续写下一集"), "成片页签：续写 CTA 回归保留");
+  check(cutText.includes("创作下一集"), "成片页签：创作下一集 CTA 回归保留");
   await ctx.close();
 
   // ===== 空态：拍摄配置提示行 =====

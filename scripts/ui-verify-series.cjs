@@ -47,11 +47,11 @@ const api = async (path, init) => {
   await page.getByRole("button", { name: "项目库" }).click({ timeout: 10000 });
   await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
 
-  // 系列分组 + 分组「续写」按钮
-  const seriesHeader = await page.locator('[role="dialog"] li:has-text("连载")').first().isVisible().catch(() => false);
+  // 系列分组 + 分组「创作下一集」按钮
+  const seriesHeader = await page.locator('[role="dialog"] li:has-text("连续剧")').first().isVisible().catch(() => false);
   check("项目库系列分组可见", seriesHeader);
-  const contBtn = await page.locator('[role="dialog"] button:has-text("续写")').first().isVisible().catch(() => false);
-  check("分组「续写」按钮存在", contBtn);
+  const contBtn = await page.locator('[role="dialog"] button:has-text("下一集")').first().isVisible().catch(() => false);
+  check("分组「下一集」按钮存在", contBtn);
 
   // 载入第 1 集（剧集卡是 div[role=button]；系列组 li 包裹剧集卡，
   // 不能用 li 文本匹配——组 li 同样命中且不触发载入）
@@ -59,23 +59,23 @@ const api = async (path, init) => {
   await page.waitForTimeout(2500);
   await page.screenshot({ path: `${SHOTS}/01-session-ep1.png` });
 
-  // 载入成功抽屉应自动收起（v2.9.2：与续写创建后同语言，省一次手动关闭）
+  // 载入成功抽屉应自动收起（v2.9.2：与创建下一集后同语言，省一次手动关闭）
   const drawerClosed = (await page.locator('[role="dialog"]').count()) === 0;
   check("载入后项目库抽屉自动收起", drawerClosed);
 
   const badge = await page.getByText("战神逆袭 · 第 1 集", { exact: false }).first().isVisible().catch(() => false);
-  check("信息卡连载徽标「战神逆袭 · 第 1 集」", badge);
+  check("信息卡连续剧徽标「战神逆袭 · 第 1 集」", badge);
 
-  const nextBtn = await page.getByRole("button", { name: "续写下一集" }).isVisible().catch(() => false);
-  check("成片页「续写下一集」CTA", nextBtn);
+  const nextBtn = await page.getByRole("button", { name: "创作下一集" }).isVisible().catch(() => false);
+  check("成片页「创作下一集」CTA", nextBtn);
 
-  await page.getByRole("button", { name: "续写下一集" }).click({ timeout: 10000 });
+  await page.getByRole("button", { name: "创作下一集" }).click({ timeout: 10000 });
   const dlg = await page.locator('[role="dialog"]').isVisible().catch(() => false);
   const inheritNote = await page.locator('[role="dialog"]').getByText("沿用", { exact: false }).isVisible().catch(() => false);
-  check("续写弹窗打开（沿用说明 + 梗概输入）", dlg && inheritNote);
+  check("创作下一集弹窗打开（沿用说明 + 梗概输入）", dlg && inheritNote);
   await page.screenshot({ path: `${SHOTS}/02-next-episode-dialog.png` });
 
-  // 提交续写（动态断言：第 N+1 集）
+  // 提交创建（动态断言：第 N+1 集）
   await page.locator('[role="dialog"] textarea').fill("婚礼现场再起波澜，神秘来信揭开五年前车祸真相，战神身份面临暴露危机。");
   await page.locator('[role="dialog"] button:has-text("创建")').click({ timeout: 10000 });
   await page.waitForTimeout(800);

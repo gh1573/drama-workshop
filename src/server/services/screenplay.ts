@@ -18,7 +18,7 @@ import { parseJsonLoose } from "@/server/providers";
  *
  * v2.7 契约（run-service 与 /api/generate 共用本模块，禁止再各自拼提示词）：
  * - 场次数弹性 3~6 场，由编剧按梗概信息量与反转密度自定；
- * - 首场 hook、末场 cliffhanger 是仅有的两条硬性要求（黄金 3 秒 + 连载钩子）；
+ * - 首场 hook、末场 cliffhanger 是仅有的两条硬性要求（黄金 3 秒 + 连续剧跨集钩子）；
  * - 中段功能从 buildup / twist / climax 中选用，相邻场次功能与运镜均不得重复；
  * - actTitle 为编剧自拟场次标题（4~8 字），不再套「第 N 幕：固定标签」模板。
  */

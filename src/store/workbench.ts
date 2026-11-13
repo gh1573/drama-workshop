@@ -47,7 +47,7 @@ export interface WorkbenchSession {
   transitionMode: string;
   /** v2.5 §7.11：调色预设键（null = 跟随题材影调） */
   gradePreset: string | null;
-  /** v2.9 连载：系列归属（null = 独立项目，续写时自动升级为系列第 1 集） */
+  /** v2.9 连载：系列归属（null = 独立项目，创作下一集时自动升级为连续剧第 1 集） */
   seriesId: string | null;
   seriesTitle: string | null;
   episodeNo: number | null;
@@ -137,8 +137,8 @@ interface WorkbenchState {
   /** 合成进行中 */
   composing: boolean;
 
-  /** —— v2.9 连载产品化 —— */
-  /** 一键续写下一集：独立项目自动升级为系列第 1 集；题材/参数继承、资产克隆（定妆图沿用）。
+  /** —— v2.9 连续剧创作路径 —— */
+  /** 创作下一集：独立项目自动升级为连续剧第 1 集；题材/参数继承、资产克隆（定妆图沿用）。
    *  成功后自动切会话到新集。seriesId 入口供项目库系列分组直发。 */
   createNextEpisode: (input: {
     synopsis: string;
@@ -147,9 +147,9 @@ interface WorkbenchState {
     | { ok: true; episodeNo: number; clonedAssets: number; seriesTitle: string }
     | { ok: false; error: string }
   >;
-  /** 续写请求进行中 */
+  /** 创作下一集请求进行中 */
   creatingEpisode: boolean;
-  /** v2.9.5：续写弹窗全局开合——从成片页签提升到会话层，任意页签可发起（信息卡/交付区共用） */
+  /** v2.9.5：创作下一集弹窗全局开合——从成片页签提升到会话层，任意页签可发起（信息卡/交付区共用） */
   nextEpOpen: boolean;
   setNextEpOpen: (open: boolean) => void;
 
@@ -1077,7 +1077,8 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   },
 
   // ============================================================
-  // v2.9 · 连载产品化（docs/architecture-v2.md §7.14）
+  // v2.9 · 连续剧创作路径（docs/architecture-v2.md §7.14；
+  // v2.9.15 叙事校准：不是「续写文本」，是连续剧的逐集创作路径）
   // ============================================================
 
   creatingEpisode: false,
@@ -1125,7 +1126,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
     } catch (err) {
       return {
         ok: false,
-        error: err instanceof Error ? err.message : "续写下一集失败",
+        error: err instanceof Error ? err.message : "创作下一集失败",
       };
     } finally {
       set({ creatingEpisode: false });

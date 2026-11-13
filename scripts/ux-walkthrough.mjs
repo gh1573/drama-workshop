@@ -48,7 +48,7 @@ await step('落地页可懂度', async () => {
 let entered = false;
 await step('点击主 CTA 进入', async () => {
   // 优先找「新建/开始/进入」类按钮
-  const cands = page.locator('button, a').filter({ hasText: /新建|开始|进入|创建|打开|工作台|续写|示例/ }).first();
+  const cands = page.locator('button, a').filter({ hasText: /新建|开始|进入|创建|打开|工作台|创作|示例/ }).first();
   if (await cands.count()) {
     await cands.click({ timeout: 5000 });
     await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});

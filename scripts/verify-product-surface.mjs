@@ -138,12 +138,12 @@ print('md-ok')
 
 // —— 3. UI 触点静态断言（源码契约） ——
 const src = (p) => fs.readFileSync(p, "utf8");
-check("成片页签「续写下一集」CTA", src("src/components/workbench/final-cut-panel.tsx").includes("续写下一集"));
+check("成片页签「创作下一集」CTA", src("src/components/workbench/final-cut-panel.tsx").includes("创作下一集"));
 check("成片页签「下载制作包 ZIP」", src("src/components/workbench/final-cut-panel.tsx").includes("下载制作包 ZIP"));
-check("项目库系列分组「续写」直发", src("src/components/workbench/project-library-drawer.tsx").includes("续写"));
+check("项目库系列分组「创作下一集」直发", src("src/components/workbench/project-library-drawer.tsx").includes("创作第"));
 check("节奏页成片入口条", src("src/components/workbench/rhythm-panel.tsx").includes("本集成片已就绪"));
-check("信息卡连载徽标", src("src/components/workbench/project-info-card.tsx").includes("第 {session.episodeNo"));
-check("首页连载/制作包表达", src("src/app/page.tsx").includes("一键续集") && src("src/app/page.tsx").includes("制作包一键下载"));
+check("信息卡连续剧徽标", src("src/components/workbench/project-info-card.tsx").includes("第 {session.episodeNo"));
+check("首页连续剧/制作包表达", src("src/app/page.tsx").includes("连续剧创作路径") && src("src/app/page.tsx").includes("制作包一键下载"));
 
 // —— 清理验证产物（删除本脚本创建的验证集，不动演示数据） ——
 if (ep.id) {

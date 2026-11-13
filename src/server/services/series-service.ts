@@ -13,7 +13,7 @@ import { getTextProvider } from "@/server/providers/factory";
 import { standaloneFailureText } from "@/lib/humanize-error";
 
 /**
- * 系列服务（v2.3）—— 多剧集连载的编排入口。
+ * 系列服务（v2.3）—— 连续剧（多集容器）的编排入口。
  *
  * 设计（docs/architecture-v2.md §7.5）：
  * - 系列只存「基调」（题材快照 + 简介），剧集仍是独立 Project，
@@ -231,11 +231,11 @@ export async function addEpisode(
 }
 
 /* ============================================================
- * 连载产品化（v2.9）—— 「续写下一集」一键动线
+ * 连续剧创作路径（v2.9）—— 「创作下一集」一键动线
  *
- * 产品动机：连载是这个品类的留存引擎（日更/周更）。系列 API
+ * 产品动机：连续剧是这个品类的留存引擎（日更/周更）。系列 API
  * （建系列/加剧集/批量提交）v2.3 已就绪，但用户在界面上无法发起——
- * 本节把「独立项目 → 连载系列 → 下一集」收敛为一次点击：
+ * 本节把「独立项目 → 连续剧 → 下一集」收敛为一次点击：
  * - 独立项目自动升级（adopt）为系列第 1 集，零迁移、只回写两列；
  * - 题材/模型参数缺省继承上一集，资产库可克隆（定妆图沿用）；
  * - 返回新集全量详情，前端直接切会话续产。
@@ -305,10 +305,10 @@ export async function adoptProjectAsSeriesEpisode1(
 }
 
 /**
- * AI 接钩子（v2.9.5 连载降门槛）：编剧室根据本集剧本（尤其卡点留钩场）
+ * AI 接钩子（v2.9.5 降门槛）：编剧室根据本集剧本（尤其卡点留钩场）
  * 与题材战术手册，起草下一集承接梗概（80~150 字）。
  * - 目标用户是「不太会写剧情走向」的普通创作者——AI 先写一稿，
- *   用户在续写弹窗里可改后开机（梗概框始终可编辑，AI 只是降门槛不是代笔）；
+ *   用户在创作下一集弹窗里可改后开机（梗概框始终可编辑，AI 只是降门槛不是代笔）；
  * - 文本通道（LLM）调用，零视频配额；思考档跟随项目编剧深度；
  * - 输出纪律：只出梗概正文，承接上集钩子、不引入未铺垫的新设定、结尾留新钩子。
  */
@@ -335,7 +335,7 @@ export async function draftNextEpisodeSynopsis(projectId: string): Promise<strin
       messages: [
         {
           role: "system",
-          content: `你是竖屏短剧编剧室的资深主笔，正在为连载短剧写下一集的承接梗概。
+          content: `你是竖屏短剧编剧室的资深主笔，正在为一部连续剧写下一集的承接梗概。
 规则：
 - 只输出梗概正文（80~150 字，中文），不要标题、引号或任何解释；
 - 必须承接上一集结尾的钩子（卡点留钩场），延续人物与冲突，不引入上一集未铺垫的全新设定；
@@ -374,7 +374,7 @@ ${script}
 }
 
 /**
- * 一键续写下一集：无系列先 adopt 当前项目为第 1 集，再追加第 N+1 集。
+ * 创作下一集：无系列先 adopt 当前项目为连续剧第 1 集，再追加第 N+1 集。
  * 返回新集全量详情 + 继承元数据（前端切会话即续产）。
  */
 export async function continueWithNextEpisode(
@@ -391,7 +391,7 @@ export async function continueWithNextEpisode(
   const project = await db.project.findUnique({ where: { id: projectId } });
   if (!project) throw new RouteError("项目不存在或已被删除", 404);
 
-  // 独立项目 → 连载第 1 集（幂等：已有系列则沿用）；
+  // 独立项目 → 连续剧第 1 集（幂等：已有系列则沿用）；
   // 注意必须取 adopt 返回值——内存里的 project.seriesId 还是旧值
   const seriesId =
     project.seriesId ?? (await adoptProjectAsSeriesEpisode1(projectId)).id;
@@ -399,7 +399,7 @@ export async function continueWithNextEpisode(
   const created = await addEpisode(seriesId, {
     synopsis: input.synopsis,
     title: input.title,
-    // 连载铁律：默认沿用上一集资产库（同一角色跨集同一张脸）
+    // 连续剧铁律：默认沿用上一集资产库（同一角色跨集同一张脸）
     cloneAssets: input.cloneAssets ?? true,
   });
 
