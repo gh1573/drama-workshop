@@ -641,6 +641,15 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       return false;
     }
     set({ pipelineStarting: true, lastError: null });
+    /* v2.9.6 剧本过稿开机：会话剧本与当前输入（梗概/题材/编剧深度）一致时，
+       开机沿用已过目剧本不重写（「先试笔 · 满意再开机」的承诺兑现）；
+       影响剧本的输入任一改动 → 重写。机组/时长/规格不影响剧本，可放心改 */
+    const scriptReusable =
+      !!session &&
+      session.beats.length > 0 &&
+      session.synopsis === synopsis.trim() &&
+      session.genre.id === genreId &&
+      session.modelConfig.scriptThinkingLevel === modelConfig.scriptThinkingLevel;
     try {
       let projectId = session?.dbId ?? null;
       if (projectId && session && session.synopsis !== synopsis.trim()) {
@@ -671,8 +680,21 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
         projectId = created.id;
         set({ session: detailToSession(created) });
       }
+      if (scriptReusable) {
+        // 已过目剧本随开机入库（试笔会话未立项 / 用户在分镜页签改过剧本，均同步服务端）
+        const synced = await api<ProjectDetail>(`/api/projects/${projectId}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            synopsis: synopsis.trim(),
+            modelConfig,
+            storyBeats: session!.beats,
+          }),
+        });
+        set((s) => (s.session ? { session: detailToSession(synced) } : {}));
+      }
       const run = await api<RunDTO>(`/api/projects/${projectId}/runs`, {
         method: "POST",
+        body: JSON.stringify({ keepScript: scriptReusable }),
       });
       set({ activeRun: run });
       startRunPolling(run.id);

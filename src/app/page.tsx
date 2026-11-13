@@ -139,6 +139,8 @@ export default function Home() {
   const activeRun = useWorkbench((s) => s.activeRun);
   const pipelineStarting = useWorkbench((s) => s.pipelineStarting);
   const startPipeline = useWorkbench((s) => s.startPipeline);
+  const genreId = useWorkbench((s) => s.genreId);
+  const modelConfig = useWorkbench((s) => s.modelConfig);
 
   // 工作台页签：流水线运行中自动切「剧组进程」，成功后自动切「成片」
   // （订阅状态迁移而非渲染期同步 setState，仅切换瞬间生效，用户手动切页不被覆盖）
@@ -190,6 +192,24 @@ export default function Home() {
   }, []);
 
   const pipelineRunning = activeRun?.status === "running";
+
+  /* v2.9.6 剧本过稿开机（转化漏斗承接：「先试笔 · 满意再全组开机」的满意时刻）：
+     剧本在手且从未开过机的会话，主 CTA 是品牌渐变「开机」而非红色破坏性
+     「重新开机」——试笔后唯一入口是折叠区里的红按钮，语义（没开过何来
+     「重新」）与情绪（破坏性红色）都是错的；过稿剧本开机不重写（传统剧组
+     纪律：剧本定稿开机不重拍编剧），输入已改则诚实提示将重写 */
+  const firstBoot =
+    !!session &&
+    session.beats.length > 0 &&
+    (session.status === "draft" || session.status === "beatsReady") &&
+    !activeRun &&
+    !pipelineRunning &&
+    !pipelineStarting;
+  const scriptReusable =
+    firstBoot &&
+    session!.synopsis === synopsis.trim() &&
+    session!.genre.id === genreId &&
+    session!.modelConfig.scriptThinkingLevel === modelConfig.scriptThinkingLevel;
 
   useEffect(() => {
     if (!generating) return;
@@ -247,7 +267,9 @@ export default function Home() {
     if (ok) {
       toast({
         title: "剧组已开机",
-        description: "编剧 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包，进度见「剧组进程」页签",
+        description: scriptReusable
+          ? "剧本已过稿沿用 · 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包，进度见「剧组进程」页签"
+          : "编剧 → 选角定妆 → 导演拆镜 → 场记锚定 → 后期成包，进度见「剧组进程」页签",
       });
     } else {
       toast({
@@ -353,32 +375,69 @@ export default function Home() {
                   <GenrePanel />
                   <SynopsisPanel />
                   <ModelConfigPanel />
-                  {/* §7.13 v2.5.2：破坏性重写 = 危险描边 + AlertDialog 二次确认，
+                  {/* v2.9.6：首次开机（剧本在手未开过机）的主动作在折叠区外常驻；
+                      重拍过/在制项目才保留破坏性重开（红描边 + AlertDialog 二次确认） */}
+                  {!firstBoot && (
+                    <>
+                      {/* §7.13 v2.5.2：破坏性重写 = 危险描边 + AlertDialog 二次确认，
                       与 amber 保存主 CTA 拉开语义（VLM 审计 P0） */}
-                  <Button
-                    size="lg"
-                    /* v2.7.1：同空态主 CTA——不再因梗概长度灰化（校验与指引交给点击时 toast） */
-                    disabled={generating || pipelineRunning || pipelineStarting}
-                    onClick={() => setRerunConfirmOpen(true)}
-                    className="h-12 w-full border border-red-500/40 bg-transparent text-sm font-bold text-red-300 shadow-none hover:bg-red-500/10 hover:text-red-200"
-                  >
-                    {pipelineRunning || pipelineStarting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        剧组拍摄中 {activeRun ? `· ${activeRun.progress}%` : "…"}
-                      </>
-                    ) : (
-                      <>
-                        <Clapperboard className="h-4 w-4" />
-                        按新配置重新开机
-                      </>
-                    )}
-                  </Button>
-                  <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-                    重新开机将重写当前项目的剧本、分镜与锚点（成片与任务记录保留）
-                  </p>
+                      <Button
+                        size="lg"
+                        /* v2.7.1：同空态主 CTA——不再因梗概长度灰化（校验与指引交给点击时 toast） */
+                        disabled={generating || pipelineRunning || pipelineStarting}
+                        onClick={() => setRerunConfirmOpen(true)}
+                        className="h-12 w-full border border-red-500/40 bg-transparent text-sm font-bold text-red-300 shadow-none hover:bg-red-500/10 hover:text-red-200"
+                      >
+                        {pipelineRunning || pipelineStarting ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            剧组拍摄中 {activeRun ? `· ${activeRun.progress}%` : "…"}
+                          </>
+                        ) : (
+                          <>
+                            <Clapperboard className="h-4 w-4" />
+                            按新配置重新开机
+                          </>
+                        )}
+                      </Button>
+                      <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+                        重新开机将重写当前项目的剧本、分镜与锚点（成片与任务记录保留）
+                      </p>
+                    </>
+                  )}
                 </CollapsibleContent>
               </Collapsible>
+            )}
+
+            {/* v2.9.6 首次开机主 CTA（折叠区外常驻）：试笔→开机的转化承接——
+                过稿剧本：按已过目剧本拍摄（不重写）；输入已改：诚实提示重写 */}
+            {firstBoot && (
+              <div className="space-y-2">
+                <Button
+                  size="lg"
+                  disabled={generating || pipelineRunning || pipelineStarting}
+                  onClick={handleStartPipeline}
+                  className="h-14 w-full bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 text-base font-bold text-white shadow-xl shadow-red-600/25 hover:opacity-90"
+                >
+                  <Clapperboard className="h-5 w-5" />
+                  {scriptReusable
+                    ? "全组开机 · 按已过目剧本拍摄"
+                    : "全组开机 · AI 剧组流水线"}
+                </Button>
+                <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+                  {scriptReusable ? (
+                    <>
+                      剧本已过稿 · <span className="text-foreground">开机不重写</span>
+                      ——直接选角定妆 → 导演拆镜 → 后期成片
+                    </>
+                  ) : (
+                    <>
+                      题材/梗概/编剧深度有改动 · 开机时编剧室将按
+                      <span className="text-foreground">当前输入重写剧本</span>
+                    </>
+                  )}
+                </p>
+              </div>
             )}
 
             {!hasSession && (

@@ -178,10 +178,35 @@ function thinkingModeLabel(level: string): string {
   return "直给爆点";
 }
 
-async function stageScreenwriting(
+/** 编剧阶段（导出仅供验证脚本直测 keep 分支；生产调用走 STAGE_FN 编排） */
+export async function stageScreenwriting(
   runId: string,
-  project: Project
+  project: Project,
+  opts?: { keepScript?: boolean }
 ): Promise<StageResult> {
+  /* v2.9.6 剧本过稿开机（传统剧组纪律：剧本定稿开机不重写）——
+     「先试笔」产出的剧本用户已过目，「满意再全组开机」的承诺必须兑现：
+     keepScript 且项目已有剧本时，编剧室本轮不重写，直接交稿进选角。
+     已知边界：客户端 keepScript 由「会话剧本 ↔ 当前输入」实时比对决定，
+     正常动线全部覆盖；保存改过梗概的旧草稿再载入的极端路径下，
+     剧本与梗概的分镜页签同屏可见，用户过目的就是将拍的内容 */
+  if (opts?.keepScript) {
+    const beats = await db.storyBeat.findMany({
+      where: { projectId: project.id },
+      orderBy: { index: "asc" },
+    });
+    if (beats.length > 0) {
+      await appendLog(
+        runId,
+        "screenwriter",
+        "剧本已过稿定稿——沿用交稿剧本直接开机，编剧室本轮不重写（配置未变）"
+      );
+      return {
+        summary: `沿用已过稿剧本：${beats.length} 场，编剧室本轮不重写`,
+      };
+    }
+    // 项目无剧本可沿用：走常规生成路径（防御式回退，不 fail）
+  }
   const provider = getTextProvider();
   const messages = buildScreenplayMessages({
     genreName: project.genreName,
@@ -679,7 +704,11 @@ async function stagePostproduction(
 
 const STAGE_FN: Record<
   StageKey,
-  (runId: string, project: Project) => Promise<StageResult>
+  (
+    runId: string,
+    project: Project,
+    opts?: { keepScript?: boolean }
+  ) => Promise<StageResult>
 > = {
   screenwriting: stageScreenwriting,
   casting: stageCasting,
@@ -688,7 +717,10 @@ const STAGE_FN: Record<
   postproduction: stagePostproduction,
 };
 
-async function executeRun(runId: string): Promise<void> {
+async function executeRun(
+  runId: string,
+  opts: { keepScript?: boolean } = {}
+): Promise<void> {
   try {
     const run = await db.productionRun.findUnique({ where: { id: runId } });
     if (!run || run.status !== "running") return;
@@ -725,7 +757,7 @@ async function executeRun(runId: string): Promise<void> {
       );
 
       try {
-        const result = await STAGE_FN[def.key](runId, project);
+        const result = await STAGE_FN[def.key](runId, project, opts);
         const fresh = parseStages((await loadRun(runId)).stages);
         const stageRow = fresh.find((s) => s.key === def.key);
         if (stageRow) {
@@ -779,7 +811,10 @@ async function executeRun(runId: string): Promise<void> {
 // 对外 API
 // ============================================================
 
-export async function startRun(projectId: string): Promise<RunDTO> {
+export async function startRun(
+  projectId: string,
+  opts: { keepScript?: boolean } = {}
+): Promise<RunDTO> {
   const project = await db.project.findUnique({ where: { id: projectId } });
   if (!project) throw new RouteError("项目不存在或已被删除", 404);
 
@@ -807,7 +842,7 @@ export async function startRun(projectId: string): Promise<RunDTO> {
     },
   });
   // 异步执行：路由立即返回，前端轮询 run 状态
-  void executeRun(run.id);
+  void executeRun(run.id, opts);
   return toRunDTO(run);
 }
 
