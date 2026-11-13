@@ -124,8 +124,9 @@ ${rosterSection}
 }
 
 function parseShots(raw: string): ShotBreakdownItem[] | null {
-  const data = parseJsonLoose(raw) as { shots?: unknown[] } | null;
-  const arr = data?.shots;
+  const data = parseJsonLoose(raw) as { shots?: unknown[] } | unknown[] | null;
+  // 顶层数组兼容：模型偶尔忽略「包一层对象」指令直接输出镜头数组（v2.9.9）
+  const arr = Array.isArray(data) ? data : data?.shots;
   if (!Array.isArray(arr) || arr.length < 2) return null;
 
   const shots: ShotBreakdownItem[] = [];
@@ -160,7 +161,14 @@ function parseShots(raw: string): ShotBreakdownItem[] | null {
   return shots;
 }
 
-/** 调用文本通道拆解一场（带 2 次解析级重试），返回结构化镜头组 */
+/** 解析级重试的用户指令（逐级收紧：第 3 次显式要求精简以避开输出截断） */
+const BREAKDOWN_RETRY_HINTS = [
+  "请拆解并只输出 JSON。",
+  "上一次输出无法解析。请严格只输出一个合法 JSON 对象（含 shots 数组），不要任何其他文字。",
+  "前两次输出都无法解析。只输出一个合法 JSON 对象 {\"shots\":[...]}：所有字符串值一律单行（换行用 \\n 转义）、不要尾逗号、visualDesc 精简到 40 字以内，确保 JSON 完整闭合。",
+];
+
+/** 调用文本通道拆解一场（带 3 次解析级重试），返回结构化镜头组 */
 export async function breakdownAct(
   ctx: BreakdownContext
 ): Promise<ShotBreakdownItem[]> {
@@ -169,17 +177,12 @@ export async function breakdownAct(
 
   let shots: ShotBreakdownItem[] | null = null;
   let lastRaw = "";
-  for (let attempt = 0; attempt < 2 && !shots; attempt++) {
+  const maxAttempts = BREAKDOWN_RETRY_HINTS.length;
+  for (let attempt = 0; attempt < maxAttempts && !shots; attempt++) {
     const { text } = await provider.complete({
       messages: [
         { role: "assistant", content: prompt },
-        {
-          role: "user",
-          content:
-            attempt === 0
-              ? "请拆解并只输出 JSON。"
-              : "上一次输出无法解析。请严格只输出一个合法 JSON 对象（含 shots 数组），不要任何其他文字。",
-        },
+        { role: "user", content: BREAKDOWN_RETRY_HINTS[attempt] },
       ],
       thinking: { type: "disabled" },
     });

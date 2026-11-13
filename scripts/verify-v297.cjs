@@ -11,9 +11,12 @@
  *
  * 判定基线：会话态以「另起新片」按钮为标记（仅会话存在时渲染，营销文案零撞车）。
  * 前置：dev server 已在 localhost:3000 运行；项目库存在在制项目。
+ * 夹具自包含（v2.9.9）：项目库无「v297回归夹具」在制项目时自动零配额重建，
+ * 不再依赖手动跑 fixture-pending-project.cjs（亦避免误渲染用户真实项目）。
  * 用法：node scripts/verify-v297.cjs
  */
 const { chromium } = require("playwright");
+const { execSync } = require("child_process");
 
 const BASE = "http://localhost:3000";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -42,7 +45,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const inSession = async () =>
     (await page.getByRole("button", { name: /另起新片/ }).count()) > 0;
 
-  // ===== 0. 冷启动：清 localStorage，无恢复 toast、无会话 =====
+  // ===== 0. 夹具自检：无「v297回归夹具」在制项目则零配额自动重建（v2.9.9）=====
+  const fixtureReady = await (async () => {
+    const r = await fetch(BASE + "/api/projects").then((x) => x.json());
+    return (r?.data ?? []).some(
+      (p) => p.status === "inProduction" && (p.title ?? "").includes("v297回归夹具")
+    );
+  })();
+  if (!fixtureReady) {
+    console.log("夹具缺失：零配额重建 15 镜待出片项目（fixture-pending-project.cjs）…");
+    execSync("node scripts/fixture-pending-project.cjs", { stdio: "inherit" });
+    await sleep(2000);
+  }
+
+  // ===== 0.5 冷启动：清 localStorage，无恢复 toast、无会话 =====
   await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 90000 });
   await sleep(3000);
   await page.evaluate(() => localStorage.clear());
@@ -52,11 +68,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok("冷启动：无恢复 toast（localStorage 为空）", !body.includes("已恢复上次拍摄现场"));
   ok("冷启动：空态无会话（无另起新片按钮）", !(await inSession()));
 
-  // ===== 1. 项目库载入在制项目（toast「项目已载入」为载入完成信号） =====
+  // ===== 1. 项目库载入夹具在制项目（toast「项目已载入」为载入完成信号） =====
   await page.getByRole("button", { name: "项目库" }).click({ timeout: 10000 });
   await sleep(1500);
-  // 选有分镜未合成的在制项目（15 片段 = 前次全流程产物；已合成/无镜头项目没有渲染按钮）
-  await page.locator('div[role="button"]').filter({ hasText: "15 片段" }).filter({ hasText: /制作中/ }).first().click({ timeout: 8000 });
+  // 精确定位夹具项目（标题含专属标记，不误触用户真实项目）；15 镜未合成才有渲染按钮
+  await page.locator('div[role="button"]').filter({ hasText: "v297回归夹具" }).first().click({ timeout: 8000 });
   ok("项目库：载入在制项目（项目已载入 toast）", await waitText("项目已载入", 20000));
   await sleep(1000);
   ok("项目库：载入后会话就位", await inSession());

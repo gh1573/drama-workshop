@@ -120,18 +120,162 @@ export interface VideoProvider {
 }
 
 /**
- * 宽松 JSON 抽取：剥离 markdown 围栏 → 截取首尾花括号 → 解析。
- * 所有 LLM 结构化输出统一走此函数，解析失败返回 null 由调用方重试。
+ * 宽松 JSON 抽取与修复：所有 LLM 结构化输出统一走此函数。
+ *
+ * 修复链（逐级尝试，命中即返回；全部失败返回 null 由调用方重试）：
+ * 1. 剥离 markdown 围栏；
+ * 2. 顶层数组直取（模型偶尔忽略「包一层对象」的指令）；
+ * 3. 首尾花括号截取 + 直接解析；
+ * 4. 尾逗号清理（], / }, 前的逗号——模型高频笔误）；
+ * 5. 字符串内裸控制字符转义（换行/回车/制表——JSON.parse 对字符串内
+ *    字面换行是硬错误，视觉短剧描述文案里换行并不罕见）；
+ * 6. 截断修复：输出被 max_tokens 切断时，回退到最后一个完整元素并
+ *    按括号栈补全闭合（丢尾部残片但保住已完整部分——对「shots 数组
+ *    只要 ≥2 个完整镜头即可用」的调用方足够）。
  */
-export function parseJsonLoose(raw: string): unknown | null {
-  if (!raw) return null;
-  const text = raw.trim().replace(/```(?:json)?/gi, "").trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end <= start) return null;
+function tryParse(s: string): unknown {
   try {
-    return JSON.parse(text.slice(start, end + 1));
+    return JSON.parse(s);
   } catch {
     return null;
   }
+}
+
+/** 字符串字面量内的裸换行/回车/制表符转义为 \n \r \t（字面量外原样保留） */
+function escapeRawControls(s: string): string {
+  let out = "";
+  let inStr = false;
+  let esc = false;
+  for (const ch of s) {
+    if (inStr) {
+      if (esc) {
+        out += ch;
+        esc = false;
+        continue;
+      }
+      if (ch === "\\") {
+        out += ch;
+        esc = true;
+        continue;
+      }
+      if (ch === '"') {
+        inStr = false;
+        out += ch;
+        continue;
+      }
+      if (ch === "\n") {
+        out += "\\n";
+        continue;
+      }
+      if (ch === "\r") {
+        out += "\\r";
+        continue;
+      }
+      if (ch === "\t") {
+        out += "\\t";
+        continue;
+      }
+      out += ch;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    out += ch;
+  }
+  return out;
+}
+
+/** 截断修复：扫描括号栈，回退到最后一个完整元素并按【该时刻】的栈快照
+ *  补全闭合——不能用扫描结束时的栈：残片元素的开括号在切片之外，
+ *  按终态栈闭合会多补（v2.9.9 单测抓出） */
+function repairTruncated(s: string): string | null {
+  const stack: string[] = [];
+  let inStr = false;
+  let esc = false;
+  let lastComplete = -1;
+  let snapshot: string[] | null = null;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (esc) {
+        esc = false;
+        continue;
+      }
+      if (ch === "\\") {
+        esc = true;
+        continue;
+      }
+      if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      continue;
+    }
+    if (ch === "{" || ch === "[") stack.push(ch);
+    else if (ch === "}" || ch === "]") {
+      stack.pop();
+      if (stack.length === 0) return null; // 结构本就完整，截断修复无能为力
+      lastComplete = i;
+      snapshot = [...stack];
+    }
+  }
+  if (lastComplete === -1 || !snapshot) return null;
+  let repaired = s.slice(0, lastComplete + 1).replace(/[,\s]+$/, "");
+  for (let i = snapshot.length - 1; i >= 0; i--) {
+    repaired += snapshot[i] === "{" ? "}" : "]";
+  }
+  return repaired;
+}
+
+/** 对候选串依次施加修复链；返回首个可解析结果 */
+function parseWithRepairs(candidate: string): unknown {
+  return (
+    tryParse(candidate) ??
+    tryParse(candidate.replace(/,\s*([}\]])/g, "$1")) ??
+    tryParse(escapeRawControls(candidate)) ??
+    (() => {
+      const decommad = candidate.replace(/,\s*([}\]])/g, "$1");
+      const escaped = escapeRawControls(decommad);
+      const repaired = repairTruncated(escaped);
+      return repaired === null ? null : tryParse(repaired);
+    })()
+  );
+}
+
+export function parseJsonLoose(raw: string): unknown | null {
+  if (!raw) return null;
+  const text = raw.trim().replace(/```(?:json)?/gi, "").trim();
+
+  // 形态一：顶层数组直取（含截断修复：栈扫描对 [...] 同样适用）
+  if (text.startsWith("[")) {
+    const endArr = text.lastIndexOf("]");
+    const candidate = endArr > 0 ? text.slice(0, endArr + 1) : text;
+    const hit = parseWithRepairs(candidate);
+    if (hit !== null) return hit;
+  }
+
+  // 形态二：对象形态（首 { 起截取；尾 } 缺失时由截断修复兑底）
+  const start = text.indexOf("{");
+  if (start !== -1) {
+    const end = text.lastIndexOf("}");
+    const candidate = end > start ? text.slice(start, end + 1) : text.slice(start);
+    const hit = parseWithRepairs(candidate);
+    if (hit !== null) return hit;
+    // } 之后还有被截断内容的形态：从 { 起全段截断修复
+    if (end > start) {
+      const repaired = repairTruncated(text.slice(start));
+      const hit2 = repaired === null ? null : tryParse(repaired);
+      if (hit2 !== null) return hit2;
+    }
+  }
+
+  // 形态三：前缀文本 + 数组（「拆解如下：[…]」——对象形态全败后兑底）
+  const aStart = text.indexOf("[");
+  if (aStart !== -1) {
+    const aEnd = text.lastIndexOf("]");
+    const candidate = aEnd > aStart ? text.slice(aStart, aEnd + 1) : text.slice(aStart);
+    const hit = parseWithRepairs(candidate);
+    if (hit !== null) return hit;
+  }
+  return null;
 }

@@ -770,6 +770,12 @@ async function executeRun(
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "未知错误";
+        // 带 detail 的错误（如 BreakdownError）把模型原始输出片段落进剧组日志——
+        // 否则「解析失败」永远无从诊断（v2.9.9）；run.error 保持干净给 UI
+        const detail =
+          typeof (err as { detail?: unknown }).detail === "string"
+            ? (err as { detail: string }).detail
+            : "";
         const fresh = parseStages((await loadRun(runId)).stages);
         const stageRow = fresh.find((s) => s.key === def.key);
         if (stageRow) {
@@ -782,7 +788,13 @@ async function executeRun(
           where: { id: runId },
           data: { status: "failed", error: `「${def.name}」阶段失败：${message}` },
         });
-        await appendLog(runId, def.role, `阶段失败：${message}`);
+        await appendLog(
+          runId,
+          def.role,
+          `阶段失败：${message}${
+            detail ? `（模型原始输出片段：${detail.slice(0, 200)}）` : ""
+          }`
+        );
         return;
       }
     }

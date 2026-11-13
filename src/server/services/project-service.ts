@@ -1,3 +1,5 @@
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { db } from "@/lib/db";
 import { RouteError } from "@/lib/api-utils";
 import {
@@ -280,9 +282,55 @@ export async function updateProject(
   return getProject(id);
 }
 
+const ASSETS_DIR = path.join(process.cwd(), "public", "assets");
+
+/** URL（/assets/xxx）→ 绝对磁盘路径；限定在 ASSETS_DIR 之内（防路径穿越） */
+function assetAbsolutePath(url: string | null | undefined): string | null {
+  if (typeof url !== "string" || !url) return null;
+  const name = url.split("/").pop();
+  if (!name || name.includes("/") || name.includes("..")) return null;
+  const abs = path.join(ASSETS_DIR, name);
+  return abs.startsWith(ASSETS_DIR) ? abs : null;
+}
+
 export async function deleteProject(id: string): Promise<void> {
   await requireProjectRow(id);
+  // 删行前先收齐本项目全部磁盘素材引用（行没了就查不到了）：
+  // 定妆照 portraitUrl / 镜头成片 mediaUrl / 任务产物 resultUrl / 成片 finalVideoUrl
+  // (+封面帧 _poster.jpg 派生) / BGM 约定对 bgm_{projectId}.*
+  const [assets, clips, tasks, project] = await Promise.all([
+    db.asset.findMany({ where: { projectId: id }, select: { portraitUrl: true } }),
+    db.timelineClip.findMany({ where: { projectId: id }, select: { mediaUrl: true } }),
+    db.renderTask.findMany({ where: { projectId: id }, select: { resultUrl: true } }),
+    db.project.findUnique({ where: { id }, select: { finalVideoUrl: true } }),
+  ]);
+  const files = new Set<string>();
+  for (const a of assets) {
+    const p = assetAbsolutePath(a.portraitUrl);
+    if (p) files.add(p);
+  }
+  for (const c of clips) {
+    const p = assetAbsolutePath(c.mediaUrl);
+    if (p) files.add(p);
+  }
+  for (const t of tasks) {
+    const p = assetAbsolutePath(t.resultUrl);
+    if (p) files.add(p);
+  }
+  const finalAbs = assetAbsolutePath(project?.finalVideoUrl);
+  if (finalAbs) {
+    files.add(finalAbs);
+    files.add(finalAbs.replace(/\.mp4$/, "_poster.jpg"));
+  }
+  const bgmEntries = await fs.readdir(ASSETS_DIR).catch(() => [] as string[]);
+  for (const f of bgmEntries) {
+    if (f.startsWith(`bgm_${id}.`)) files.add(path.join(ASSETS_DIR, f));
+  }
+
   await db.project.delete({ where: { id } });
+
+  // 行删除成功后清理磁盘素材（best-effort：失败仅剩孤儿文件，不阻断删除）
+  await Promise.allSettled([...files].map((f) => fs.unlink(f)));
 }
 
 /** 场次级能量回写（导演阶段：场首/场尾能量取自本场首末镜头） */
