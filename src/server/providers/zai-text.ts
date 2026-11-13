@@ -28,8 +28,16 @@ export class ZaiTextProvider implements TextProvider {
           messages: req.messages,
           ...(req.thinking ? { thinking: req.thinking } : {}),
         });
-        const text = completion.choices[0]?.message?.content ?? "";
-        if (text) return { text };
+        const choice = completion.choices[0];
+        const text = choice?.message?.content ?? "";
+        if (text) {
+          // v2.9.11：透传 finish_reason（length=被 max_tokens 截断），
+          // 解析失败时剧组日志可定性根因，不再肉眼猜截断
+          const finishReason = (
+            choice as { finish_reason?: string } | undefined
+          )?.finish_reason;
+          return finishReason ? { text, finishReason } : { text };
+        }
         lastError = new Error("模型返回空内容");
       } catch (err) {
         lastError = err;

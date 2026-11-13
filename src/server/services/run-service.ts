@@ -41,7 +41,7 @@ import type { ProductionRun, Project, StoryBeat as DbBeat } from "@prisma/client
  * 工程语义：
  * - 每个阶段幂等（断点重试从首个未成功阶段继续）；
  * - 阶段快照 + 剧组日志持久化，前端轮询即可获得完整生产观测；
- * - LLM 调用全部经 Provider 通道（解析级重试 2 次）；
+ * - LLM 调用全部经 Provider 通道（解析级重试 3 次，第 3 级降载防截断）；
  * - 编剧提示词与解析统一在 screenplay.ts（v2.7 单一提示词源）。
  */
 
@@ -50,6 +50,32 @@ type StageKey = string;
 interface StageResult {
   summary: string;
 }
+
+/** 解析失败错误：message 给 UI 人话（不贴原始 JSON），
+ *  detail（原始输出摘要）由阶段编排落进剧组日志供诊断 —— 对齐 BreakdownError 约定。
+ *  v2.9.11：此前 stage.error 直接携带 120 字符截断 JSON，
+ *  阶段卡/警示条/日志三处同屏刷一坨代码，用户视角毫无信息量 */
+class ParseFailError extends Error {
+  detail: string;
+  constructor(message: string, detail: string) {
+    super(message);
+    this.detail = detail;
+  }
+}
+
+/** 解析级重试的用户指令（逐级收紧；第 3 级显式降载以避开输出截断，
+ *  对齐分镜阶段 BREAKDOWN_RETRY_HINTS 的最佳实践） */
+const SCREENPLAY_RETRY_HINTS = [
+  "", // 首次：使用原始提示词
+  "上一次输出无法解析。请严格只输出一个合法 JSON 对象（含 storyBeats 数组），不要任何其他文字。",
+  '前两次输出都无法解析。只输出一个合法 JSON 对象 {"storyBeats":[...]}：所有字符串值一律单行（换行用 \\n 转义）、每场 description 与 dialogueSubtitle 精简到 60 字以内、不要尾逗号，确保 JSON 完整闭合。',
+];
+
+const CASTING_RETRY_HINTS = [
+  "请建立资产库并只输出 JSON。",
+  "上一次输出无法解析。请严格只输出一个合法 JSON 对象（characters/scenes/props 三个数组），不要任何其他文字。",
+  '前两次输出都无法解析。只输出一个合法 JSON 对象 {"characters":[],"scenes":[],"props":[]}：所有字符串值一律单行、每个 visualAnchor 精简到 40 字以内、不要尾逗号，确保 JSON 完整闭合。',
+];
 
 const STAGE_START_MESSAGE: Record<string, string> = {
   screenwriting: "领取任务：围绕黄金 3 秒钩子推演场次剧本（节奏模式：{mode}）",
@@ -223,8 +249,13 @@ export async function stageScreenwriting(
 
   let beats: StoryBeat[] | null = null;
   let lastRaw = "";
-  for (let attempt = 0; attempt < 2 && !beats; attempt++) {
-    const { text } = await provider.complete({
+  let lastFinishReason = "";
+  for (
+    let attempt = 0;
+    attempt < SCREENPLAY_RETRY_HINTS.length && !beats;
+    attempt++
+  ) {
+    const { text, finishReason } = await provider.complete({
       messages: [
         messages[0],
         {
@@ -232,16 +263,28 @@ export async function stageScreenwriting(
           content:
             attempt === 0
               ? messages[1].content
-              : `${messages[1].content}\n\n注意：上一次输出无法解析。请严格只输出一个合法 JSON 对象（含 storyBeats 数组），不要任何其他文字。`,
+              : `${messages[1].content}\n\n${SCREENPLAY_RETRY_HINTS[attempt]}`,
         },
       ],
       thinking: { type: project.thinkingLevel === "low" ? "disabled" : "enabled" },
     });
     lastRaw = text;
+    lastFinishReason = finishReason ?? "";
     beats = parseScreenplayBeats(text);
   }
   if (!beats) {
-    throw new Error(`剧本解析失败（${lastRaw.slice(0, 120)}…）`);
+    // v2.9.11：人话给 UI，原始输出摘要（长度+首尾）落剧组日志供诊断；
+    // finishReason=length 时直接定性「被截断」，不再让人猜
+    const verdict =
+      lastFinishReason === "length"
+        ? "AI 返回内容被截断"
+        : "AI 返回内容不完整或格式异常";
+    throw new ParseFailError(
+      `${verdict}（已连续重试仍无法解析）——点击「断点续拍」重新生成`,
+      `原始输出 ${lastRaw.length} 字${
+        lastFinishReason ? `（finish_reason=${lastFinishReason}）` : ""
+      }，首 50 字：${lastRaw.slice(0, 50)}，尾 50 字：${lastRaw.slice(-50)}`
+    );
   }
   await updateProject(project.id, { storyBeats: beats, status: "beatsReady" });
   return {
@@ -356,25 +399,35 @@ async function stageCasting(
   const prompt = buildCastingMessages(beats, project);
   let casting: ReturnType<typeof parseCasting> = null;
   let lastRaw = "";
-  for (let attempt = 0; attempt < 2 && !casting; attempt++) {
-    const { text } = await provider.complete({
+  let lastFinishReason = "";
+  for (
+    let attempt = 0;
+    attempt < CASTING_RETRY_HINTS.length && !casting;
+    attempt++
+  ) {
+    const { text, finishReason } = await provider.complete({
       messages: [
         { role: "assistant", content: prompt },
-        {
-          role: "user",
-          content:
-            attempt === 0
-              ? "请建立资产库并只输出 JSON。"
-              : "上一次输出无法解析。请严格只输出一个合法 JSON 对象（characters/scenes/props 三个数组），不要任何其他文字。",
-        },
+        { role: "user", content: CASTING_RETRY_HINTS[attempt] },
       ],
       thinking: { type: "disabled" },
     });
     lastRaw = text;
+    lastFinishReason = finishReason ?? "";
     casting = parseCasting(text);
   }
   if (!casting) {
-    throw new Error(`选角定妆解析失败（${lastRaw.slice(0, 120)}…）`);
+    // v2.9.11：人话给 UI，原始输出摘要落剧组日志（同编剧阶段）
+    const verdict =
+      lastFinishReason === "length"
+        ? "AI 返回内容被截断"
+        : "AI 返回内容不完整或格式异常";
+    throw new ParseFailError(
+      `${verdict}（已连续重试仍无法解析）——点击「断点续拍」重新生成`,
+      `原始输出 ${lastRaw.length} 字${
+        lastFinishReason ? `（finish_reason=${lastFinishReason}）` : ""
+      }，首 50 字：${lastRaw.slice(0, 50)}，尾 50 字：${lastRaw.slice(-50)}`
+    );
   }
 
   // 幂等 upsert：同名资产更新锚点（保证与最新剧本一致）

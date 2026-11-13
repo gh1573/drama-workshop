@@ -20,6 +20,10 @@ export interface TextRequest {
 
 export interface TextResult {
   text: string;
+  /** 上游结束原因（stop=自然结束 / length=被 max_tokens 截断）。
+   *  v2.9.11 透传：截断可定性诊断——解析失败时剧组日志直接给出根因，
+   *  不再只能靠肉眼看原始输出猜 */
+  finishReason?: string;
 }
 
 export interface TextProvider {
@@ -193,6 +197,11 @@ function repairTruncated(s: string): string | null {
   let esc = false;
   let lastComplete = -1;
   let snapshot: string[] | null = null;
+  // v2.9.11 对象内截断兜底：记录最后一个「不在字符串内」的逗号（位置 + 该时刻栈快照）。
+  // 端到端走查实捕：LLM 输出在第一个对象内部就断掉，无任何闭合元素可回退——
+  // 旧逻辑直接返回 null，解析级重试也救不回同样截断的输出。
+  let lastComma = -1;
+  let commaSnapshot: string[] | null = null;
   for (let i = 0; i < s.length; i++) {
     const ch = s[i];
     if (inStr) {
@@ -211,6 +220,10 @@ function repairTruncated(s: string): string | null {
       inStr = true;
       continue;
     }
+    if (ch === "," && stack.length > 0) {
+      lastComma = i;
+      commaSnapshot = [...stack];
+    }
     if (ch === "{" || ch === "[") stack.push(ch);
     else if (ch === "}" || ch === "]") {
       stack.pop();
@@ -219,12 +232,25 @@ function repairTruncated(s: string): string | null {
       snapshot = [...stack];
     }
   }
-  if (lastComplete === -1 || !snapshot) return null;
-  let repaired = s.slice(0, lastComplete + 1).replace(/[,\s]+$/, "");
-  for (let i = snapshot.length - 1; i >= 0; i--) {
-    repaired += snapshot[i] === "{" ? "}" : "]";
+  if (lastComplete !== -1 && snapshot) {
+    let repaired = s.slice(0, lastComplete + 1).replace(/[,\s]+$/, "");
+    for (let i = snapshot.length - 1; i >= 0; i--) {
+      repaired += snapshot[i] === "{" ? "}" : "]";
+    }
+    return repaired;
   }
-  return repaired;
+  // v2.9.11：无闭合元素可回退时，退到最后一个逗号锚点按【该时刻】栈快照闭合。
+  // 锚点必不在字符串内（inStr 时已 continue），切割安全；修出的有效 JSON
+  // 由业务层做内容充足性判定（如场次 <3 判废重试）——语义从「解析失败」
+  // 变成「内容不足」，诊断更快、重试提示更有针对性
+  if (lastComma !== -1 && commaSnapshot && commaSnapshot.length > 0) {
+    let repaired = s.slice(0, lastComma).replace(/[,\s]+$/, "");
+    for (let i = commaSnapshot.length - 1; i >= 0; i--) {
+      repaired += commaSnapshot[i] === "{" ? "}" : "]";
+    }
+    return repaired;
+  }
+  return null;
 }
 
 /** 对候选串依次施加修复链；返回首个可解析结果 */

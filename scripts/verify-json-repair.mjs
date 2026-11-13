@@ -98,5 +98,42 @@ const be = new BreakdownError("解析失败测试", '{"shots":[{"a":1}');
 check("BreakdownError.detail 契约（供 run-service 落日志）", be.detail === '{"shots":[{"a":1}');
 check("BreakdownError.message 契约", be.message === "解析失败测试");
 
+// ===== 8. 对象内截断兜底（v2.9.11：端到端走查实捕样本）=====
+// 真实案例：编剧阶段 LLM 输出在第一个场次对象内部断掉，无任何闭合元素——
+// 旧逻辑直接 null，重试也撞同样截断；新逻辑退到最后一个逗号锚点按栈闭合
+const beatInner =
+  '```json\n{\n  "storyBeats": [\n    {\n      "index": 1,\n      "actTitle": "婚书碎地",\n      "narrativeFunction": "hook",';
+const beatFixed = parseJsonLoose(beatInner);
+check(
+  "对象内截断：逗号锚点兜底修出有效 JSON",
+  beatFixed?.storyBeats?.[0]?.actTitle === "婚书碎地" &&
+    beatFixed?.storyBeats?.[0]?.narrativeFunction === "hook",
+  JSON.stringify(beatFixed)?.slice(0, 90) ?? ""
+);
+// 截断发生在字符串内部：退到前一个逗号锚点，已完成字段保留
+const strInner =
+  '{"shots":[{"name":"婚书碎地","visualDesc":"主角冷笑亮出信物，军队破门而入';
+const strFixed = parseJsonLoose(strInner);
+check(
+  "字符串内截断：退到前锚点，前字段保留",
+  strFixed?.shots?.[0]?.name === "婚书碎地",
+  JSON.stringify(strFixed)?.slice(0, 90) ?? ""
+);
+// 第一个键值对内部截断（无任何逗号锚点）：仍返 null 交给重试，不误修
+check(
+  "无锚点极端截断：仍返 null（不误修）",
+  parseJsonLoose('{"storyBeats": [{"actTitle": "婚书碎地') === null
+);
+// 既有语义回归：无逗号 + 无闭合 → null（v2.9.9 用例行为不变）
+check(
+  "旧用例回归：无完整元素仍 null",
+  parseJsonLoose('{"shots":[{"name":"残') === null
+);
+// 误修复防线：正常结构不受逗号锚点逻辑影响
+check(
+  "正常嵌套对象不受锚点逻辑影响",
+  parseJsonLoose('{"a":{"b":[1,2,3]},"c":"x"}')?.a?.b?.length === 3
+);
+
 console.log(`\n结果：${pass}/${pass + fail} 通过`);
 process.exit(fail === 0 ? 0 : 1);
