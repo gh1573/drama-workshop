@@ -1,0 +1,22 @@
+// 走查 v8 —— 中断召回三件套复测：项目库标签 / 载入落点 / toast
+import { chromium } from 'playwright';
+const browser = await chromium.launch();
+const ctx = await browser.newContext({ viewport: { width: 1728, height: 1080 } });
+const page = await ctx.newPage();
+page.setDefaultTimeout(15000);
+await page.goto('http://localhost:3000', { waitUntil: 'domcontentloaded', timeout: 30000 });
+await page.waitForTimeout(2500);
+await page.locator('button').filter({ hasText: '项目库' }).first().click();
+await page.waitForTimeout(1200);
+const libTxt = (await page.locator('[role=dialog]').textContent() || '').replace(/\s+/g,' ');
+console.log('库内中断标签:', libTxt.includes('拍摄中断') ? '出现「拍摄中断 · 可续拍」' : '(未出现!)');
+await page.screenshot({ path: '/tmp/uxwalk/80-library-badges.png' });
+const failed = page.locator('[role=dialog] button, [role=dialog] [class*=cursor-pointer]').filter({ hasText: '马甲大佬' }).first();
+await failed.click();
+await page.waitForTimeout(2500);
+const body1 = (await page.locator('body').textContent() || '').replace(/\s+/g,' ');
+console.log('载入 toast 提及中断:', /上次拍摄中断/.test(body1));
+console.log('落剧组进程页签(断点续拍可见):', /断点续拍/.test(body1));
+await page.screenshot({ path: '/tmp/uxwalk/81-loaded-failed.png' });
+browser.close();
+console.log('walk8 done');
