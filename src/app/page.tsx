@@ -641,6 +641,16 @@ export default function Home() {
                         </span>
                       </div>
                     ))}
+                    {/* v2.9.14 预期管理（用户视角走查：429 风暴下退避重试可拖到
+                        2~3 分钟，秒表虽是活性信号但没人告诉用户「这是正常的」——
+                        45s 后亮出「繁忙自动等待」口径，避免用户在 40s 心理预期
+                        落空后误判卡死并关页） */}
+                    {genElapsed >= 45 && (
+                      <p className="rounded-lg bg-secondary/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                        比平时慢？多半是创作通道繁忙，系统正在自动等待重试（最长约 3 分钟）——
+                        秒表在走就是在推进，完成后这里会自动亮出剧本，请勿关闭页面。
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

@@ -10,6 +10,7 @@ import type {
 import { createProjectDraft, getProject } from "./project-service";
 import { createTask } from "./task-service";
 import { getTextProvider } from "@/server/providers/factory";
+import { standaloneFailureText } from "@/lib/humanize-error";
 
 /**
  * 系列服务（v2.3）—— 多剧集连载的编排入口。
@@ -326,29 +327,41 @@ export async function draftNextEpisodeSynopsis(projectId: string): Promise<strin
     .join("\n\n");
 
   const provider = getTextProvider();
-  const { text } = await provider.complete({
-    messages: [
-      {
-        role: "system",
-        content: `你是竖屏短剧编剧室的资深主笔，正在为连载短剧写下一集的承接梗概。
+  /* v2.9.14（用户视角走查）：接钩子撞 429/网络错误时裸英文 JSON 直透弹窗——
+   * 独立动作口径人话化（无阶段可续，不提「断点续拍」） */
+  let text: string;
+  try {
+    ({ text } = await provider.complete({
+      messages: [
+        {
+          role: "system",
+          content: `你是竖屏短剧编剧室的资深主笔，正在为连载短剧写下一集的承接梗概。
 规则：
 - 只输出梗概正文（80~150 字，中文），不要标题、引号或任何解释；
 - 必须承接上一集结尾的钩子（卡点留钩场），延续人物与冲突，不引入上一集未铺垫的全新设定；
 - 按题材钩子战术推进爽点节奏：${project.hookTactic || "前 3 秒给冲突，结尾留钩"};
 - 结尾留新的钩子，驱动追更。`,
-      },
-      {
-        role: "user",
-        content: `题材：${project.genreName}
+        },
+        {
+          role: "user",
+          content: `题材：${project.genreName}
 上一集梗概：${project.synopsis}
 上一集剧本：
 ${script}
 
 请写下一集承接梗概。`,
-      },
-    ],
-    thinking: { type: project.thinkingLevel === "high" ? "enabled" : "disabled" },
-  });
+        },
+      ],
+      thinking: { type: project.thinkingLevel === "high" ? "enabled" : "disabled" },
+    }));
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err);
+    throw new RouteError(
+      standaloneFailureText(raw) ?? "AI 创作通道暂时不可用，请稍后重试",
+      502,
+      raw.slice(0, 300)
+    );
+  }
 
   const draft = text
     .trim()

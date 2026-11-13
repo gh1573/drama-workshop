@@ -170,7 +170,10 @@ const BREAKDOWN_RETRY_HINTS = [
   "前两次输出都无法解析。只输出一个合法 JSON 对象 {\"shots\":[...]}：所有字符串值一律单行（换行用 \\n 转义）、不要尾逗号、visualDesc 精简到 40 字以内，确保 JSON 完整闭合。",
 ];
 
-/** 调用文本通道拆解一场（带 3 次解析级重试），返回结构化镜头组 */
+/** 调用文本通道拆解一场（带 3 次解析级重试），返回结构化镜头组
+ *  v2.9.14：通道级失败（限流/网络/超时）抛 BreakdownChannelError——
+ *  message 保留原始技术错误（流水线的 stageFailureText 靠它做确定性
+ *  模式匹配），channel 标记让独立路由按「无阶段可续」口径人话化 */
 export async function breakdownAct(
   ctx: BreakdownContext
 ): Promise<ShotBreakdownItem[]> {
@@ -181,16 +184,22 @@ export async function breakdownAct(
   let lastRaw = "";
   const maxAttempts = BREAKDOWN_RETRY_HINTS.length;
   for (let attempt = 0; attempt < maxAttempts && !shots; attempt++) {
-    const { text } = await provider.complete({
-      messages: [
-        { role: "assistant", content: prompt },
-        { role: "user", content: BREAKDOWN_RETRY_HINTS[attempt] },
-      ],
-      thinking: { type: "disabled" },
-      onRetry: ctx.onRetry,
-    });
-    lastRaw = text;
-    shots = parseShots(text);
+    try {
+      const { text } = await provider.complete({
+        messages: [
+          { role: "assistant", content: prompt },
+          { role: "user", content: BREAKDOWN_RETRY_HINTS[attempt] },
+        ],
+        thinking: { type: "disabled" },
+        onRetry: ctx.onRetry,
+      });
+      lastRaw = text;
+      shots = parseShots(text);
+    } catch (err) {
+      throw new BreakdownChannelError(
+        err instanceof Error ? err.message : String(err)
+      );
+    }
   }
   if (!shots) {
     throw new BreakdownError(
@@ -223,5 +232,13 @@ export class BreakdownError extends Error {
   constructor(message: string, detail = "") {
     super(message);
     this.detail = detail;
+  }
+}
+
+/** v2.9.14：通道级失败（限流/网络/超时）——区别于解析失败。
+ *  message = 原始技术错误（保留可匹配性）；独立路由负责翻译成人话 */
+export class BreakdownChannelError extends BreakdownError {
+  constructor(rawChannelError: string) {
+    super(rawChannelError, rawChannelError.slice(0, 300));
   }
 }

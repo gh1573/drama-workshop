@@ -7,6 +7,7 @@ import {
   buildScreenplayMessages,
   parseScreenplayBeats,
 } from "@/server/services/screenplay";
+import { standaloneFailureText } from "@/lib/humanize-error";
 
 export const maxDuration = 300;
 
@@ -69,7 +70,12 @@ export async function POST(req: NextRequest) {
     const provider = getTextProvider();
     let beats: StoryBeat[] | null = null;
     let lastRaw = "";
+    /* v2.9.14（用户视角走查 P1：429 误诊）：通道级失败（限流/网络/超时）与
+       解析级失败（模型有输出但不合工单）必须分流——此前一律报「未能通过解析，
+       请调整梗概」，撞限流的用户会被误导去改梗概，而真正该做的只是等两分钟 */
+    let channelError: string | null = null;
     for (let attempt = 0; attempt < 2 && !beats; attempt++) {
+      channelError = null; // 以最后一轮的失败性质定调
       try {
         const { text } = await provider.complete({
           messages: [
@@ -87,11 +93,22 @@ export async function POST(req: NextRequest) {
         lastRaw = text;
         beats = parseScreenplayBeats(text);
       } catch (err) {
-        lastRaw = err instanceof Error ? err.message : String(err);
+        channelError = err instanceof Error ? err.message : String(err);
+        lastRaw = channelError;
+        /* 通道级失败（限流/网络/超时）：provider 内部已做 20/40/80s 退避重试，
+           「更严格的 JSON 格式指令」救不了通道——立即终止，不让用户白等第二轮退避 */
+        break;
       }
     }
 
     if (!beats) {
+      if (channelError) {
+        // 通道级失败：人话化（独立动作口径），技术原始错误进 detail 供排障
+        const friendly =
+          standaloneFailureText(channelError) ??
+          "AI 创作通道暂时不可用，请稍后重试";
+        return fail(friendly, 502, channelError.slice(0, 300));
+      }
       return fail(
         "AI 返回内容未能通过解析，请稍后重试或调整梗概后重试",
         502,

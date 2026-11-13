@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { ok, fail, handleRouteError, RouteError } from "@/lib/api-utils";
 import { getProject, replaceActClips } from "@/server/services/project-service";
 import {
+  BreakdownChannelError,
   BreakdownError,
   breakdownAct,
 } from "@/server/services/breakdown-service";
@@ -10,6 +11,7 @@ import {
   bindRefsFromShots,
 } from "@/server/services/run-service";
 import { rebuildTracks } from "@/server/services/track-service";
+import { standaloneFailureText } from "@/lib/humanize-error";
 
 export const maxDuration = 300;
 
@@ -61,6 +63,14 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
 
     return ok({ shots, clips, boundRefs: bound, anchored }, 201);
   } catch (err) {
+    /* v2.9.14（用户视角走查）：通道级失败不再裸透 429 JSON——
+     * 单场拆解是独立动作（无阶段可续），按独立口径人话化 */
+    if (err instanceof BreakdownChannelError) {
+      const friendly =
+        standaloneFailureText(err.message) ??
+        "AI 创作通道暂时不可用，请稍后重试";
+      return fail(friendly, 502, err.detail);
+    }
     if (err instanceof BreakdownError) {
       return fail(err.message, 502, err.detail);
     }
