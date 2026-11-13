@@ -271,6 +271,14 @@ export default function Home() {
     return () => clearInterval(t);
   }, [generatingSince]);
 
+  /* v2.9.17（用户视角走查实捕：推演面板在视口下方，点击「先试笔」后
+     用户只看到按钮转圈，不滚动不知道发生了什么——面板出现即自动滚到
+     现场，让过程反馈回到视线内） */
+  const genPanelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (generating) genPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [generating]);
+
   /* v2.9.7 断线重进：恢复上次拍摄现场（运行观测/任务轮询随 loadProject 续接）
      + 视频通道模式探明（占位模式下渲染文案统一换贴片指引口径）
      v2.9.12：恢复因瞬时故障失败时——先 4 秒后自动重试一次（弱网/服务
@@ -624,7 +632,7 @@ export default function Home() {
                 </div>
 
                 {generating && (
-                  <div className="space-y-2 rounded-xl border bg-card p-4">
+                  <div ref={genPanelRef} className="space-y-2 rounded-xl border bg-card p-4">
                     {/* v2.9.7 秒表行：推演 20~40s，仅有步骤轮播无法区分「还在跑」与「卡死」 */}
                     <div className="flex items-center justify-between border-b border-border/60 pb-2">
                       <p className="text-xs font-bold text-amber-400">编剧室推演中</p>
@@ -678,7 +686,19 @@ export default function Home() {
             }`}
           >
             {generating && (
+              /* v2.9.17（用户视角走查实捕：三张裸 Skeleton 像内容坏了——
+                 用户不知道在等什么、会出什么）：占位区加语义头，讲清
+                 「编剧室推演中，剧本将在这里亮相」，与左栏推演面板同口径 */
               <div className="space-y-4">
+                <div className="flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3.5 py-2.5">
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-400" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-amber-400">编剧室推演中</p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                      AI 编剧正在推演三幕剧本——每一场的钩子、台词与镜头语言将在这里亮相，完成后可逐场过目
+                    </p>
+                  </div>
+                </div>
                 <Skeleton className="h-40 w-full rounded-xl" />
                 <Skeleton className="h-56 w-full rounded-xl" />
                 <Skeleton className="h-56 w-full rounded-xl" />
