@@ -867,6 +867,8 @@ export interface ProjectSummary {
   episodeNo: number | null;
   /** v2.9.2：成片直出地址（可空 = 未合成）——项目库交付入口依据 */
   finalVideoUrl: string | null;
+  /** v2.9.13 中断召回：该项目存在失败的流水线 run（展示层标签「拍摄中断」依据，不动 DB status） */
+  interruptedRun?: boolean;
 }
 
 /** —— 系列（v2.3 多剧集连载容器） —— */

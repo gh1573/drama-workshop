@@ -97,6 +97,18 @@ export async function listProjects(): Promise<ProjectSummary[]> {
       series: { select: { title: true } },
     },
   });
+  // v2.9.13 中断召回（用户视角走查 P0）：项目库标签依据——
+  // 上次流水线中断（failed run）的项目在库里显示「拍摄中断」而非「草稿」，
+  // 用户一眼知道这部片子拍了一半可以续拍（展示层取词，不动 DB status）
+  const interruptedIds = new Set(
+    (
+      await db.productionRun.findMany({
+        where: { status: "failed" },
+        select: { projectId: true },
+        distinct: ["projectId"],
+      })
+    ).map((r) => r.projectId)
+  );
   return rows.map((r) => ({
     id: r.id,
     title: r.title,
@@ -113,6 +125,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
     /* v2.9.2：交付可达性——项目库不只有「进入再生产」，成片已合成的项目
        直接给出成片/制作包入口（库即交付中枢，VLM 产品走查 P0） */
     finalVideoUrl: r.finalVideoUrl,
+    interruptedRun: interruptedIds.has(r.id),
   }));
 }
 

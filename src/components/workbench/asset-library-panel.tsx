@@ -203,7 +203,7 @@ export function AssetLibraryPanel({ onJumpToCut }: { onJumpToCut?: () => void })
     }
     toast({
       title: "定妆照任务已提交",
-      description: `${asset.name} · 生成完成后自动回填资产卡，可在流水线面板任务中心查看进度`,
+      description: `${asset.name} · 生成完成后自动回填资产卡，可在「剧组进程」页签底部任务中心查看进度`,
     });
   }
 

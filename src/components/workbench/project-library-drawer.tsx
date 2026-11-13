@@ -97,7 +97,14 @@ export function ProjectLibraryDrawer() {
       /* 载入成功即收起抽屉——与「续写创建后自动关闭」同语言：
          用户点项目卡的意图就是回到工作台看它，不应再手动关一层抽屉 */
       setOpen(false);
-      toast({ title: "项目已载入", description: detail.title });
+      toast({
+        title: "项目已载入",
+        // v2.9.13 中断召回（用户视角走查 P0）：载入上次中断的项目，
+        // toast 直接告诉用户去哪里续拍，不让用户在空白成片页里迷失
+        description: detail.activeRun?.status === "failed"
+          ? `${detail.title} · 上次拍摄中断，已定位到「剧组进程」页签，可断点续拍`
+          : detail.title,
+      });
     } catch (e) {
       toast({
         title: "载入失败",
@@ -208,9 +215,20 @@ export function ProjectLibraryDrawer() {
           <Badge variant="outline" className="text-[10px]">
             {p.genreName}
           </Badge>
-          <Badge variant="outline" className="text-[10px]">
-            {PROJECT_STATUS[p.status]}
-          </Badge>
+          {/* v2.9.13 中断召回（用户视角走查 P0）：有中断流水线的项目优先显示
+              「拍摄中断」——「草稿」会让用户以为这是没开工的新项目 */}
+          {p.interruptedRun ? (
+            <Badge
+              variant="outline"
+              className="border-rose-500/50 bg-rose-500/10 text-[10px] text-rose-400"
+            >
+              拍摄中断 · 可续拍
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-[10px]">
+              {PROJECT_STATUS[p.status]}
+            </Badge>
+          )}
           <span>
             {p.beatCount} 场 · {p.clipCount} 片段
           </span>

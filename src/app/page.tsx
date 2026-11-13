@@ -198,7 +198,8 @@ export default function Home() {
   // v2.9.5 载入落点（VLM 走查 P1：载入已合成项目仍停在上次页签，主交付物藏在页签后）：
   // 会话切换到另一集（项目库载入/连载区块切集/续写切新集）时，
   // 已合成项目直接落「成片」页签——已完项目的终点是交付物；
-  // 未合成项目不动页签（用户可能正对齐参考另一集的剧本）
+  // v2.9.13 中断召回（用户视角走查 P0）：上次流水线中断的项目直接落
+  // 「剧组进程」页签——中断项目的下一步是断点续拍，不是空白的成片页
   useEffect(() => {
     const unsub = useWorkbench.subscribe((s, prev) => {
       if (
@@ -207,6 +208,12 @@ export default function Home() {
         s.session.finalVideoUrl
       ) {
         setTab("cut");
+      } else if (
+        s.session?.dbId &&
+        s.session.dbId !== prev.session?.dbId &&
+        s.activeRun?.status === "failed"
+      ) {
+        setTab("pipeline");
       }
     });
     return unsub;
