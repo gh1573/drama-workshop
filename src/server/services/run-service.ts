@@ -881,6 +881,42 @@ function clearAutoResume(runId: string): void {
   autoResumeMap.delete(runId);
 }
 
+/** v2.9.18.1 扫过期死承诺：failed 且 error 带自动续拍标记，且承诺时间
+ *  已过 + 120s 宽限仍未兑现 → 改写 error 并落日志。
+ *  实弹走查教训：Next dev 多 worker 各自求值本模块，定时器活在 A 进程时
+ *  B 进程启动即扫会把在途承诺误报成「已取消」——随后 A 照常点火，
+ *  剧组日志自相矛盾。宽限窗内在途承诺不动；真死的承诺由轮询路径的
+ *  惰性清扫兜底（见 getLatestRun），最迟 ~1 分钟内收敛。 */
+async function sweepStaleAutoResumePromises(): Promise<void> {
+  const rows = await db.productionRun.findMany({
+    where: {
+      status: "failed",
+      updatedAt: { gt: new Date(Date.now() - 3600_000) },
+    },
+    select: { id: true, error: true, updatedAt: true },
+    take: 50,
+  });
+  for (const row of rows) {
+    const errText = row.error ?? "";
+    const m = errText.match(/（(\d+)s 后自动续拍第 \d+\/\d+ 轮）/);
+    if (!m) continue;
+    const promisedSec = Number(m[1]);
+    const ageMs = Date.now() - row.updatedAt.getTime();
+    if (ageMs < (promisedSec + 120) * 1000) continue; // 在途定时器可能即将兑现——不误伤
+    await db.productionRun
+      .update({
+        where: { id: row.id },
+        data: { error: errText.replace(AUTO_RESUME_TAG_RE, "") },
+      })
+      .catch(() => undefined);
+    await appendLog(
+      row.id,
+      "producer",
+      "自动续拍未如期执行（可能经历服务重启）——请手动「断点续拍」从断点继续（已完成阶段不会重复执行）"
+    ).catch(() => undefined);
+  }
+}
+
 /** run 失败后调用：瞬时类失败 → 播报 + 退避定时自动续拍（不超过上限） */
 async function scheduleAutoResume(runId: string, rawMessage: string): Promise<void> {
   try {
@@ -1161,6 +1197,15 @@ export async function getRun(runId: string): Promise<RunDTO> {
 }
 
 export async function getLatestRun(projectId: string): Promise<RunDTO | null> {
+  // v2.9.18.1 惰性清扫兜底：模块加载时的清扫只在 worker 首次求值触发；
+  // 若进程在宽限窗内死亡，承诺死后无人收敛——挂在观测轮询热路径上
+  // 节流扫一次（每进程至多 60s 一次，扫描本身仅 SELECT 近 1h failed）
+  const sweepG = globalThis as unknown as { __dramaAutoResumeSweptAt?: number };
+  const now = Date.now();
+  if (!sweepG.__dramaAutoResumeSweptAt || now - sweepG.__dramaAutoResumeSweptAt > 60_000) {
+    sweepG.__dramaAutoResumeSweptAt = now;
+    void sweepStaleAutoResumePromises().catch(() => undefined);
+  }
   const row = await db.productionRun.findFirst({
     where: { projectId },
     orderBy: { createdAt: "desc" },
@@ -1200,32 +1245,7 @@ if (!g.__dramaRunRecovered) {
     })
     .catch(() => undefined);
   // v2.9.18 重启善后：自动续拍定时器随进程消失——error 里的
-  // 「Xs 后自动续拍」承诺必须改写，绝不留答应了却不来的死承诺
-  void db.productionRun
-    .findMany({
-      where: {
-        status: "failed",
-        updatedAt: { gt: new Date(Date.now() - 3600_000) },
-      },
-      select: { id: true, error: true },
-      take: 50,
-    })
-    .then(async (rows) => {
-      for (const row of rows) {
-        if (row.error && AUTO_RESUME_TAG_RE.test(row.error)) {
-          await db.productionRun
-            .update({
-              where: { id: row.id },
-              data: { error: row.error.replace(AUTO_RESUME_TAG_RE, "") },
-            })
-            .catch(() => undefined);
-          await appendLog(
-            row.id,
-            "producer",
-            "自动续拍计划因服务重启取消——请手动「断点续拍」从断点继续（已完成阶段不会重复执行）"
-          ).catch(() => undefined);
-        }
-      }
-    })
-    .catch(() => undefined);
+  // 「Xs 后自动续拍」承诺若已过期且未兑现，必须改写，不留答应了
+  // 却不来的死承诺。v2.9.18.1：改用带宽限窗的清扫（在途定时器不误伤）
+  void sweepStaleAutoResumePromises().catch(() => undefined);
 }

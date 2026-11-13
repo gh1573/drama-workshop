@@ -17,6 +17,10 @@
  */
 const BASE = "http://localhost:3000";
 const BUDGET_MS = Number(process.argv[2] ?? 1800) * 1000;
+/** 可选：--observe <projectId> 直接观测既有项目的 run（不新建、不再耗配额） */
+const OBSERVE_ID = process.argv.includes("--observe")
+  ? process.argv[process.argv.indexOf("--observe") + 1]
+  : null;
 
 const GENRE = {
   id: "chongsheng",
@@ -48,8 +52,16 @@ async function api(path, init) {
 }
 
 const run = async () => {
-  console.log(`[${ts()}] v2.9.18 自动续拍实弹验证 · 预算 ${BUDGET_MS / 1000}s`);
+  console.log(`[${ts()}] v2.9.18 自动续拍实弹验证 · 预算 ${BUDGET_MS / 1000}s${OBSERVE_ID ? ` · 观测模式 ${OBSERVE_ID}` : ""}`);
 
+  let projectId;
+  let runId;
+  if (OBSERVE_ID) {
+    projectId = OBSERVE_ID;
+    const list = await api(`/api/projects/${projectId}/runs`);
+    runId = (list.data ?? list)[0]?.id;
+    console.log(`[${ts()}] 观测既有 run: ${runId}`);
+  } else {
   // 1. 立项
   const created = await api("/api/projects", {
     method: "POST",
@@ -66,7 +78,7 @@ const run = async () => {
       },
     }),
   });
-  const projectId = created.data?.id ?? created.id;
+  projectId = created.data?.id ?? created.id;
   console.log(`[${ts()}] 立项成功: ${projectId}`);
 
   // 2. 开机
@@ -74,8 +86,9 @@ const run = async () => {
     method: "POST",
     body: JSON.stringify({}),
   });
-  const runId = started.data?.id ?? started.id;
+  runId = started.data?.id ?? started.id;
   console.log(`[${ts()}] 开机: runId=${runId}`);
+  }
 
   // 3. 轮询观测
   const t0 = Date.now();
@@ -104,7 +117,7 @@ const run = async () => {
       if (/自动续拍|断点续拍|阶段失败|杀青/.test(msg)) {
         console.log(`[${ts()}]   日志> ${msg.slice(0, 150)}`);
       }
-      if (msg.includes("自动续拍（第")) autoFiredRounds++;
+      if (msg.includes("，无人值守）：从")) autoFiredRounds++;
       if (msg.includes("后自动续拍（第")) sawScheduleAnnounce = true;
       if (msg.includes("已达 3 轮上限")) capReached = true;
     }
@@ -126,7 +139,7 @@ const run = async () => {
           const msg = `[${line.role}] ${line.message}`;
           if (/自动续拍|断点续拍|阶段失败|杀青/.test(msg))
             console.log(`[${ts()}]   日志> ${msg.slice(0, 150)}`);
-          if (msg.includes("自动续拍（第")) autoFiredRounds++;
+          if (msg.includes("，无人值守）：从")) autoFiredRounds++;
           if (msg.includes("后自动续拍（第")) sawScheduleAnnounce = true;
           if (msg.includes("已达 3 轮上限")) capReached = true;
         }
