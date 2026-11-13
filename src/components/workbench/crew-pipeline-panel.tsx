@@ -74,8 +74,10 @@ export function CrewPipelinePanel() {
   const pipelineStarting = useWorkbench((s) => s.pipelineStarting);
   const startPipeline = useWorkbench((s) => s.startPipeline);
   const retryPipeline = useWorkbench((s) => s.retryPipeline);
+  const retryingPipeline = useWorkbench((s) => s.retryingPipeline);
   const retryTask = useWorkbench((s) => s.retryTask);
   const cancelTask = useWorkbench((s) => s.cancelTask);
+  const taskActionBusy = useWorkbench((s) => s.taskActionBusy);
   // §7.13 v2.5.2：已有 run 时的重开为破坏性重写，需二次确认
   const [rerunConfirmOpen, setRerunConfirmOpen] = useState(false);
 
@@ -259,7 +261,10 @@ export function CrewPipelinePanel() {
               </Button>
               <AlertDialog
                 open={rerunConfirmOpen}
-                onOpenChange={setRerunConfirmOpen}
+                onOpenChange={(o) => {
+                  /* v2.9.10：开机指令在途时不允许误关（弹窗内等落定） */
+                  if (!o && !pipelineStarting) setRerunConfirmOpen(false);
+                }}
               >
                 <AlertDialogContent className="border-t-2 border-t-red-500/70">
                   <AlertDialogHeader>
@@ -273,17 +278,21 @@ export function CrewPipelinePanel() {
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>再想想</AlertDialogCancel>
+                    <AlertDialogCancel disabled={pipelineStarting}>再想想</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={(e) => {
-                        e.preventDefault();
-                        setRerunConfirmOpen(false);
-                        void handleStart();
+                        e.preventDefault(); // 等指令落定再关弹窗（成败 toast 由 handleStart 播报）
+                        void handleStart().finally(() => setRerunConfirmOpen(false));
                       }}
+                      disabled={pipelineStarting}
                       className="bg-red-600 text-white hover:bg-red-500"
                     >
-                      <Clapperboard className="h-4 w-4" />
-                      重写并开机
+                      {pipelineStarting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Clapperboard className="h-4 w-4" />
+                      )}
+                      {pipelineStarting ? "开机中…" : "重写并开机"}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -309,10 +318,17 @@ export function CrewPipelinePanel() {
           <Button
             size="sm"
             onClick={handleRetry}
+            disabled={retryingPipeline}
             className="border border-amber-500/40 bg-amber-500/10 font-semibold text-amber-400 hover:bg-amber-500/20"
           >
-            <RotateCcw className="h-4 w-4" />
-            断点续拍
+            {/* v2.9.10：续拍在途态——run 失败后用户最急的时刻，
+                无禁用可连点双发 retry（审计 P1） */}
+            {retryingPipeline ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RotateCcw className="h-4 w-4" />
+            )}
+            {retryingPipeline ? "续拍启动中…" : "断点续拍"}
           </Button>
         )}
         {running && (
@@ -403,19 +419,41 @@ export function CrewPipelinePanel() {
                     {(task.status === "queued" || task.status === "running") && (
                       <button
                         aria-label="取消任务"
-                        onClick={() => cancelTask(task.id)}
-                        className="rounded-md p-0.5 text-muted-foreground hover:text-foreground"
+                        disabled={Boolean(taskActionBusy[task.id])}
+                        onClick={() => {
+                          /* v2.9.10：取消失败不能静默——用户在止损，点了没反应是最差体验 */
+                          void cancelTask(task.id).then((err) => {
+                            if (err)
+                              toast({ title: "取消未成功", description: err, variant: "destructive" });
+                          });
+                        }}
+                        className="rounded-md p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
                       >
-                        <Ban className="h-3.5 w-3.5" />
+                        {taskActionBusy[task.id] === "cancel" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Ban className="h-3.5 w-3.5" />
+                        )}
                       </button>
                     )}
                     {(task.status === "failed" || task.status === "cancelled") && (
                       <button
                         aria-label="重试任务"
-                        onClick={() => retryTask(task.id)}
-                        className="rounded-md p-0.5 text-amber-400 hover:bg-amber-500/10"
+                        disabled={Boolean(taskActionBusy[task.id])}
+                        onClick={() => {
+                          /* v2.9.10：官方指定的失败恢复入口，重试失败要报 */
+                          void retryTask(task.id).then((err) => {
+                            if (err)
+                              toast({ title: "重试未成功", description: err, variant: "destructive" });
+                          });
+                        }}
+                        className="rounded-md p-0.5 text-amber-400 hover:bg-amber-500/10 disabled:opacity-40"
                       >
-                        <RotateCcw className="h-3.5 w-3.5" />
+                        {taskActionBusy[task.id] === "retry" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        )}
                       </button>
                     )}
                   </div>

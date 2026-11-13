@@ -46,6 +46,7 @@ export function FinalCutPanel() {
   const finalVideoUrl = useWorkbench((s) => s.session?.finalVideoUrl ?? null);
   const tasks = useWorkbench((s) => s.tasks);
   const composing = useWorkbench((s) => s.composing);
+  const renderingAll = useWorkbench((s) => s.renderingAll);
   const renderAll = useWorkbench((s) => s.renderAll);
   const composeEpisode = useWorkbench((s) => s.composeEpisode);
   // —— v2.9 连载 → v2.9.5 弹窗提升会话层：开合走 store，弹窗本体在页面层挂载 ——
@@ -522,7 +523,12 @@ export function FinalCutPanel() {
                 onClick={() => bgmInputRef.current?.click()}
                 className="h-7 border-border/60 px-2.5 text-xs"
               >
-                <Upload className="h-3 w-3" />
+                {/* v2.9.10：与「上传 BGM」同款在途转圈（一致性） */}
+                {bgmUploading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Upload className="h-3 w-3" />
+                )}
                 更换
               </Button>
               <Button
@@ -532,7 +538,11 @@ export function FinalCutPanel() {
                 onClick={handleBgmDelete}
                 className="h-7 border-border/60 px-2.5 text-xs text-muted-foreground hover:text-foreground"
               >
-                <Trash2 className="h-3 w-3" />
+                {bgmUploading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3 w-3" />
+                )}
                 清除
               </Button>
             </div>
@@ -586,10 +596,17 @@ export function FinalCutPanel() {
           <div className="flex flex-col items-center gap-1.5">
             <Button
               onClick={handleRenderAll}
+              disabled={renderingAll}
               className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 font-bold text-white shadow-lg shadow-red-600/25 hover:opacity-90"
             >
-              <Video className="h-4 w-4" />
-              一键渲染全片（{pendingCount} 镜 + 配音）
+              {/* v2.9.10：批量提交在途态——POST /render-all 慢网下数秒，
+                  此前无禁用无转圈可连点重复建任务（审计 P0） */}
+              {renderingAll ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Video className="h-4 w-4" />
+              )}
+              {renderingAll ? "正在提交渲染任务…" : `一键渲染全片（${pendingCount} 镜 + 配音）`}
             </Button>
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" />
@@ -641,11 +658,14 @@ export function FinalCutPanel() {
           <p className="flex items-center gap-1.5 text-xs text-rose-400">
             <AlertTriangle className="h-3.5 w-3.5" />
             {composeError}
+            {/* v2.9.10：显式调 handleCompose——此前仅清错误依赖自动合成 effect 重触发，
+                若此刻 allReady 条件已不成立，点「重试」会毫无可见反应 */}
             <button
-              onClick={() => setComposeError(null)}
-              className="underline underline-offset-2 hover:text-foreground"
+              onClick={handleCompose}
+              disabled={composing}
+              className="underline underline-offset-2 hover:text-foreground disabled:opacity-50"
             >
-              重试
+              {composing ? "合成中…" : "重试"}
             </button>
           </p>
         )}

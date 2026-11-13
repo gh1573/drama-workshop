@@ -98,17 +98,22 @@ interface WorkbenchState {
   /** —— v2 剧组流水线 —— */
   /** 全组开机：未立项先立项草稿，已立项则同步最新梗概后启动流水线 */
   startPipeline: () => Promise<boolean>;
-  /** 断点续拍：从首个未成功阶段继续 */
+  /** 断点续拍：从首个未成功阶段继续；v2.9.10 补在途态 + 防重入（焦急连点双发 retry） */
   retryPipeline: () => Promise<boolean>;
+  /** 续拍请求进行中（按钮禁用/转圈依据） */
+  retryingPipeline: boolean;
   /** 拉取项目详情并刷新会话（制作包全量） */
   refreshProject: () => Promise<void>;
   /** 拉取渲染任务列表；存在活跃任务时自动继续轮询 */
   fetchTasks: () => Promise<void>;
   /** 提交渲染任务（portrait/video），返回错误信息或 null */
   createTask: (kind: TaskKind, target: { assetId?: string; clipId?: string }) => Promise<string | null>;
-  /** 重试/取消任务 */
-  retryTask: (taskId: string) => Promise<void>;
-  cancelTask: (taskId: string) => Promise<void>;
+  /** 重试/取消任务；v2.9.10 返回错误信息（此前 catch 静默吞——官方失败恢复入口「点了没反应」）
+   *  taskActionBusy 记录在途任务 id（行内图标转圈/禁用依据） */
+  retryTask: (taskId: string) => Promise<string | null>;
+  cancelTask: (taskId: string) => Promise<string | null>;
+  /** 任务行内动作在途（taskId -> "retry" | "cancel"） */
+  taskActionBusy: Record<string, "retry" | "cancel">;
   /** 编辑资产锚点（refCount>0 时需显式解冻确认） */
   updateAsset: (
     assetId: string,
@@ -119,8 +124,11 @@ interface WorkbenchState {
   reanchor: () => Promise<boolean>;
 
   /** —— v2.4 一键成片 —— */
-  /** 一键渲染全片：批量提交 video + voiceover 任务（幂等去重） */
+  /** 一键渲染全片：批量提交 video + voiceover 任务（幂等去重）；
+   *  v2.9.10 补在途态 + 防重入（POST /render-all 批量建任务慢网下数秒无反馈，且可连点重复提交） */
   renderAll: () => Promise<boolean>;
+  /** 一键渲染提交进行中（按钮禁用/转圈依据） */
+  renderingAll: boolean;
   /** 成片合成：ffmpeg 产出整集视频，回写 finalVideoUrl；返回错误信息或 null */
   composeEpisode: () => Promise<string | null>;
   /** 合成进行中 */
@@ -156,8 +164,9 @@ interface WorkbenchState {
   removeClip: (clipId: string) => Promise<boolean>;
   moveClip: (clipId: string, dir: -1 | 1) => Promise<boolean>;
 
-  /** 切换某场的运镜（本地即时生效；已入库项目异步同步） */
-  setBeatMovement: (beatIndex: number, movement: string) => void;
+  /** 切换场次运镜：本地立即生效；已入库项目同步 PATCH。
+   *  v2.9.10 返回同步结果（此前 fire-and-forget + 组件立即报成功——同步失败时是误导性成功提示） */
+  setBeatMovement: (beatIndex: number, movement: string) => Promise<boolean>;
   /** AI 分镜拆解：把一场拆成 3~5 镜头写入镜头轨 */
   breakdownAct: (beatIndex: number) => Promise<string | null>;
   /** 拆解进行中的场次序号（null = 无） */
@@ -393,7 +402,9 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   lastError: null,
   activeRun: null,
   pipelineStarting: false,
+  retryingPipeline: false,
   tasks: [],
+  taskActionBusy: {},
   library: [],
   libraryOpen: false,
   libraryLoading: false,
@@ -686,20 +697,26 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
 
   breakingDown: null,
 
-  setBeatMovement: (beatIndex, movement) => {
+  setBeatMovement: async (beatIndex, movement) => {
     const { session } = get();
-    if (!session) return;
+    if (!session) return false;
     const beats = session.beats.map((b) =>
       b.index === beatIndex ? { ...b, cameraMovement: movement } : b
     );
     set({ session: { ...session, beats } });
-    // 已入库项目：静默同步（失败不回滚本地，下次保存会覆盖）
+    // 已入库项目：同步入库（本地乐观更新不回滚，失败时报给用户——下次保存会覆盖自愈）
     if (session.dbId) {
-      void api(`/api/projects/${session.dbId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ storyBeats: beats }),
-      }).catch(() => undefined);
+      try {
+        await api(`/api/projects/${session.dbId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ storyBeats: beats }),
+        });
+        return true;
+      } catch {
+        return false;
+      }
     }
+    return true;
   },
 
   breakdownAct: async (beatIndex) => {
@@ -807,6 +824,8 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   retryPipeline: async () => {
     const runId = get().activeRun?.id;
     if (!runId) return false;
+    if (get().retryingPipeline) return false; // 防重入：续拍在途时连点不再双发
+    set({ retryingPipeline: true });
     try {
       const run = await api<RunDTO>(`/api/runs/${runId}/retry`, { method: "POST" });
       set({ activeRun: run, lastError: null });
@@ -815,6 +834,8 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
     } catch (err) {
       set({ lastError: err instanceof Error ? err.message : "续拍失败" });
       return false;
+    } finally {
+      set({ retryingPipeline: false });
     }
   },
 
@@ -907,20 +928,39 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   },
 
   retryTask: async (taskId) => {
+    if (get().taskActionBusy[taskId]) return "上一个操作仍在进行中"; // 防连点
+    set((s) => ({ taskActionBusy: { ...s.taskActionBusy, [taskId]: "retry" } }));
     try {
       await api(`/api/tasks/${taskId}/retry`, { method: "POST" });
       void get().fetchTasks();
-    } catch {
-      /* 任务中心会展示最新状态 */
+      return null;
+    } catch (err) {
+      /* v2.9.10：官方失败恢复入口不能静默——重试失败要报给用户 */
+      return err instanceof Error ? err.message : "重试提交失败";
+    } finally {
+      set((s) => {
+        const next = { ...s.taskActionBusy };
+        delete next[taskId];
+        return { taskActionBusy: next };
+      });
     }
   },
 
   cancelTask: async (taskId) => {
+    if (get().taskActionBusy[taskId]) return "上一个操作仍在进行中"; // 防连点
+    set((s) => ({ taskActionBusy: { ...s.taskActionBusy, [taskId]: "cancel" } }));
     try {
       await api(`/api/tasks/${taskId}/cancel`, { method: "POST" });
       void get().fetchTasks();
-    } catch {
-      /* 任务中心会展示最新状态 */
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "取消提交失败";
+    } finally {
+      set((s) => {
+        const next = { ...s.taskActionBusy };
+        delete next[taskId];
+        return { taskActionBusy: next };
+      });
     }
   },
 
@@ -957,10 +997,13 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   // ============================================================
 
   composing: false,
+  renderingAll: false,
 
   renderAll: async () => {
     const dbId = get().session?.dbId;
     if (!dbId) return false;
+    if (get().renderingAll) return false; // 防重入：批量提交在途时连点不再重复建任务
+    set({ renderingAll: true });
     try {
       await api<{ submitted: number; skipped: number; totalClips: number }>(
         `/api/projects/${dbId}/render-all`,
@@ -970,6 +1013,8 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       return true;
     } catch {
       return false;
+    } finally {
+      set({ renderingAll: false });
     }
   },
 

@@ -5,6 +5,16 @@ import { Download, FolderOpen, Layers, Loader2, Package, Pencil, Plus, Trash2 } 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -40,7 +50,11 @@ export function ProjectLibraryDrawer() {
   const creatingEpisode = useWorkbench((s) => s.creatingEpisode);
 
   const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
+  const [renamingSave, setRenamingSave] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  /* v2.9.10：删除确认弹窗（不可逆动作，§7.13 危险操作纪律） */
+  const [confirmRemove, setConfirmRemove] = useState<{ id: string; title: string } | null>(null);
+  const [removing, setRemoving] = useState(false);
   const [nextEp, setNextEp] = useState<
     { seriesId: string; title: string; nextNo: number } | null
   >(null);
@@ -75,6 +89,7 @@ export function ProjectLibraryDrawer() {
   }, [open, fetchLibrary]);
 
   async function handleLoad(id: string) {
+    if (busyId) return; // v2.9.10 防重入：慢网连点不并发多次拉取
     setBusyId(id);
     try {
       const detail = await api<ProjectDetail>(`/api/projects/${id}`);
@@ -94,23 +109,37 @@ export function ProjectLibraryDrawer() {
     }
   }
 
-  async function handleRemove(id: string, title: string) {
-    const ok = await removeProject(id);
-    toast({
-      title: ok ? "项目已删除" : "删除失败",
-      description: ok ? title : undefined,
-      variant: ok ? "default" : "destructive",
-    });
+  /* v2.9.10：删除整集工程不可逆——补二次确认（与「重新开机」同纪律）
+     + 在途态（DELETE 慢网可连点） */
+  async function handleRemove() {
+    if (!confirmRemove || removing) return;
+    setRemoving(true);
+    try {
+      const ok = await removeProject(confirmRemove.id);
+      toast({
+        title: ok ? "项目已删除" : "删除失败",
+        description: ok ? confirmRemove.title : undefined,
+        variant: ok ? "default" : "destructive",
+      });
+      if (ok) setConfirmRemove(null);
+    } finally {
+      setRemoving(false);
+    }
   }
 
   async function handleRename() {
-    if (!renaming) return;
-    const ok = await renameProject(renaming.id, renaming.title.trim());
-    toast({
-      title: ok ? "已重命名" : "重命名失败",
-      variant: ok ? "default" : "destructive",
-    });
-    if (ok) setRenaming(null);
+    if (!renaming || renamingSave) return;
+    setRenamingSave(true);
+    try {
+      const ok = await renameProject(renaming.id, renaming.title.trim());
+      toast({
+        title: ok ? "已重命名" : "重命名失败",
+        variant: ok ? "default" : "destructive",
+      });
+      if (ok) setRenaming(null);
+    } finally {
+      setRenamingSave(false);
+    }
   }
 
   /** v2.9：系列分组续写（题材/参数继承，资产克隆沿用定妆） */
@@ -238,7 +267,7 @@ export function ProjectLibraryDrawer() {
             className="h-7 border-rose-500/40 px-2 text-xs text-rose-400 hover:bg-rose-500/10"
             onClick={(e) => {
               e.stopPropagation();
-              void handleRemove(p.id, p.title);
+              setConfirmRemove({ id: p.id, title: p.title });
             }}
           >
             <Trash2 className="h-3 w-3" />
@@ -338,19 +367,61 @@ export function ProjectLibraryDrawer() {
               className="border-border/70 bg-secondary/30 text-sm"
             />
             <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setRenaming(null)}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={renamingSave}
+                onClick={() => setRenaming(null)}
+              >
                 取消
               </Button>
               <Button
                 size="sm"
                 onClick={handleRename}
+                disabled={renamingSave}
                 className="bg-gradient-to-r from-red-600 to-amber-500 text-white hover:opacity-90"
               >
-                保存
+                {renamingSave && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {renamingSave ? "保存中…" : "保存"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* —— v2.9.10 删除二次确认：整集工程（剧本/分镜/资产/成片）不可逆清除 —— */}
+        <AlertDialog
+          open={!!confirmRemove}
+          onOpenChange={(o) => {
+            if (!o && !removing) setConfirmRemove(null);
+          }}
+        >
+          <AlertDialogContent className="border-rose-500/30">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-rose-400">
+                <Trash2 className="h-4 w-4" />
+                删除项目「{confirmRemove?.title}」？
+              </AlertDialogTitle>
+              <AlertDialogDescription className="leading-relaxed">
+                将永久删除该项目的剧本、分镜、资产定妆与成片素材，且不可撤销。
+                若只想清理列表，可先「另起新片」保留工程随时回访。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={removing}>取消</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault(); // 保持弹窗开着等请求落定
+                  void handleRemove();
+                }}
+                disabled={removing}
+                className="bg-rose-600 text-white hover:bg-rose-500"
+              >
+                {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {removing ? "删除中…" : "确认删除"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* —— v2.9 连载：系列分组续写 Dialog —— */}
         <Dialog open={!!nextEp} onOpenChange={(o) => !o && setNextEp(null)}>
