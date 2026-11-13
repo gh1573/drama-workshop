@@ -577,6 +577,12 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       const savedId = get().session?.dbId;
       if (savedId) persistLastProjectId(savedId);
       return true;
+    } catch (err) {
+      /* v2.9.17：保存失败必须报给用户——此前无 catch，网络错误/5xx 时
+         异常直接抛穿 handleSave，「保存失败」toast 永不出现，用户只看到
+         转圈结束毫无反馈（静默失败，违背过程反馈纪律） */
+      set({ lastError: err instanceof Error ? err.message : "保存失败，请检查网络后重试" });
+      return false;
     } finally {
       set({ saving: false });
     }
@@ -587,6 +593,9 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
     try {
       const list = await api<ProjectSummary[]>("/api/projects");
       set({ library: list });
+    } catch {
+      /* v2.9.17：项目库拉取失败不抛穿（多处 void 调用会产生未处理拒绝）；
+         列表保持原样，抽屉内已有重试入口（再次打开即重拉） */
     } finally {
       set({ libraryLoading: false });
     }
