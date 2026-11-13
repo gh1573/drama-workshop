@@ -842,6 +842,108 @@ async function stagePostproduction(
 }
 
 // ============================================================
+// v2.9.18 上游风暴自动续拍（run 级自动重试）
+// 走查实证：429 风暴期一次开机需手动点 4 轮「断点续拍」——流水线在
+// 单调用级已有退避重试，但 run 失败后只能干等人手。剧组语义：导演组
+// 不会因供电闪断就散场，会在合理耐心内自动重新开工，并把每一轮等待
+// 与续拍都播报到剧组日志，无需人值守。
+// 设计约束：
+// - 只对瞬时类失败自动续拍（限流/5xx/网络/超时/截断/解析耗尽），
+//   业务类失败（项目不存在/护栏拦截等）仍走人工；
+// - 退避 45s/90s/180s，上限 3 轮，达上限明确告知停止原因；
+// - 人工「断点续拍」随时可插队，且人工接手即重置耐心（再给 3 轮）；
+// - 自动续拍前校验「本 run 仍是该项目最新 run」，防止旧 run 复活
+//   与新开机打架；续拍被拒（running）静默让位；
+// - 服务重启丢定时器：启动回收时把 error 里的自动续拍承诺改写并
+//   落一条日志，绝不留「答应了却不来」的死承诺。
+// ============================================================
+
+const AUTO_RESUME_CAP = 3;
+const AUTO_RESUME_DELAYS_MS = [45_000, 90_000, 180_000];
+/** 瞬时类失败判据（与 humanize-error 模式表同源 + 解析三级重试耗尽） */
+const TRANSIENT_FAILURE_RE =
+  /429|rate.?limit|限流|status 5\d\d|internal server error|bad gateway|service unavailable|fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ECONNRESET|EAI_AGAIN|socket hang up|network|timed? ?out|aborted|被截断|truncat|空内容|连续重试仍无法解析/i;
+/** 写入 run.error 的自动续拍承诺标记（重启回收时据此改写） */
+const AUTO_RESUME_TAG_RE = /（\d+s 后自动续拍第 \d+\/\d+ 轮）/;
+
+type AutoResumeState = { round: number; timer?: ReturnType<typeof setTimeout> };
+// Next dev 多 worker 会重复求值本模块——状态挂 globalThis 共享（同进程内）
+const autoG = globalThis as unknown as {
+  __dramaAutoResume?: Map<string, AutoResumeState>;
+};
+const autoResumeMap: Map<string, AutoResumeState> =
+  autoG.__dramaAutoResume ?? new Map();
+autoG.__dramaAutoResume = autoResumeMap;
+
+function clearAutoResume(runId: string): void {
+  const state = autoResumeMap.get(runId);
+  if (state?.timer) clearTimeout(state.timer);
+  autoResumeMap.delete(runId);
+}
+
+/** run 失败后调用：瞬时类失败 → 播报 + 退避定时自动续拍（不超过上限） */
+async function scheduleAutoResume(runId: string, rawMessage: string): Promise<void> {
+  try {
+    if (!TRANSIENT_FAILURE_RE.test(rawMessage)) return; // 业务类失败：人工判断优先
+    const run = await loadRun(runId);
+    if (run.status !== "failed") return; // 已被人工接手/复活
+
+    const prev = autoResumeMap.get(runId);
+    if (prev?.timer) clearTimeout(prev.timer);
+    const round = (prev?.round ?? 0) + 1;
+
+    if (round > AUTO_RESUME_CAP) {
+      await appendLog(
+        runId,
+        "producer",
+        `上游通道持续不稳——自动续拍已达 ${AUTO_RESUME_CAP} 轮上限，先停一停；稍后请手动「断点续拍」，或检查网络后再试`
+      );
+      return;
+    }
+
+    const delayMs = AUTO_RESUME_DELAYS_MS[Math.min(round - 1, AUTO_RESUME_DELAYS_MS.length - 1)];
+    const sec = Math.round(delayMs / 1000);
+
+    await appendLog(
+      runId,
+      "producer",
+      `上游通道仍不稳定——${sec}s 后自动续拍（第 ${round}/${AUTO_RESUME_CAP} 轮），无需值守；期间也可随时手动「断点续拍」`
+    );
+    // run.error 追加承诺标记：阶段卡主面直接可见，不必翻日志
+    await db.productionRun.update({
+      where: { id: runId },
+      data: {
+        error: `${run.error ?? ""}（${sec}s 后自动续拍第 ${round}/${AUTO_RESUME_CAP} 轮）`,
+      },
+    });
+
+    autoResumeMap.set(runId, {
+      round,
+      timer: setTimeout(async () => {
+        try {
+          const fresh = await db.productionRun.findUnique({ where: { id: runId } });
+          if (!fresh || fresh.status !== "failed") return; // 人工已接手/已完成
+          // 防旧 run 复活：该 run 必须仍是项目最新一次运行
+          const latest = await db.productionRun.findFirst({
+            where: { projectId: fresh.projectId },
+            orderBy: { createdAt: "desc" },
+          });
+          if (latest && latest.id !== runId) {
+            clearAutoResume(runId);
+            return;
+          }
+          await retryRun(runId, { auto: true, round });
+        } catch {
+          // 续拍被拒（如恰好被人工置 running）——静默让位，不惊扰用户
+        }
+      }, delayMs),
+    });
+  } catch {
+    // 自动续拍是尽力而为：调度失败不影响失败态本身（手动按钮仍在）
+  }
+}
+
+// ============================================================
 // 编排状态机
 // ============================================================
 
@@ -942,6 +1044,8 @@ async function executeRun(
             detail ? `（模型原始输出片段：${detail.slice(0, 200)}）` : ""
           }`
         );
+        // v2.9.18 瞬时类失败 → 排程自动续拍（剧组日志播报 + 阶段卡承诺标记）
+        await scheduleAutoResume(runId, message);
         return;
       }
     }
@@ -950,6 +1054,8 @@ async function executeRun(
       where: { id: runId },
       data: { status: "succeeded", progress: 100 },
     });
+    // 杀青即清账：挂着的自动续拍计划作废（不应存在，防御性清理）
+    clearAutoResume(runId);
     await appendLog(
       runId,
       "producer",
@@ -964,6 +1070,8 @@ async function executeRun(
         data: { status: "failed", error: stageFailureText(message) },
       })
       .catch(() => undefined);
+    // v2.9.18 外层兜底失败同样参与自动续拍（多为网络/DB 瞬断）
+    await scheduleAutoResume(runId, message);
   }
 }
 
@@ -1006,12 +1114,18 @@ export async function startRun(
   return toRunDTO(run);
 }
 
-/** 断点续跑：已成功阶段保留，从首个未成功阶段继续 */
-export async function retryRun(runId: string): Promise<RunDTO> {
+/** 断点续跑：已成功阶段保留，从首个未成功阶段继续
+ *  v2.9.18 opts.auto：定时器自动续拍走此入口（日志口径区分自动/人工）；
+ *  人工入口（API 路由）重置自动续拍耐心——人接手后重新给满 3 轮 */
+export async function retryRun(
+  runId: string,
+  opts: { auto?: boolean; round?: number } = {}
+): Promise<RunDTO> {
   const run = await loadRun(runId);
   if (run.status === "running") {
     throw new RouteError("流水线正在运行中，无需重试", 409);
   }
+  if (!opts.auto) clearAutoResume(runId);
   const stages = parseStages(run.stages).map((s) =>
     s.status === "failed"
       ? { ...s, status: "pending", error: null, startedAt: null, finishedAt: null }
@@ -1030,7 +1144,11 @@ export async function retryRun(runId: string): Promise<RunDTO> {
     runId,
     "producer",
     resume
-      ? `断点续拍：从「${resume.name}」阶段继续（已完成阶段不重复执行）`
+      ? `${
+          opts.auto
+            ? `自动续拍（第 ${opts.round ?? "?"} 轮，无人值守）：从「${resume.name}」阶段继续（已完成阶段不重复执行）`
+            : `断点续拍：从「${resume.name}」阶段继续（已完成阶段不重复执行）`
+        }`
       : "复核完成，直接进入收尾"
   );
   void executeRun(runId);
@@ -1079,6 +1197,35 @@ if (!g.__dramaRunRecovered) {
         status: "failed",
         error: "服务重启导致流水线中断，可点击重试从断点继续",
       },
+    })
+    .catch(() => undefined);
+  // v2.9.18 重启善后：自动续拍定时器随进程消失——error 里的
+  // 「Xs 后自动续拍」承诺必须改写，绝不留答应了却不来的死承诺
+  void db.productionRun
+    .findMany({
+      where: {
+        status: "failed",
+        updatedAt: { gt: new Date(Date.now() - 3600_000) },
+      },
+      select: { id: true, error: true },
+      take: 50,
+    })
+    .then(async (rows) => {
+      for (const row of rows) {
+        if (row.error && AUTO_RESUME_TAG_RE.test(row.error)) {
+          await db.productionRun
+            .update({
+              where: { id: row.id },
+              data: { error: row.error.replace(AUTO_RESUME_TAG_RE, "") },
+            })
+            .catch(() => undefined);
+          await appendLog(
+            row.id,
+            "producer",
+            "自动续拍计划因服务重启取消——请手动「断点续拍」从断点继续（已完成阶段不会重复执行）"
+          ).catch(() => undefined);
+        }
+      }
     })
     .catch(() => undefined);
 }
