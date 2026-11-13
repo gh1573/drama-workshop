@@ -257,27 +257,35 @@ export default function Home() {
 
   /* v2.9.7 断线重进：恢复上次拍摄现场（运行观测/任务轮询随 loadProject 续接）
      + 视频通道模式探明（占位模式下渲染文案统一换贴片指引口径）
-     v2.9.12：恢复因瞬时故障失败时给出「现场还在」提示——
-     此前静默回落空表单，用户以为项目丢了（项目安全在库，刷新即可自愈） */
+     v2.9.12：恢复因瞬时故障失败时——先 4 秒后自动重试一次（弱网/服务
+     冷启动时首拍经常撞上编译窗口），再失败才提示「现场还在」；
+     此前静默回落空表单，用户以为项目丢了（项目安全在库，可手动打开） */
   useEffect(() => {
     void useWorkbench.getState().probeVideoChannel();
-    void (async () => {
-      const detail = await useWorkbench.getState().restoreLastSession();
-      if (detail) {
-        toast({
-          title: "已恢复上次拍摄现场",
-          description: `《${detail.title}》已就位，运行与任务进度自动续接`,
-        });
-        return;
-      }
-      if (useWorkbench.getState().lastRestoreFailed) {
+    const attemptRestore = (isRetry: boolean) => {
+      void (async () => {
+        const detail = await useWorkbench.getState().restoreLastSession();
+        if (detail) {
+          toast({
+            title: "已恢复上次拍摄现场",
+            description: `《${detail.title}》已就位，运行与任务进度自动续接`,
+          });
+          return;
+        }
+        if (!useWorkbench.getState().lastRestoreFailed) return;
         useWorkbench.setState({ lastRestoreFailed: false });
+        if (!isRetry) {
+          // 瞬时故障：自动重试一次（restoreLastSession 已保留恢复键）
+          window.setTimeout(() => attemptRestore(true), 4000);
+          return;
+        }
         toast({
           title: "上次拍摄现场暂时没能自动恢复",
           description: "项目安全在库——稍后刷新页面自动回到现场，或点右上角「项目库」手动打开",
         });
-      }
-    })();
+      })();
+    };
+    attemptRestore(false);
   }, []);
 
   /** v2.9.7 另起新片：当前项目留库可回（closeSession 停轮询器并清恢复键），
