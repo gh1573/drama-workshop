@@ -20,6 +20,8 @@ import {
   Play,
   ScanFace,
   Scissors,
+  ShieldCheck,
+  Clock,
   Sparkles,
   UserRound,
   Users,
@@ -198,13 +200,23 @@ export default function Home() {
     return () => clearInterval(t);
   }, [generating]);
 
+  /* v2.9.6（VLM 首屏转化走查 P0：空点开机后 toast 在右上角报错，
+     报错位置/按钮/输入框三点分离，新用户不知道去哪填）——
+     报错后直接带回输入现场：滚动定位 + 聚焦梗概输入框 */
+  function guideToSynopsis() {
+    const el = document.getElementById("synopsis-input");
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => el?.focus({ preventScroll: true }), 380);
+  }
+
   async function handleGenerate() {
     if (synopsis.trim().length < 10) {
       toast({
         title: "梗概太短",
-        description: "请输入至少 10 个字的剧情梗概，或点击「填充示例梗概」",
+        description: "已定位到左侧梗概输入框——写 10 字以上，或点「填充示例梗概」一键体验",
         variant: "destructive",
       });
+      guideToSynopsis();
       return;
     }
     const ok = await generate();
@@ -225,9 +237,10 @@ export default function Home() {
     if (synopsis.trim().length < 10) {
       toast({
         title: "梗概太短",
-        description: "请输入至少 10 个字的剧情梗概，或点击「填充示例梗概」",
+        description: "已定位到左侧梗概输入框——写 10 字以上，或点「填充示例梗概」一键体验",
         variant: "destructive",
       });
+      guideToSynopsis();
       return;
     }
     const ok = await startPipeline();
@@ -394,17 +407,40 @@ export default function Home() {
                   )}
                 </Button>
 
-                {/* 副路径：仅快速推演场次剧本（不立项） */}
-                <p className="text-center text-xs text-muted-foreground">
-                  只想先试试剧本？
-                  <button
-                    onClick={handleGenerate}
-                    disabled={generating || pipelineRunning}
-                    className="mx-1 underline underline-offset-2 transition-colors hover:text-foreground disabled:opacity-40"
-                  >
-                    仅快速推演场次剧本（不立项）
-                  </button>
+                {/* v2.9.6（VLM 首屏转化走查 P0：快速推演作为唯一的低风险试步被
+                    埋成一行小字，新用户只剩「赌一把全量开机」或流失两条路）——
+                    升级为显式零额度按钮：不立项不拍片，先看 AI 笔力再决定开机 */}
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={generating || pipelineRunning}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-border/70 bg-card px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:border-amber-500/40 hover:text-foreground disabled:cursor-wait disabled:opacity-40"
+                >
+                  {generating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <PenLine className="h-4 w-4" />
+                  )}
+                  先试笔 · 只推演剧本（零视频额度）
+                </button>
+                <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+                  AI 编剧先出三幕场次剧本给你过目，满意再全组开机——不立项、不消耗视频额度
                 </p>
+
+                {/* v2.9.6（VLM 走查 8/8 视图最高频缺口：耗时/成本/兜底三问全空白，
+                    「全组开机」成黑盒赌博）——CTA 就近开机须知，全部为可兑现承诺：
+                    文本阶段分钟级出稿；改设定只补拍受影响镜头（锚点系统）；
+                    断点续跑（阶段幂等）。不编造具体分钟数，不虚报额度 */}
+                <div className="space-y-1 rounded-xl border border-border/60 bg-secondary/20 px-3.5 py-2.5">
+                  <p className="flex items-start gap-2 text-[11px] leading-relaxed text-muted-foreground">
+                    <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400/80" />
+                    开机后剧本分钟内出稿，成片逐镜渲染，进度在「剧组进程」实时可旁观
+                  </p>
+                  <p className="flex items-start gap-2 text-[11px] leading-relaxed text-muted-foreground">
+                    <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400/80" />
+                    改角色/场景只补拍受影响镜头；中断断点续跑，已完成阶段不重烧
+                  </p>
+                </div>
 
                 {generating && (
                   <div className="space-y-2 rounded-xl border bg-card p-4">
@@ -526,7 +562,11 @@ export default function Home() {
                   className="flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-sm font-bold text-amber-950 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 disabled:cursor-wait disabled:opacity-60"
                 >
                   <Clapperboard className="h-4 w-4" />
-                  全组开机 · 让 AI 剧组接管 01~05
+                  {/* v2.9.6（VLM 走查 5/8 视图：左右两枚开机按钮文案不同，
+                      读起来像两个不同动作）——主标与左列主 CTA 完全一致，
+                      仅留定位副提示；阶段衔接语义由上方「全组开机后 AI 自动执行」
+                      徽标与五阶段卡承担，无信息损失 */}
+                  全组开机 · AI 剧组流水线
                   <span className="font-mono text-[10px] font-medium opacity-70">
                     左侧选题材 · 输梗概即可
                   </span>
@@ -570,7 +610,11 @@ export default function Home() {
                       v2.9.4：连载身份补表达——EP.01 徽标背后的「已是系列第 1 集、
                       可一键续集」必须在转化现场说出来（亮点卡讲能力，语境条讲身份） */}
                   <p className="text-center text-[10px] leading-relaxed text-muted-foreground">
-                    示例成片可直接播放 · 流水线实产系列第 1 集
+                    {/* v2.9.6（VLM 走查：示例成片缺「输入→输出」因果对照，信任
+                        打折扣）——已核实种子项目：本片梗概与左列「填充示例梗概」
+                        逐字同源（shuangwen sampleSynopsis），机型即默认快拍机组，
+                        因果链完全真实可兑现：用户点填充→开机→同款成片 */}
+                    本片 = 左列「填充示例梗概」同款梗概 · 默认快拍机组实产 · 系列第 1 集
                     <br />
                     开机后你的剧集同样直出，并可一键续写下一集
                     <br />

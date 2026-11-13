@@ -527,7 +527,11 @@ export const CREW_ROLES: Record<CrewRoleKey, { name: string; duty: string }> = {
   },
   supervisor: {
     name: "场记",
-    duty: "锚定组装 · 跨镜一致性 · 状态连续",
+    /* v2.9.6（VLM 首屏走查：阶段卡 duty「锚定组装 · 跨镜一致性 · 状态连续」
+       是用阶段名解释阶段名的循环定义，对新人是黑话噪音）。场记的正业就是
+       接戏——逐镜登记锚点、盯连续性防穿帮；锚点系统的专业语义不变，只把
+       职责说成人话 */
+    duty: "逐镜登记锚点 · 跨镜接戏不穿帮",
   },
   post: {
     name: "后期",
