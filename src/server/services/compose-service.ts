@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import { db } from "@/lib/db";
 import { RouteError } from "@/lib/api-utils";
@@ -39,6 +41,23 @@ export interface ComposeResult {
   durationSec: number;
   withVoice: boolean;
   withBgm: boolean;
+}
+
+/** Python 解释器解析（v2.9.10 环境韧性）：
+ *  assemble-episode.py 的 draw_card 依赖 PIL——dev server 子进程的 PATH
+ *  解析可能落在无 PIL 的系统 python 上（实测：沙箱回收后 venv 重建差异，
+ *  合成 500 且原因被截在 Python 栈尾部）。解析顺序：
+ *  1. 显式 DRAMA_PYTHON（运维覆写）；
+ *  2. ~/.venv/bin/python3（存在即用——预装 PIL/numpy 的用户 venv）；
+ *  3. PATH 上的 python3（其他部署环境）。
+ *  解析一次即缓存（进程内稳定）。 */
+const VENV_PYTHON = path.join(os.homedir(), ".venv", "bin", "python3");
+let cachedPython: string | null = null;
+function resolvePython(): string {
+  if (cachedPython) return cachedPython;
+  if (process.env.DRAMA_PYTHON) return (cachedPython = process.env.DRAMA_PYTHON);
+  if (existsSync(VENV_PYTHON)) return (cachedPython = VENV_PYTHON);
+  return (cachedPython = "python3");
 }
 
 interface AssembleOutput {
@@ -109,7 +128,7 @@ export async function composeEpisode(projectId: string): Promise<ComposeResult> 
   ];
   const stdout = await new Promise<string>((resolve, reject) => {
     execFile(
-      "python3",
+      resolvePython(),
       [script, projectId, ...args],
       { timeout: COMPOSE_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 },
       (err, out, stderr) => {
