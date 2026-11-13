@@ -633,7 +633,7 @@ export function FinalCutPanel() {
           <p className="flex items-center gap-1.5 text-center text-xs text-rose-400">
             <AlertTriangle className="h-3.5 w-3.5" />
             {realVideo === false
-              ? `${failedVideoTasks.length} 个镜头在占位模式下待处理：可逐镜手动贴片（镜头轨内粘贴成片地址），或启用真机通道后重试`
+              ? `${failedVideoTasks.length} 个镜头在占位模式下待处理：可在镜头轨贴片入库（直链自动下载 / 上传本地文件），或启用真机通道后重试`
               : `${failedVideoTasks.length} 个渲染任务失败，可在「剧组进程」页签重试后再次渲染`}
           </p>
         )}

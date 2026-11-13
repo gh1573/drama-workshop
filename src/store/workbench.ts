@@ -229,7 +229,7 @@ function notifyBatchSettled(
     title: `本批渲染 ${failed.length} 项未成功`,
     description:
       (realVideo === false
-        ? "视频通道为占位模式（零配额）：可在镜头轨逐镜贴片，或启用真机通道后重试"
+        ? "视频通道为占位模式（零配额）：可在镜头轨贴片入库（直链自动下载/本地上传），或启用真机通道后重试"
         : `${okCount > 0 ? `${okCount} 项已完成；` : ""}可在「剧组进程」任务中心逐项重试`) +
       `。首条原因：${brief(failed[0].error ?? "未知")}`,
     variant: "destructive",

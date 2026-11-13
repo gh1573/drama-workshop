@@ -83,7 +83,15 @@ export const updateClipSchema = z.object({
   subtitle: z.string().max(120).optional(),
   format: z.enum(["mp4", "mov", "webm"]).optional(),
   status: z.enum(["pending", "generating", "ready", "failed"]).optional(),
-  mediaUrl: z.string().url().max(500).nullable().optional(),
+  /* v2.9.8：贴片入库后回写本地 /assets/ 地址（外链会被服务层护栏拒绝并指引入库端点） */
+  mediaUrl: z
+    .string()
+    .max(500)
+    .refine((v) => v.startsWith("/assets/") || /^https?:\/\//.test(v), {
+      message: "成片地址须为 /assets/ 本地路径或 http(s) 链接",
+    })
+    .nullable()
+    .optional(),
   durationMs: z.number().int().min(0).max(600000).nullable().optional(),
   cameraMovement: z.string().max(40).nullable().optional(),
   plannedMs: z.number().int().min(0).max(600000).nullable().optional(),

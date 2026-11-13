@@ -105,7 +105,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   }
   if (!settled) ok("P0-1 noop 视频任务秒级落定（<15s）", false, "30s 内未全部落定");
   body = await bodyText();
-  ok("P1-4 成片面失败行：占位待处理 + 贴片去向（视频秒败即时可见）", body.includes("占位模式下待处理") && body.includes("逐镜手动贴片"));
+  ok("P1-4 成片面失败行：占位待处理 + 贴片入库指引（视频秒败即时可见）", body.includes("占位模式下待处理") && body.includes("贴片入库"));
 
   // ===== 4. 任务中心溢出计数（切到剧组进程页签后可见） =====
   await page.getByRole("tab", { name: "剧组进程" }).click({ timeout: 8000 });

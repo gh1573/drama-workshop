@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -13,6 +13,7 @@ import {
   Trash2,
   CheckCircle2,
   Layers,
+  Upload,
   Video,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -67,7 +68,9 @@ export function TimelinePanel() {
   const realVideo = useWorkbench((s) => s.videoChannelReal);
   const [target, setTarget] = useState<ClipData | null>(null);
   const [url, setUrl] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"download" | "upload" | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const refreshProject = useWorkbench((s) => s.refreshProject);
   // v2.4.1 §7.10：按场次折叠，默认全部收起（摘要行展示密度）
   const [openActs, setOpenActs] = useState<ReadonlySet<number>>(new Set());
   const [renderingClipId, setRenderingClipId] = useState<string | null>(null);
@@ -112,19 +115,101 @@ export function TimelinePanel() {
     });
   }
 
-  async function handleConfirmReady() {
-    if (!target) return;
-    setBusy(true);
-    const ok = await patchClip(target.id, {
-      status: "ready",
-      mediaUrl: url.trim() ? url.trim() : null,
-    });
-    setBusy(false);
+  /* v2.9.8 外部出片入库：外链下载落盘 / 本地文件上传，统一走 /api/clips/[id]/media，
+     服务端自包含落盘 + 短素材时长对齐；「可留空仅标记完成」语义已除（合成必须
+     消费真实媒体，留空会造成绿格子但合成必败的假完成态） */
+  function closeAttachDialog() {
     setTarget(null);
     setUrl("");
+    setBusy(null);
+  }
+
+  async function handleAttachUrl() {
+    if (!target) return;
+    const trimmed = url.trim();
+    if (!/^https?:\/\//.test(trimmed)) {
+      toast({
+        title: "请粘贴 http(s) 视频直链",
+        description: "例如网盘/图床的 mp4 直链；本地文件请用下方「上传本地文件」",
+        variant: "destructive",
+      });
+      return;
+    }
+    setBusy("download");
+    try {
+      const res = await fetch(`/api/clips/${target.id}/media`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmed }),
+      });
+      const json = await res.json();
+      if (!json?.ok) throw new Error(json?.error ?? "入库失败");
+      await refreshProject();
+      reportAttached(json.data, "下载");
+      closeAttachDialog();
+    } catch (e) {
+      toast({
+        title: "下载入库失败",
+        description: e instanceof Error ? e.message : "请稍后重试",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleAttachFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // 允许重复选择同一文件
+    if (!file || !target) return;
+    setBusy("upload");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/clips/${target.id}/media`, {
+        method: "POST",
+        body: fd,
+      });
+      const json = await res.json();
+      if (!json?.ok) throw new Error(json?.error ?? "上传失败");
+      await refreshProject();
+      reportAttached(json.data, "上传");
+      closeAttachDialog();
+    } catch (e) {
+      toast({
+        title: "上传入库失败",
+        description: e instanceof Error ? e.message : "请稍后重试",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** 入库成功播报：尺寸 + 时长对齐提示 + 全就绪时指路合成 */
+  function reportAttached(
+    data: { sizeBytes?: number; durationAligned?: boolean; mediaDurationMs?: number | null },
+    verb: string
+  ) {
+    const clips = useWorkbench.getState().session?.clips ?? [];
+    const allReady =
+      clips.length > 0 && clips.every((c) => c.status === "ready" && c.mediaUrl);
+    const hasFinal = !!useWorkbench.getState().session?.finalVideoUrl;
     toast({
-      title: ok ? "镜头已标记完成" : "操作失败",
-      variant: ok ? "default" : "destructive",
+      title: `「${target?.name ?? "镜头"}」成片已${verb}入库`,
+      description: [
+        data.sizeBytes ? `${(data.sizeBytes / 1024 / 1024).toFixed(1)}MB` : null,
+        data.durationAligned && data.mediaDurationMs
+          ? `时长已按素材对齐 ${(data.mediaDurationMs / 1000).toFixed(1)}s（短于计划，防字幕漂移）`
+          : null,
+        allReady
+          ? hasFinal
+            ? "全部镜头就绪——去「成片」页签重新合成即可入片"
+            : "全部镜头就绪——打开「成片」页签即自动合成"
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
     });
   }
 
@@ -473,35 +558,74 @@ export function TimelinePanel() {
         </ul>
       )}
 
-      <Dialog open={!!target} onOpenChange={(open) => !open && setTarget(null)}>
+      <Dialog open={!!target} onOpenChange={(open) => !open && closeAttachDialog()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>回填成片 · {target?.name}</DialogTitle>
             <DialogDescription>
-              正常情况请用行内「渲染此镜」或成片页签「一键渲染全片」走视频通道；
-              本入口仅用于外部工具成片后粘贴地址并标记完成。
+              外部工具出片后在此入库（自动下载落盘，成片不受外链过期影响），
+              或直接上传本地文件；入库即标记完成，合成只消费已入库素材。
             </DialogDescription>
           </DialogHeader>
-          <Input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://…/clip.mp4（可留空，仅标记完成）"
-            className="border-border/70 bg-secondary/30 text-sm"
-          />
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setTarget(null)}>
-              取消
-            </Button>
+          {/* —— 通道一：直链下载入库 —— */}
+          <div className="flex items-center gap-2">
+            <Input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !busy && void handleAttachUrl()}
+              placeholder="https://…/clip.mp4（视频直链）"
+              disabled={busy !== null}
+              className="border-border/70 bg-secondary/30 text-sm"
+            />
             <Button
               size="sm"
-              disabled={busy}
-              onClick={handleConfirmReady}
+              disabled={busy !== null || !url.trim()}
+              onClick={() => void handleAttachUrl()}
               /* v2.8 色彩纪律：成功语义用单色 emerald，去 teal 渐变（引入第二色相无必要） */
-              className="bg-emerald-600 text-white hover:bg-emerald-500"
+              className="shrink-0 bg-emerald-600 text-white hover:bg-emerald-500"
             >
-              标记为已生成
+              {busy === "download" ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  下载入库中…
+                </>
+              ) : (
+                "下载入库"
+              )}
             </Button>
-          </DialogFooter>
+          </div>
+          {/* —— 通道二：本地文件上传 —— */}
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/mp4,video/quicktime,video/webm,video/x-matroska,.mp4,.mov,.webm,.mkv"
+              className="hidden"
+              onChange={(e) => void handleAttachFile(e)}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy !== null}
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full border-border/70"
+            >
+              {busy === "upload" ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  上传入库中…
+                </>
+              ) : (
+                <>
+                  <Upload className="h-3.5 w-3.5" />
+                  上传本地文件（mp4 / mov / webm / mkv，≤80MB）
+                </>
+              )}
+            </Button>
+          </div>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            合成会按画幅自动裁剪归一（横竖盘皆可入片）；素材短于计划时长时自动对齐，防字幕漂移。
+          </p>
         </DialogContent>
       </Dialog>
     </section>

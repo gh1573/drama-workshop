@@ -441,6 +441,15 @@ export async function updateClip(
   if (patch.status && !(patch.status in CLIP_STATUS)) {
     throw new RouteError("非法的镜头状态", 400);
   }
+  /* v2.9.8 外部出片入库护栏：http(s) 外链直接 PATCH 会让镜头格子变绿但合成必败
+     （ffmpeg 只消费本地素材，外部链接不可读）——拒绝并指引进库端点
+     （下载落盘自包含）；本地 /assets/ 地址与重置（null）不受影响 */
+  if (patch.mediaUrl && /^https?:\/\//.test(patch.mediaUrl)) {
+    throw new RouteError(
+      "外部链接不能直接作为镜头成片（合成只消费已入库素材）：请经贴片入库接口 POST /api/clips/{id}/media 提交，将自动下载落盘并标记完成",
+      422
+    );
+  }
   const data: Prisma.TimelineClipUpdateInput = { ...patch };
   // 人工微调提示词 → 指纹标记 manual（不会被流水线覆盖，也不再判过期）
   if (patch.finalPrompt !== undefined) {

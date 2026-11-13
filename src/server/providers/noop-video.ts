@@ -22,7 +22,7 @@ export class NoopVideoProvider implements VideoProvider {
     return {
       mode: "sync",
       status: "failed",
-      reason: `视频真机通道未启用（占位模式，零配额消耗；目标规格 ${req.aspectRatio} ${req.resolution} ${req.durationSeconds}s）。两种出片方式：① 配额窗口可用时设 VIDEO_PROVIDER=zai 重启后重试此镜；② 外部工具按最终提示词出片后，回镜头轨手动标记完成并粘贴成片地址。`,
+      reason: `视频真机通道未启用（占位模式，零配额消耗；目标规格 ${req.aspectRatio} ${req.resolution} ${req.durationSeconds}s）。两种出片方式：① 配额窗口可用时设 VIDEO_PROVIDER=zai 重启后重试此镜；② 外部工具按最终提示词出片后，回镜头轨贴片入库（粘贴直链自动下载，或上传本地文件），入库即标记完成。`,
     };
   }
 

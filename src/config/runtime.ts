@@ -164,6 +164,28 @@ export const BGM_MIME_EXT: Record<string, string> = {
   "audio/ogg": "ogg",
 };
 
+/**
+ * 贴片媒体（镜头成片外部入库，v2.9.8 §7.9）：
+ * 视频限额/占位通道下的真实出片闭环——外部工具出片后，
+ * 经 /api/clips/[id]/media 下载入库（自包含，不受外链过期影响）或本地上传，
+ * 合成只消费本地已入库素材（外部 http 地址 ffmpeg 不可靠且违自包含纪律）。
+ * 覆盖变量：CLIP_MEDIA_MAX_BYTES
+ */
+export const CLIP_MEDIA_MAX_BYTES = envInt(
+  "CLIP_MEDIA_MAX_BYTES",
+  80 * 1024 * 1024
+);
+
+/** 贴片媒体 MIME 白名单（扩展名仅用于落盘后缀，ffmpeg 按内容探测） */
+export const CLIP_MEDIA_MIME_EXT: Record<string, string> = {
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+  "video/webm": "webm",
+  "video/x-matroska": "mkv",
+  /* 部分 CDN/网盘以二进制流下发，放行但仅按 URL 扩展名兜底 */
+  "application/octet-stream": "bin",
+};
+
 /* ============================================================
  * 成片画幅与转场参数（§7.9 / §7.11 v2.5）
  * compose-service 读取后经 CLI 参数传入 assemble-episode.py，
