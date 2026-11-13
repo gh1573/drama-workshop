@@ -12,10 +12,24 @@ export interface TextMessage {
   content: string;
 }
 
+/** v2.9.13 重试事件通知：通道退避/重试对调用方可见，用户视角走查 P0——
+ *  限流退避最长静默 140s+，不通知则用户面对「盲等」（进度不动、日志不滚） */
+export interface RetryNotice {
+  kind: "rate_limit" | "generic";
+  /** 第几次重试（rate_limit 与 generic 各自计数） */
+  attempt: number;
+  /** 本次退避等待毫秒（generic 重试固定 500ms） */
+  waitMs: number;
+  /** 上游原始错误摘要（给人看的日志用） */
+  message: string;
+}
+
 export interface TextRequest {
   messages: TextMessage[];
   /** 思考模式：拆镜/编剧类结构化任务关闭思考以提速；深度创作可开启 */
   thinking?: { type: "enabled" | "disabled" };
+  /** 重试事件回调：限流退避 / 常规重试时通知调用方（可写剧组日志让用户看到系统在自救） */
+  onRetry?: (info: RetryNotice) => void;
 }
 
 export interface TextResult {

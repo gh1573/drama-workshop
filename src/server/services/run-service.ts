@@ -12,6 +12,8 @@ import {
   type StoryBeat,
 } from "@/lib/drama";
 import { getTextProvider, parseJsonLoose } from "@/server/providers";
+import type { RetryNotice } from "@/server/providers/types";
+import { stageFailureText } from "@/lib/humanize-error";
 import { composeVideoPrompt } from "@/server/engines/prompt-engine";
 import { ORPHAN_RECOVERY_WINDOW_MS } from "@/config/runtime";
 import {
@@ -148,6 +150,62 @@ async function loadRun(runId: string): Promise<ProductionRun> {
   return row;
 }
 
+/**
+ * v2.9.13 长调用心跳（用户视角走查 P1）：编剧/拆镜单次 LLM 调用最长可达
+ * 分钟级（限流退避更甚），期间 journal 零更新 = 用户「半盲等」。
+ * 心跳每 30s 写一条进行中文案，让用户看到剧组在干活。
+ * 调用异常时 finally 清理定时器；心跳不抛错（appendLog 失败不影响主流程）。
+ */
+async function heartbeat(
+  runId: string,
+  role: CrewRoleKey,
+  label: string,
+  t0: number
+): Promise<void> {
+  const elapsed = Math.round((Date.now() - t0) / 1000);
+  try {
+    await appendLog(
+      runId,
+      role,
+      `${label}（已耗时 ${elapsed}s，AI 创作需要时间，请稍候）`
+    );
+  } catch {
+    // 心跳失败不影响主流程
+  }
+}
+
+function startHeartbeat(
+  runId: string,
+  role: CrewRoleKey,
+  label: string
+): () => void {
+  const t0 = Date.now();
+  const timer = setInterval(
+    () => void heartbeat(runId, role, label, t0),
+    30_000
+  );
+  return () => clearInterval(timer);
+}
+
+/**
+ * v2.9.13 通道重试事件 → 剧组日志（用户视角走查 P0）：
+ * 限流退避 20s/40s/80s 最长静默 140s+，不写日志用户就不知道系统在自救。
+ */
+function retryToLog(
+  runId: string,
+  role: CrewRoleKey,
+  label: string
+): (info: RetryNotice) => void {
+  return (info) => {
+    const sec = Math.round(info.waitMs / 1000);
+    const msg =
+      info.kind === "rate_limit"
+        ? `${label}：AI 创作通道繁忙（上游限流），${sec}s 后自动重试（第 ${info.attempt} 轮）`
+        : `${label}：通道瞬时异常，0.5s 后自动重试（第 ${info.attempt} 次）`;
+    void appendLog(runId, role, msg).catch(() => undefined);
+  };
+}
+
 async function appendLog(
   runId: string,
   role: CrewRoleKey,
@@ -255,22 +313,33 @@ export async function stageScreenwriting(
     attempt < SCREENPLAY_RETRY_HINTS.length && !beats;
     attempt++
   ) {
-    const { text, finishReason } = await provider.complete({
-      messages: [
-        messages[0],
-        {
-          role: "user",
-          content:
-            attempt === 0
-              ? messages[1].content
-              : `${messages[1].content}\n\n${SCREENPLAY_RETRY_HINTS[attempt]}`,
-        },
-      ],
-      thinking: { type: project.thinkingLevel === "low" ? "disabled" : "enabled" },
-    });
-    lastRaw = text;
-    lastFinishReason = finishReason ?? "";
-    beats = parseScreenplayBeats(text);
+    // v2.9.13 心跳：编剧单次推演可达分钟级，30s 一条进行中文案防盲等
+    const stopBeat = startHeartbeat(
+      runId,
+      "screenwriter",
+      `编剧推演中${attempt > 0 ? `（第 ${attempt + 1} 轮补写）` : ""}`
+    );
+    try {
+      const { text, finishReason } = await provider.complete({
+        messages: [
+          messages[0],
+          {
+            role: "user",
+            content:
+              attempt === 0
+                ? messages[1].content
+                : `${messages[1].content}\n\n${SCREENPLAY_RETRY_HINTS[attempt]}`,
+          },
+        ],
+        thinking: { type: project.thinkingLevel === "low" ? "disabled" : "enabled" },
+        onRetry: retryToLog(runId, "screenwriter", "编剧推演"),
+      });
+      lastRaw = text;
+      lastFinishReason = finishReason ?? "";
+      beats = parseScreenplayBeats(text);
+    } finally {
+      stopBeat();
+    }
   }
   if (!beats) {
     // v2.9.11：人话给 UI，原始输出摘要（长度+首尾）落剧组日志供诊断；
@@ -500,6 +569,7 @@ async function stageDirecting(
 
   let totalShots = 0;
   let skippedScenes = 0;
+  let sceneOrder = 0; // v2.9.13 实际拆解计数（跳过的场不计入）
   for (const beat of beats) {
     // 成片保护：该场已有已生成镜头时跳过拆解（不覆盖劳动成果），
     // 由日志明确告知；如需重拍请先在镜头轨把该场镜头重置为待生成
@@ -516,24 +586,44 @@ async function stageDirecting(
       );
       continue;
     }
-    const shots = await breakdownAct({
-      genreName: project.genreName,
-      genreBadge: project.genreBadge,
-      tonePrompt: project.tonePrompt,
-      synopsis: project.synopsis,
-      beats: beats.map((b) => ({
-        index: b.index,
-        actTitle: b.actTitle,
-        narrativeFunction: b.narrativeFunction as StoryBeat["narrativeFunction"],
-        pacingNote: b.pacingNote,
-        description: b.description,
-        dialogueSubtitle: b.dialogueSubtitle,
-        cameraMovement: b.cameraMovement,
-        promptGuidance: b.promptGuidance,
-      })),
-      targetIndex: beat.index,
-      assetRoster: roster,
-    });
+    sceneOrder++;
+    // v2.9.13 逐场开工日志（用户视角走查 P1）：拆镜阶段总耗时可达数分钟，
+    // 只有「全场完成」日志的话用户看不到推进；开工+完成成对出现即是进度
+    await appendLog(
+      runId,
+      "director",
+      `开始拆解场 ${beat.index}（${beat.actTitle}）· ${beats.length} 场中的第 ${sceneOrder} 场`
+    );
+    // v2.9.13 心跳：单场拆镜 LLM 调用可达分钟级（限流退避更甚）
+    const stopBeat = startHeartbeat(
+      runId,
+      "director",
+      `导演拆解场 ${beat.index}（${beat.actTitle}）中`
+    );
+    let shots: ShotBreakdownItem[];
+    try {
+      shots = await breakdownAct({
+        genreName: project.genreName,
+        genreBadge: project.genreBadge,
+        tonePrompt: project.tonePrompt,
+        synopsis: project.synopsis,
+        beats: beats.map((b) => ({
+          index: b.index,
+          actTitle: b.actTitle,
+          narrativeFunction: b.narrativeFunction as StoryBeat["narrativeFunction"],
+          pacingNote: b.pacingNote,
+          description: b.description,
+          dialogueSubtitle: b.dialogueSubtitle,
+          cameraMovement: b.cameraMovement,
+          promptGuidance: b.promptGuidance,
+        })),
+        targetIndex: beat.index,
+        assetRoster: roster,
+        onRetry: retryToLog(runId, "director", `场 ${beat.index} 拆镜`),
+      });
+    } finally {
+      stopBeat();
+    }
     const clips = await replaceActClips(project.id, beat.index, shots);
     await bindRefsFromShots(project.id, beat.index, shots, clips);
     await updateBeatEnergy(project.id, beat.index, {
@@ -823,6 +913,10 @@ async function executeRun(
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "未知错误";
+        // v2.9.13 错误人性化（用户视角走查 P0）：裸英文 429/5xx/网络错误
+        // 直接甩给用户看不懂——三层（stages.error / run.error / journal）
+        // 统一改为「人话标题 + 行动建议 + 技术详情括号」口径
+        const friendly = stageFailureText(message);
         // 带 detail 的错误（如 BreakdownError）把模型原始输出片段落进剧组日志——
         // 否则「解析失败」永远无从诊断（v2.9.9）；run.error 保持干净给 UI
         const detail =
@@ -834,17 +928,17 @@ async function executeRun(
         if (stageRow) {
           stageRow.status = "failed";
           stageRow.finishedAt = new Date().toISOString();
-          stageRow.error = message;
+          stageRow.error = friendly;
           await patchStages(runId, fresh);
         }
         await db.productionRun.update({
           where: { id: runId },
-          data: { status: "failed", error: `「${def.name}」阶段失败：${message}` },
+          data: { status: "failed", error: `「${def.name}」阶段失败：${friendly}` },
         });
         await appendLog(
           runId,
           def.role,
-          `阶段失败：${message}${
+          `阶段失败：${friendly}${
             detail ? `（模型原始输出片段：${detail.slice(0, 200)}）` : ""
           }`
         );
@@ -866,7 +960,8 @@ async function executeRun(
     await db.productionRun
       .update({
         where: { id: runId },
-        data: { status: "failed", error: message },
+        // v2.9.13 外层兜底同样走人性化翻译（与阶段失败同口径）
+        data: { status: "failed", error: stageFailureText(message) },
       })
       .catch(() => undefined);
   }

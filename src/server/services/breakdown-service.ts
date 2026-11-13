@@ -34,6 +34,8 @@ export interface BreakdownContext {
     scenes: string[];
     props: string[];
   };
+  /** v2.9.13 通道重试事件回调（流水线内透传给剧组日志；手动拆镜路径可不传） */
+  onRetry?: (info: import("@/server/providers/types").RetryNotice) => void;
 }
 
 function clampInt(v: unknown, min: number, max: number, fb: number): number {
@@ -185,6 +187,7 @@ export async function breakdownAct(
         { role: "user", content: BREAKDOWN_RETRY_HINTS[attempt] },
       ],
       thinking: { type: "disabled" },
+      onRetry: ctx.onRetry,
     });
     lastRaw = text;
     shots = parseShots(text);

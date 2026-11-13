@@ -41,7 +41,8 @@ export class ZaiTextProvider implements TextProvider {
         lastError = new Error("模型返回空内容");
       } catch (err) {
         lastError = err;
-        // 限流：指数退避后重试（不占用常规重试名额）
+        // 限流：指数退避后重试（不占用常规重试名额）——
+        // v2.9.13 退避事件回调：让调用方写剧组日志，用户看到「通道在自救」而非盲等
         if (
           backoff < RATE_LIMIT_MAX_BACKOFF_ATTEMPTS &&
           err instanceof Error &&
@@ -49,12 +50,27 @@ export class ZaiTextProvider implements TextProvider {
         ) {
           const waitMs = RATE_LIMIT_BACKOFF_MS * 2 ** backoff;
           backoff++;
+          req.onRetry?.({
+            kind: "rate_limit",
+            attempt: backoff,
+            waitMs,
+            message: err.message.slice(0, 120),
+          });
           await new Promise((r) => setTimeout(r, waitMs));
           continue;
         }
       }
       attempt++;
       if (attempt >= 3) break;
+      req.onRetry?.({
+        kind: "generic",
+        attempt,
+        waitMs: 500,
+        message:
+          lastError instanceof Error
+            ? lastError.message.slice(0, 120)
+            : String(lastError).slice(0, 120),
+      });
       await new Promise((r) => setTimeout(r, 500));
     }
     throw new Error(
