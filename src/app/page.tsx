@@ -256,7 +256,9 @@ export default function Home() {
   }, [generatingSince]);
 
   /* v2.9.7 断线重进：恢复上次拍摄现场（运行观测/任务轮询随 loadProject 续接）
-     + 视频通道模式探明（占位模式下渲染文案统一换贴片指引口径） */
+     + 视频通道模式探明（占位模式下渲染文案统一换贴片指引口径）
+     v2.9.12：恢复因瞬时故障失败时给出「现场还在」提示——
+     此前静默回落空表单，用户以为项目丢了（项目安全在库，刷新即可自愈） */
   useEffect(() => {
     void useWorkbench.getState().probeVideoChannel();
     void (async () => {
@@ -265,6 +267,14 @@ export default function Home() {
         toast({
           title: "已恢复上次拍摄现场",
           description: `《${detail.title}》已就位，运行与任务进度自动续接`,
+        });
+        return;
+      }
+      if (useWorkbench.getState().lastRestoreFailed) {
+        useWorkbench.setState({ lastRestoreFailed: false });
+        toast({
+          title: "上次拍摄现场暂时没能自动恢复",
+          description: "项目安全在库——稍后刷新页面自动回到现场，或点右上角「项目库」手动打开",
         });
       }
     })();

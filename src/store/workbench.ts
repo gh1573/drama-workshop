@@ -67,6 +67,9 @@ interface WorkbenchState {
   generatingSince: number | null;
   saving: boolean;
   lastError: string | null;
+  /** v2.9.12：上次会话恢复因瞬时故障失败（键保留，刷新自愈）——
+   *  落地页据此提示「现场还在，可重试」，而不是默默把用户丢回空表单 */
+  lastRestoreFailed: boolean;
   // —— v2 剧组流水线 ——
   /** 进行中/最近一次流水线运行（null = 从未开机） */
   activeRun: RunDTO | null;
@@ -176,7 +179,18 @@ interface WorkbenchState {
 /** 统一请求器：解析 { ok, data | error } 封套。
  *  v2.9.12 用户视角走查：网络层失败（断线/服务器重启）此前裸抛
  *  "Failed to fetch" 英文技术报错直出到 toast——统一人话化收口：
- *  告知连接中断 + 明确「任务不会丢、重进可续看」，用户不必恐慌重开。 */
+ *  告知连接中断 + 明确「任务不会丢、重进可续看」，用户不必恐慌重开。
+ *  ApiError 携带 HTTP status：调用方可区分「资源不存在(404)」与
+ *  「瞬时故障(网络/5xx)」——恢复逻辑靠它避免误清用户现场。 */
+export class ApiError extends Error {
+  status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export async function api<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -185,7 +199,7 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
       headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
     });
   } catch {
-    throw new Error(
+    throw new ApiError(
       "与剧组服务器的连接中断了——请检查网络后重试；已提交的拍摄任务不会丢失，重进页面可继续观测进度",
     );
   }
@@ -193,12 +207,16 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
   try {
     json = (await res.json()) as { ok: true; data: T } | { ok: false; error: string };
   } catch {
-    throw new Error(
+    throw new ApiError(
       `剧组服务器返回了无法识别的响应 (${res.status})——请稍后重试；若反复出现请截图反馈`,
+      res.status,
     );
   }
   if (!res.ok || !json.ok) {
-    throw new Error(("error" in json && json.error) || `请求失败 (${res.status})`);
+    throw new ApiError(
+      ("error" in json && json.error) || `请求失败 (${res.status})`,
+      res.status,
+    );
   }
   return json.data;
 }
@@ -415,6 +433,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   generatingStep: 0,
   saving: false,
   lastError: null,
+  lastRestoreFailed: false,
   activeRun: null,
   pipelineStarting: false,
   retryingPipeline: false,
@@ -879,9 +898,15 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       const detail = await api<ProjectDetail>(`/api/projects/${id}`);
       get().loadProject(detail);
       return detail;
-    } catch {
-      /* 项目已删除/网络失败：清键避免每次刷新都白试 */
-      persistLastProjectId(null);
+    } catch (err) {
+      // v2.9.12：区分「项目已删除(404)」与「瞬时故障(网络/5xx)」——
+      // 此前一律清键，断线时用户重进页面永远回不到拍摄中的项目
+      //（违背「断线重进可自动恢复观测」承诺）。瞬时失败保留键，下次刷新自愈。
+      if (err instanceof ApiError && err.status === 404) {
+        persistLastProjectId(null);
+        return null;
+      }
+      set({ lastRestoreFailed: true });
       return null;
     }
   },
