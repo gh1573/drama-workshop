@@ -383,14 +383,23 @@ function startRunPolling(runId: string) {
         const run = await api<RunDTO>(`/api/runs/${runId}`);
         useWorkbench.setState({ activeRun: run });
         if (run.status !== "running") {
-          stopRunPolling();
-          const dbId = useWorkbench.getState().session?.dbId;
-          if (dbId) {
-            if (run.status === "succeeded") {
-              await useWorkbench.getState().refreshProject();
-              useWorkbench.setState((s) => ({ outputNonce: s.outputNonce + 1 }));
+          /* v2.9.18 自动续拍等待窗：failed 且 error 仍带「Ns 后自动续拍」
+             承诺时绝不能停表——服务端 45~180s 后自动点火，停表会让面板
+             永远停在失败态，「无需值守」在 UI 层断裂。承诺消失（达上限/
+             清扫改写）或杀青时才真正停。 */
+          const pendingAutoResume =
+            run.status === "failed" &&
+            /后自动续拍第 \d+\/\d+ 轮/.test(run.error ?? "");
+          if (!pendingAutoResume) {
+            stopRunPolling();
+            const dbId = useWorkbench.getState().session?.dbId;
+            if (dbId) {
+              if (run.status === "succeeded") {
+                await useWorkbench.getState().refreshProject();
+                useWorkbench.setState((s) => ({ outputNonce: s.outputNonce + 1 }));
+              }
+              void useWorkbench.getState().fetchTasks();
             }
-            void useWorkbench.getState().fetchTasks();
           }
         }
       } catch {

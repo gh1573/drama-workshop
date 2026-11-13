@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Ban,
@@ -82,6 +82,43 @@ export function CrewPipelinePanel() {
   // §7.13 v2.5.2：已有 run 时的重开为破坏性重写，需二次确认
   const [rerunConfirmOpen, setRerunConfirmOpen] = useState(false);
 
+  /* v2.9.18 状态迁移播报：盲转圈消灭的最后一环——用户可能正在别的页签
+     看分镜/资产，run 失败与自动复活必须主动找上门，而不是等他回头。
+     - running→failed（带承诺）：toast 说清「Ns 后自动续拍 · 无需值守」
+     - failed→running（非人工 8s 内）：toast 说清「已自动续拍继续拍摄」
+     人工点击（handleStart/handleRetry）自带 toast，用时间戳去重防双响 */
+  const prevRunStatus = useRef<string | null>(null);
+  const manualActionAt = useRef(0);
+  useEffect(() => {
+    const status = run?.status ?? null;
+    const prev = prevRunStatus.current;
+    prevRunStatus.current = status;
+    if (!run || prev === null || prev === status) return;
+    const manualRecent = Date.now() - manualActionAt.current < 8000;
+
+    if (prev === "running" && status === "failed") {
+      const m = (run.error ?? "").match(/（(\d+)s 后自动续拍第 (\d+)\/(\d+) 轮）/);
+      if (m) {
+        toast({
+          title: `阶段失败——${m[1]}s 后自动续拍（第 ${m[2]}/${m[3]} 轮）`,
+          description: "无需值守，系统会从断点自动继续；期间也可随时手动「断点续拍」",
+        });
+      } else {
+        toast({
+          title: "流水线中断",
+          description: run.error ?? "请查看剧组日志了解原因，可「断点续拍」从断点继续",
+          variant: "destructive",
+        });
+      }
+    }
+    if (prev === "failed" && status === "running" && !manualRecent) {
+      toast({
+        title: "已自动续拍，继续拍摄",
+        description: "上游通道恢复，从断点自动继续——已完成阶段不会重复执行",
+      });
+    }
+  }, [run?.status, run?.error, toast]);
+
   const assetNameById = useMemo(
     () => new Map((session?.assets ?? []).map((a) => [a.id, a.name])),
     [session?.assets]
@@ -102,6 +139,7 @@ export function CrewPipelinePanel() {
   );
 
   async function handleStart() {
+    manualActionAt.current = Date.now();
     const ok = await startPipeline();
     if (ok) {
       toast({
@@ -118,6 +156,7 @@ export function CrewPipelinePanel() {
   }
 
   async function handleRetry() {
+    manualActionAt.current = Date.now();
     const ok = await retryPipeline();
     toast({
       title: ok ? "断点续拍已启动" : "续拍失败",
