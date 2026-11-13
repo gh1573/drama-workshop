@@ -62,6 +62,9 @@ export function TimelinePanel() {
   const patchClip = useWorkbench((s) => s.patchClip);
   const tasks = useWorkbench((s) => s.tasks);
   const createTask = useWorkbench((s) => s.createTask);
+  /* v2.9.7：通道模式共享 store 探明结果（占位模式下单镜渲染的 tooltip 与
+     提交回执换成贴片指引口径，不再预告真机 60~90s） */
+  const realVideo = useWorkbench((s) => s.videoChannelReal);
   const [target, setTarget] = useState<ClipData | null>(null);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -92,7 +95,10 @@ export function TimelinePanel() {
     } else {
       toast({
         title: "已提交渲染",
-        description: `「${clip.name}」进入视频队列，完成后自动回填成片`,
+        description:
+          realVideo === false
+            ? `「${clip.name}」占位模式将秒级给出贴片指引（零配额），配音照常出片`
+            : `「${clip.name}」进入视频队列，完成后自动回填成片`,
       });
     }
   }
@@ -151,7 +157,13 @@ export function TimelinePanel() {
       {clip.status !== "ready" && clip.finalPrompt && (
         <button
           aria-label="渲染此镜"
-          title={rendering ? "渲染中…" : "渲染此镜（视频通道，约 60~90s）"}
+          title={
+            rendering
+              ? "渲染中…"
+              : realVideo === false
+                ? "渲染此镜（占位模式：秒级给出贴片指引，零配额）"
+                : "渲染此镜（视频通道，约 60~90s）"
+          }
           disabled={rendering || renderingClipId !== null}
           onClick={() => void handleRenderClip(clip)}
           className="rounded-md p-1.5 text-amber-400 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"

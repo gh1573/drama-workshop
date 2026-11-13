@@ -18,6 +18,7 @@ import {
   PenLine,
   PencilLine,
   Play,
+  Plus,
   ScanFace,
   Scissors,
   ShieldCheck,
@@ -139,6 +140,7 @@ export default function Home() {
   const activeRun = useWorkbench((s) => s.activeRun);
   const pipelineStarting = useWorkbench((s) => s.pipelineStarting);
   const startPipeline = useWorkbench((s) => s.startPipeline);
+  const closeSession = useWorkbench((s) => s.closeSession);
   const genreId = useWorkbench((s) => s.genreId);
   const modelConfig = useWorkbench((s) => s.modelConfig);
 
@@ -154,6 +156,25 @@ export default function Home() {
       if (next === before) return;
       if (next === "running") setTab("pipeline");
       else if (next === "succeeded") setTab("cut");
+      /* v2.9.7 运行终态播报（E2E 走查 P0：杀青/中断此前完全静默——用户在
+         别的页签只看到按钮禁用态变化，中断尤其需要拉回注意力）。
+         仅播报 running → 终态的真实迁移；载入已终态项目不误报 */
+      if (before === "running") {
+        if (next === "succeeded") {
+          toast({
+            title: "全组杀青 · 制作包已就绪",
+            description:
+              "剧本 · 分镜 · 定妆 · 锚点全部完成，去「成片」一键渲染出片",
+          });
+        } else if (next === "failed") {
+          setTab("pipeline");
+          toast({
+            title: "剧组中断",
+            description: `${s.activeRun?.error ?? "未知阶段错误"}——已完成阶段不丢失，可断点续拍`,
+            variant: "destructive",
+          });
+        }
+      }
     });
     return unsub;
   }, []);
@@ -219,6 +240,53 @@ export default function Home() {
     );
     return () => clearInterval(t);
   }, [generating]);
+
+  /* v2.9.7 试笔耗时计数（E2E 走查：真实推演 20~40s，仅有步骤轮播时用户
+     无法区分「还在跑」与「卡死」——秒表是最诚实的活性信号。
+     时间戳由 store 在 generate() 起点记录，本地每秒镜像（不在 effect 内同步 setState） */
+  const generatingSince = useWorkbench((s) => s.generatingSince);
+  const [genElapsed, setGenElapsed] = useState(0);
+  useEffect(() => {
+    if (generatingSince == null) return;
+    const t = setInterval(
+      () => setGenElapsed(Math.floor((Date.now() - generatingSince) / 1000)),
+      1000
+    );
+    return () => clearInterval(t);
+  }, [generatingSince]);
+
+  /* v2.9.7 断线重进：恢复上次拍摄现场（运行观测/任务轮询随 loadProject 续接）
+     + 视频通道模式探明（占位模式下渲染文案统一换贴片指引口径） */
+  useEffect(() => {
+    void useWorkbench.getState().probeVideoChannel();
+    void (async () => {
+      const detail = await useWorkbench.getState().restoreLastSession();
+      if (detail) {
+        toast({
+          title: "已恢复上次拍摄现场",
+          description: `《${detail.title}》已就位，运行与任务进度自动续接`,
+        });
+      }
+    })();
+  }, []);
+
+  /** v2.9.7 另起新片：当前项目留库可回（closeSession 停轮询器并清恢复键），
+      工作台回到新片空态——此前唯一的新片路径是刷新页面的副作用 */
+  function handleNewProject() {
+    const wasRunning = pipelineRunning;
+    const title = session?.title;
+    closeSession();
+    setConfigOpen(true);
+    setTab("cut");
+    toast({
+      title: "已另起新片",
+      description: wasRunning
+        ? "剧组仍在后台拍摄，可从「项目库」回到本项目旁观进度"
+        : title
+          ? `《${title}》已保留在项目库，随时可切回`
+          : "上一个项目已保留在项目库",
+    });
+  }
 
   /* v2.9.6（VLM 首屏转化走查 P0：空点开机后 toast 在右上角报错，
      报错位置/按钮/输入框三点分离，新用户不知道去哪填）——
@@ -315,6 +383,26 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2">
             <TooltipProvider delayDuration={200}>
+              {/* v2.9.7 另起新片入口（E2E 走查：会话态下唯一新片路径是刷新页面的
+                  副作用，会话恢复上线后该路径消失，必须有显式入口） */}
+              {hasSession && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleNewProject}
+                      className="border-border/70 text-xs"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      另起新片
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    当前项目自动留库，从空梗概开始新一部
+                  </TooltipContent>
+                </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -391,7 +479,7 @@ export default function Home() {
                         {pipelineRunning || pipelineStarting ? (
                           <>
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            剧组拍摄中 {activeRun ? `· ${activeRun.progress}%` : "…"}
+                            {activeRun ? `剧组拍摄中 · ${activeRun.progress}%` : "全组开机中…"}
                           </>
                         ) : (
                           <>
@@ -456,7 +544,7 @@ export default function Home() {
                   {pipelineRunning || pipelineStarting ? (
                     <>
                       <Loader2 className="h-5 w-5 animate-spin" />
-                      剧组拍摄中 {activeRun ? `· ${activeRun.progress}%` : "…"}
+                      {activeRun ? `剧组拍摄中 · ${activeRun.progress}%` : "全组开机中…"}
                     </>
                   ) : (
                     <>
@@ -503,6 +591,13 @@ export default function Home() {
 
                 {generating && (
                   <div className="space-y-2 rounded-xl border bg-card p-4">
+                    {/* v2.9.7 秒表行：推演 20~40s，仅有步骤轮播无法区分「还在跑」与「卡死」 */}
+                    <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                      <p className="text-xs font-bold text-amber-400">编剧室推演中</p>
+                      <p className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                        已进行 {genElapsed}s
+                      </p>
+                    </div>
                     {LOADING_STEPS.map((s, i) => (
                       <div key={s} className="flex items-center gap-2 text-sm">
                         {i < generatingStep ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { toast } from "@/hooks/use-toast";
 import { GENRES } from "@/lib/genres";
 import {
   type AssetDTO,
@@ -62,6 +63,8 @@ interface WorkbenchState {
   // 状态标记
   generating: boolean;
   generatingStep: number;
+  /** v2.9.7：本次试笔开始时间戳（秒表展示用，防止长推演被误认为卡死） */
+  generatingSince: number | null;
   saving: boolean;
   lastError: string | null;
   // —— v2 剧组流水线 ——
@@ -139,6 +142,15 @@ interface WorkbenchState {
   nextEpOpen: boolean;
   setNextEpOpen: (open: boolean) => void;
 
+  /** v2.9.7：视频通道是否真机（null = 未探明，按真机口径展示不误导）——
+   *  占位模式下渲染中文案/tooltip/提交回执统一换成贴片指引口径 */
+  videoChannelReal: boolean | null;
+  /** 通道模式探明（幂等，页面挂载时调用一次） */
+  probeVideoChannel: () => Promise<void>;
+  /** v2.9.7 断线重进：恢复上次会话（运行观测/任务轮询随载入续接）。
+   *  无可恢复或已删除返回 null；已有会话不覆盖。 */
+  restoreLastSession: () => Promise<ProjectDetail | null>;
+
   addClip: (beatIndex: number) => Promise<boolean>;
   patchClip: (clipId: string, patch: Partial<ClipData>) => Promise<boolean>;
   removeClip: (clipId: string) => Promise<boolean>;
@@ -165,6 +177,63 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(("error" in json && json.error) || `请求失败 (${res.status})`);
   }
   return json.data;
+}
+
+// ============================================================
+// v2.9.7 会话持久化（断线重进恢复现场）：
+// 「全组拍摄中，请勿离开本页（断线重进可自动恢复观测）」的兑现依赖——
+// 刷新后自动回到上次项目（运行观测/任务轮询随 loadProject 续接）。
+// 显式「另起新项目」时清除，保证新用户空态不被旧会话覆盖。
+// ============================================================
+const LAST_PROJECT_KEY = "drama-workshop:last-project";
+
+function persistLastProjectId(id: string | null): void {
+  try {
+    if (id) window.localStorage.setItem(LAST_PROJECT_KEY, id);
+    else window.localStorage.removeItem(LAST_PROJECT_KEY);
+  } catch {
+    /* 隐私模式等存储不可用：跳过，不影响主流程 */
+  }
+}
+
+/** v2.9.7 批次落定播报：上一拍还在执行的任务已全部进入终态。
+ *  成功/失败一并交代，失败给首条原因与下一步指引（占位模式给贴片指引）——
+ *  E2E 走查 P0：任务结果此前只静默地躺在任务中心，用户等不到任何提醒。 */
+function notifyBatchSettled(
+  prev: TaskDTO[],
+  next: TaskDTO[],
+  realVideo: boolean | null
+): void {
+  const nextById = new Map(next.map((t) => [t.id, t]));
+  let okCount = 0;
+  const failed: TaskDTO[] = [];
+  for (const p of prev) {
+    if (p.status !== "queued" && p.status !== "running") continue;
+    const now = nextById.get(p.id);
+    if (!now) continue;
+    if (now.status === "succeeded") okCount++;
+    else if (now.status === "failed") failed.push(now);
+    /* cancelled：用户主动取消，不播报 */
+  }
+  if (okCount === 0 && failed.length === 0) return;
+  const brief = (s: string) =>
+    s.length > 64 ? `${s.slice(0, 64)}…` : s;
+  if (failed.length === 0) {
+    toast({
+      title: `渲染任务完成 · ${okCount} 项`,
+      description: "产物已自动回填（镜头成片 / 配音 / 定妆照），无需手动刷新",
+    });
+    return;
+  }
+  toast({
+    title: `本批渲染 ${failed.length} 项未成功`,
+    description:
+      (realVideo === false
+        ? "视频通道为占位模式（零配额）：可在镜头轨逐镜贴片，或启用真机通道后重试"
+        : `${okCount > 0 ? `${okCount} 项已完成；` : ""}可在「剧组进程」任务中心逐项重试`) +
+      `。首条原因：${brief(failed[0].error ?? "未知")}`,
+    variant: "destructive",
+  });
 }
 
 function fallbackGenre(detail: ProjectDetail): GenrePreset {
@@ -307,6 +376,8 @@ function scheduleTaskPolling() {
 export const useWorkbench = create<WorkbenchState>((set, get) => ({
   genreId: "shuangwen",
   synopsis: "",
+  videoChannelReal: null,
+  generatingSince: null,
   modelConfig: {
     videoModel: "Omni 1.2 Flash",
     durationSeconds: 5,
@@ -365,6 +436,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   },
 
   loadProject: (detail) => {
+    persistLastProjectId(detail.id);
     set({
       genreId: detail.genreId,
       synopsis: detail.synopsis,
@@ -378,13 +450,26 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
     void get().fetchTasks();
   },
 
-  closeSession: () =>
-    set({ session: null, activeRun: null, tasks: [], outputNonce: get().outputNonce + 1 }),
+  /* v2.9.7 修复（另起新项目入口启用后暴露）：关会话必须停两个轮询器——
+     否则 run 轮询会持续把已清空的 activeRun 写回来，任务轮询空转；
+     同步清持久化键，下次刷新不再回到旧片场。 */
+  closeSession: () => {
+    stopRunPolling();
+    stopTaskPolling();
+    persistLastProjectId(null);
+    set({
+      session: null,
+      activeRun: null,
+      tasks: [],
+      synopsis: "",
+      outputNonce: get().outputNonce + 1,
+    });
+  },
 
   generate: async () => {
     const { genreId, synopsis, modelConfig } = get();
     if (synopsis.trim().length < 10) return false;
-    set({ generating: true, generatingStep: 0, lastError: null });
+    set({ generating: true, generatingStep: 0, generatingSince: Date.now(), lastError: null });
     try {
       const { storyBeats } = await api<{ storyBeats: StoryBeat[] }>("/api/generate", {
         method: "POST",
@@ -396,7 +481,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       set({ lastError: err instanceof Error ? err.message : "未知错误" });
       return false;
     } finally {
-      set({ generating: false });
+      set({ generating: false, generatingSince: null });
     }
   },
 
@@ -443,6 +528,9 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
         set((s) => ({ session: s.session ? detailToSession(detail) : s.session }));
       }
       await get().fetchLibrary();
+      /* v2.9.7：保存入库即成为「上次现场」 */
+      const savedId = get().session?.dbId;
+      if (savedId) persistLastProjectId(savedId);
       return true;
     } finally {
       set({ saving: false });
@@ -462,10 +550,17 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   removeProject: async (id) => {
     try {
       await api(`/api/projects/${id}`, { method: "DELETE" });
+      const wasCurrent = get().session?.dbId === id;
+      if (wasCurrent) {
+        stopRunPolling();
+        stopTaskPolling();
+        persistLastProjectId(null);
+      }
       set((s) => ({
         library: s.library.filter((p) => p.id !== id),
-        session:
-          s.session?.dbId === id ? null : s.session,
+        session: wasCurrent ? null : s.session,
+        activeRun: wasCurrent ? null : s.activeRun,
+        tasks: wasCurrent ? [] : s.tasks,
       }));
       return true;
     } catch {
@@ -698,6 +793,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       });
       set({ activeRun: run });
       startRunPolling(run.id);
+      persistLastProjectId(projectId);
       void get().fetchLibrary();
       return true;
     } catch (err) {
@@ -722,6 +818,38 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
     }
   },
 
+  /* v2.9.7：通道模式探明（幂等）——null 期间一律按真机口径展示，不误导读用户 */
+  probeVideoChannel: async () => {
+    if (get().videoChannelReal !== null) return;
+    try {
+      const res = await fetch("/api/channel");
+      const json = await res.json();
+      if (json?.ok) set({ videoChannelReal: Boolean(json.data?.realVideo) });
+    } catch {
+      /* 探明失败保持 null（真机口径），下次挂载重试 */
+    }
+  },
+
+  restoreLastSession: async () => {
+    if (get().session) return null; // 已有会话不覆盖
+    let id: string | null = null;
+    try {
+      id = window.localStorage.getItem(LAST_PROJECT_KEY);
+    } catch {
+      return null;
+    }
+    if (!id) return null;
+    try {
+      const detail = await api<ProjectDetail>(`/api/projects/${id}`);
+      get().loadProject(detail);
+      return detail;
+    } catch {
+      /* 项目已删除/网络失败：清键避免每次刷新都白试 */
+      persistLastProjectId(null);
+      return null;
+    }
+  },
+
   refreshProject: async () => {
     const dbId = get().session?.dbId;
     if (!dbId) return;
@@ -741,19 +869,25 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
     if (!dbId) return;
     try {
       const tasks = await api<TaskDTO[]>(`/api/projects/${dbId}/tasks`);
-      const hadActive = get().tasks.some(
+      const prev = get().tasks;
+      const hadActive = prev.some(
         (t) => t.status === "queued" || t.status === "running"
       );
       set({ tasks });
       if (tasks.some((t) => t.status === "queued" || t.status === "running")) {
         scheduleTaskPolling();
       } else if (hadActive) {
-        // 从活跃转静默：回灌一次项目详情（产物地址可能已回写）
+        // 从活跃转静默：回灌一次项目详情（产物地址可能已回写）+ 批次落定播报（v2.9.7）
         stopTaskPolling();
         void get().refreshProject();
+        notifyBatchSettled(prev, tasks, get().videoChannelReal);
       }
     } catch {
-      /* 忽略瞬时错误 */
+      /* v2.9.7 断链自愈：链式轮询一次瞬时错误（网络抖动/dev 编译延迟）就会
+         永久断链，任务冻结在「进行中」无人观测——仍有活跃任务时必须续排 */
+      if (get().tasks.some((t) => t.status === "queued" || t.status === "running")) {
+        scheduleTaskPolling();
+      }
     }
   },
 

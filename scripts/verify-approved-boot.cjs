@@ -4,7 +4,8 @@
  *    红色破坏性「按新配置重新开机」不再出现（没开过机何来「重新」）
  * 2. 点击开机 → POST /runs body.keepScript === true（过稿剧本不重写契约），
  *    且开机前有 PATCH storyBeats 把已过目剧本入库
- * 3. 项目库载入草稿 → CTA 仍为「按已过目剧本拍摄」
+ * 3. 重载 → 自动恢复上次现场（v2.9.7 回访动线：恢复键 + 恢复 toast + 会话就位）
+ *    → CTA 仍为「按已过目剧本拍摄」
  * 4. 改梗概 → CTA 翻转为「AI 剧组流水线」+ 诚实提示重写 → keepScript === false
  * 网络：POST /runs 与 GET /runs/* 被 mock（流水线不真跑，零视频/图像配额）；
  *       试笔 / 立项 / PATCH 均走真实接口（本地 DB，无外部生成通道）
@@ -32,15 +33,26 @@ const { chromium } = require("playwright");
   await page.goto("http://localhost:3000", { waitUntil: "networkidle", timeout: 60000 });
   await page.waitForTimeout(1500);
 
-  // ===== 1. 真实试笔 =====
+  // ===== 1. 真实试笔（文本通道偶发 502 时自动重试；失败 toast = 本轮落定信号） =====
   await page.getByRole("button", { name: "填充示例梗概" }).click({ timeout: 8000 });
-  await page.getByRole("button", { name: /先试笔 · 只推演剧本/ }).click({ timeout: 8000 });
   const firstBootCTA = page.getByRole("button", { name: /全组开机 · 按已过目剧本拍摄/ });
-  await firstBootCTA.waitFor({ state: "visible", timeout: 150000 });
+  let ctaVisible = false;
+  for (let attempt = 1; attempt <= 4 && !ctaVisible; attempt++) {
+    await page.getByRole("button", { name: /先试笔 · 只推演剧本/ }).click({ timeout: 8000 });
+    const deadline = Date.now() + 100000;
+    while (Date.now() < deadline) {
+      if (await firstBootCTA.isVisible().catch(() => false)) {
+        ctaVisible = true;
+        break;
+      }
+      if ((await body()).includes("生成失败")) break; // 本轮通道失败，重试
+      await page.waitForTimeout(1000);
+    }
+  }
   await page.waitForTimeout(600);
 
   let text = await body();
-  check("试笔后：首次开机主 CTA「按已过目剧本拍摄」常驻可见", text.includes("全组开机 · 按已过目剧本拍摄"));
+  check("试笔后：首次开机主 CTA「按已过目剧本拍摄」常驻可见", ctaVisible);
   check("试笔后：红色破坏性「按新配置重新开机」不再出现", !text.includes("按新配置重新开机"));
   check("试笔后：副行承诺「开机不重写」", text.includes("开机不重写"));
   check("试笔后：三段式承接说明（选角定妆 → 导演拆镜 → 后期成片）", text.includes("直接选角定妆 → 导演拆镜 → 后期成片"));
@@ -87,21 +99,16 @@ const { chromium } = require("playwright");
     patchBodies.some((b) => Array.isArray(b.storyBeats) && b.storyBeats.length > 0)
   );
 
-  // ===== 3. 重载 → 项目库载入草稿（回访动线） =====
+  // ===== 3. 重载 → 自动恢复现场（v2.9.7 回访动线：开机写恢复键，刷新即回片场） =====
   await page.reload({ waitUntil: "networkidle" });
-  await page.waitForTimeout(1500);
-  await page.getByRole("button", { name: "项目库" }).click({ timeout: 10000 });
-  await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
-  await page.waitForTimeout(1200);
-  const draftCard = page
-    .locator('[role="dialog"] [role="button"]')
-    .filter({ hasText: /龙王归来 · 赘婿隐忍/ })
-    .first();
-  await draftCard.click({ timeout: 10000 });
-  await page.waitForTimeout(1500);
-
+  await page.waitForTimeout(2500);
   text = await body();
-  check("载入草稿：首次开机主 CTA 仍为「按已过目剧本拍摄」", text.includes("全组开机 · 按已过目剧本拍摄"));
+  check("重载回访：自动恢复 toast（已恢复上次拍摄现场）", text.includes("已恢复上次拍摄现场"));
+  check(
+    "重载回访：会话就位（另起新片入口可见）",
+    (await page.getByRole("button", { name: /另起新片/ }).count()) > 0
+  );
+  check("恢复草稿：首次开机主 CTA 仍为「按已过目剧本拍摄」", text.includes("全组开机 · 按已过目剧本拍摄"));
 
   // ===== 4. 改梗概 → 诚实翻转（配置折叠区需先展开） =====
   await page.getByRole("button", { name: /调整题材\/梗概/ }).click({ timeout: 8000 });

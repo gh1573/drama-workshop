@@ -69,6 +69,8 @@ async function zaiCreate(
 
 export class ZaiVideoProvider implements VideoProvider {
   readonly name = "zai-video";
+  /** 真机异步通道：create 受提交节流与限流退避约束（v2.9.7 通道能力声明） */
+  readonly remote = true;
 
   async render(req: VideoRenderRequest): Promise<VideoRenderResult> {
     let body = {

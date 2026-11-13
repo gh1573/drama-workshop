@@ -48,14 +48,14 @@ export function FinalCutPanel() {
   const composing = useWorkbench((s) => s.composing);
   const renderAll = useWorkbench((s) => s.renderAll);
   const composeEpisode = useWorkbench((s) => s.composeEpisode);
-  const fetchTasks = useWorkbench((s) => s.fetchTasks);
   // —— v2.9 连载 → v2.9.5 弹窗提升会话层：开合走 store，弹窗本体在页面层挂载 ——
   const creatingEpisode = useWorkbench((s) => s.creatingEpisode);
   const setNextEpOpen = useWorkbench((s) => s.setNextEpOpen);
 
   const [composeError, setComposeError] = useState<string | null>(null);
-  /** 视频通道是否真机（null = 未探明，按真机口径展示不误导） */
-  const [realVideo, setRealVideo] = useState<boolean | null>(null);
+  /* v2.9.7：视频通道是否真机改由 store 统一探明（一次探明全页面共享，
+     避免各面板各自 fetch；null = 未探明，按真机口径展示不误导） */
+  const realVideo = useWorkbench((s) => s.videoChannelReal);
   /** BGM 状态（null = 未设置；上传后需重新合成才入片） */
   const [bgm, setBgm] = useState<{ name: string; sizeBytes: number } | null>(null);
   const [bgmUploading, setBgmUploading] = useState(false);
@@ -94,23 +94,7 @@ export function FinalCutPanel() {
   );
   const renderProgress = total > 0 ? Math.round((readyCount / total) * 100) : 0;
 
-  // 通道模式探明（一次）：占位模式下渲染任务秒级落 failed + 贴片指引（§7.4）
-  useEffect(() => {
-    void (async () => {
-      try {
-        const res = await fetch("/api/channel");
-        const json = await res.json();
-        if (json?.ok) setRealVideo(Boolean(json.data?.realVideo));
-      } catch {
-        /* 探明失败按真机口径，不误导读用户 */
-      }
-    })();
-  }, []);
-
-  // 渲染进行中保持任务轮询（复用 store 的链式轮询）
-  useEffect(() => {
-    if (activeVideoTasks > 0) void fetchTasks();
-  }, [activeVideoTasks, fetchTasks]);
+  // 通道模式探明与 BGM 回显均上收到页面挂载/store（v2.9.7），本面板不再各自请求
 
   // BGM 状态回显（面板加载时还原已上传素材）
   useEffect(() => {
@@ -154,7 +138,7 @@ export function FinalCutPanel() {
       toast({
         title: "全片渲染已提交",
         description: realVideo === false
-          ? "占位模式：视频任务将秒级落为待处理（零配额消耗），配音任务正常出片"
+          ? "占位模式：视频任务秒级落定并给出贴片指引（零配额），配音任务正常出片"
           : "视频 + 配音任务已进入渲染队列，进度将实时更新",
       });
     } else {
@@ -614,7 +598,7 @@ export function FinalCutPanel() {
             {realVideo === false && (
               <p className="flex max-w-md items-start gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/8 px-2.5 py-2 text-left text-[11px] leading-relaxed text-amber-300/90">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                视频通道为占位模式（零配额消耗）：视频任务将秒级标记待处理并给出贴片指引，配音照常出片；
+                视频通道为占位模式（零配额消耗）：视频任务秒级落定并给出贴片指引，配音照常出片；
                 真机出片需设置 VIDEO_PROVIDER=zai 后重启。
               </p>
             )}
@@ -623,7 +607,11 @@ export function FinalCutPanel() {
         {activeVideoTasks > 0 && (
           <p className="flex items-center gap-1.5 text-xs text-amber-400">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            视频通道渲染中（每镜约 60~90s，完成后自动合成）
+            {/* v2.9.7 占位模式文案纠偏（E2E 走查：真机口径的「每镜 60~90s」
+                在占位模式下是误导——占位任务秒级落定并给出贴片指引） */}
+            {realVideo === false
+              ? "视频任务快速落定中（占位模式 · 零配额），失败镜会给出贴片指引"
+              : "视频通道渲染中（每镜约 60~90s，完成后自动合成）"}
           </p>
         )}
         {allReady && !finalVideoUrl && (

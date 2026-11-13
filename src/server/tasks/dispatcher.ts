@@ -36,6 +36,10 @@ import {
  * handler 与 REST 契约不变。
  */
 
+/** 确定性失败（重试必然同结果，如占位通道未启用、配置缺失）——
+ * 直接落 failed 不回队，不让任务在队列里假转圈（v2.9.7 E2E 走查 P0） */
+class NonRetryableError extends Error {}
+
 interface QueuedTask {
   id: string;
   kind: TaskKind;
@@ -192,17 +196,18 @@ async function tick(s: DispatcherState): Promise<void> {
   if (s.queue.length > 0 || s.running.size > 0) scheduleTick(s);
 }
 
-/** 失败处置：未达重试上限回队尾，否则落 failed */
+/** 失败处置：未达重试上限回队尾，否则落 failed；确定性失败跳过重试直落 */
 async function retryOrFail(
   s: DispatcherState,
   taskId: string,
   kind: TaskKind,
-  message: string
+  message: string,
+  fatal = false
 ): Promise<void> {
   const task = await db.renderTask.findUnique({ where: { id: taskId } });
   const attempts = task?.attempts ?? 1;
   const maxAttempts = task?.maxAttempts ?? 2;
-  if (attempts < maxAttempts) {
+  if (!fatal && attempts < maxAttempts) {
     await db.renderTask
       .update({ where: { id: taskId }, data: { status: "queued", error: message } })
       .catch(() => undefined);
@@ -258,7 +263,7 @@ async function execute(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "未知错误";
-    await retryOrFail(s, id, kind, message);
+    await retryOrFail(s, id, kind, message, err instanceof NonRetryableError);
   } finally {
     s.running.delete(id);
     if (!polled) scheduleTick(s);
@@ -511,7 +516,9 @@ const handlers: Partial<Record<TaskKind, Handler>> = {
     const firstFrameUrl = await resolveFirstFrameUrl(clip.id);
 
     // 全局提交节流：批量任务下 create 间隔不小于 VIDEO_SUBMIT_INTERVAL_MS
-    await throttleVideoSubmit();
+    // （只保护真机通道的 create 端点；本地占位通道无外部调用，免节流——
+    //   否则 15 镜 noop 秒败任务会被节流阀拖成几分钟假转圈，v2.9.7）
+    if (provider.remote) await throttleVideoSubmit();
 
     const result = await provider.render({
       finalPrompt: clip.finalPrompt,
@@ -529,6 +536,11 @@ const handlers: Partial<Record<TaskKind, Handler>> = {
       return { remoteTaskId: result.remoteTaskId };
     }
     if (result.status === "failed") {
+      // 占位通道的失败是确定性的（配置未启用），重试必然同结果——
+      // 直落 failed 让任务中心秒级透出指引，不烧重试名额也不占用节流队列
+      if (!provider.remote) {
+        throw new NonRetryableError(result.reason ?? "视频通道渲染失败");
+      }
       throw new Error(result.reason ?? "视频通道渲染失败");
     }
 

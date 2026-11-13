@@ -421,6 +421,13 @@ export function CrewPipelinePanel() {
                   </div>
                 );
               })}
+              {/* v2.9.7 溢出计数（E2E 走查：一键渲染 15 镜 + 配音 = 30+ 任务，
+                  静默截断 12 条像「任务丢了」） */}
+              {tasks.length > 12 && (
+                <p className="pt-0.5 text-center font-mono text-[10px] text-muted-foreground">
+                  还有 {tasks.length - 12} 个任务未展示（共 {tasks.length}，最新在上）
+                </p>
+              )}
             </div>
           </TooltipProvider>
         </div>

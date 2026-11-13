@@ -105,6 +105,11 @@ export type VideoRenderResult = VideoSyncResult | VideoAsyncResult;
 
 export interface VideoProvider {
   readonly name: string;
+  /** 是否真机远程通道（占用外部配额、create 受限流约束）。
+  * 占位通道（noop）为 false：提交免节流、失败为确定性配置缺失不重试
+  * （v2.9.7 对齐 docs §7.4「占位模式任务秒级落 failed」的验收语义，
+  * 节流与重试都是为保护真机通道而设，不应作用于本地占位）。 */
+  readonly remote: boolean;
   /**
    * 提交渲染：同步通道直接返回终态；异步通道返回任务句柄，
    * 由 dispatcher 持句柄轮询 poll()（§7.4，接口对业务层不变）。

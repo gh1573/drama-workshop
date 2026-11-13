@@ -15,6 +15,8 @@ import type {
  */
 export class NoopVideoProvider implements VideoProvider {
   readonly name = "noop-video";
+  /** 本地占位通道：不占外部配额、无 create 限流（免节流不重试，v2.9.7） */
+  readonly remote = false;
 
   async render(req: VideoRenderRequest): Promise<VideoRenderResult> {
     return {
