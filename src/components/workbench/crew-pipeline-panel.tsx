@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Loader2,
   RotateCcw,
+  Timer,
   Video,
   XCircle,
 } from "lucide-react";
@@ -337,12 +338,28 @@ export function CrewPipelinePanel() {
             全组拍摄中，请勿离开本页（断线重进可自动恢复观测）
           </p>
         )}
-        {failed && run?.error && (
-          <p className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-rose-400">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate" title={run.error}>{run.error}</span>
-          </p>
-        )}
+        {failed && run?.error && (() => {
+          // v2.9.18：run.error 尾部可能带自动续拍承诺标记——红色失败原因
+          // 用 truncate 时标记恰好被截掉，而「无需值守」恰是用户最需要的
+          // 信息。拆出来做 amber 徽标（amber=在途/等待语义，与全站一致），
+          // 失败原因与自动计划两件事分开说。
+          const m = run.error.match(/（(\d+)s 后自动续拍第 (\d+)\/(\d+) 轮）/);
+          const base = m && m.index !== undefined ? run.error.slice(0, m.index) : run.error;
+          return (
+            <>
+              {m && (
+                <span className="flex shrink-0 items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
+                  <Timer className="h-3 w-3" />
+                  {m[1]}s 后自动续拍（第 {m[2]}/{m[3]} 轮）· 无需值守
+                </span>
+              )}
+              <p className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-rose-400">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate" title={base}>{base}</span>
+              </p>
+            </>
+          );
+        })()}
         </div>
       </div>
 
