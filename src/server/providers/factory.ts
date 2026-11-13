@@ -15,33 +15,29 @@ import { NoopVideoProvider } from "./noop-video";
  * 通道选择读环境变量，默认内置通道；接入新模型只改这里。
  */
 
-const g = globalThis as unknown as {
-  __dramaProviders?: {
-    text: TextProvider;
-    image: ImageProvider;
-    video: VideoProvider;
-    voice: VoiceProvider;
-  };
-};
-
+/**
+ * v2.9.13 去除 globalThis 实例缓存（用户视角走查实捕）：
+ * 所有 Provider 实现均无状态（complete/generate/render 只依赖入参），
+ * 实例创建零成本；而 dev 热重载下模块重载后 globalThis 里的旧实例
+ * 继续持有旧方法体——v2.9.13 的 onRetry 回调因此从未生效（实捕：
+ * journal 有心跳无重试日志，端到端单测 onRetry 触发正常）。
+ * 生产构建无热重载不受影响，但缓存无收益只有滞留风险，直接移除。
+ */
 function providers() {
-  if (!g.__dramaProviders) {
-    g.__dramaProviders = {
-      text: process.env.TEXT_PROVIDER === "noop" ? new NoopText() : new ZaiTextProvider(),
-      image: new ZaiImageProvider(),
-      /**
-       * 视频通道缺省策略（docs §7.4 通道缺省策略，v2.4.3）：
-       * 缺省 = noop 占位（零配额消耗，任务秒级落 failed + 引导贴片）；
-       * 显式 VIDEO_PROVIDER=zai 才接真机异步通道（配额窗口由运维决策开启）。
-       */
-      video:
-        process.env.VIDEO_PROVIDER === "zai"
-          ? new ZaiVideoProvider()
-          : new NoopVideoProvider(),
-      voice: new ZaiVoiceProvider(),
-    };
-  }
-  return g.__dramaProviders;
+  return {
+    text: process.env.TEXT_PROVIDER === "noop" ? new NoopText() : new ZaiTextProvider(),
+    image: new ZaiImageProvider(),
+    /**
+     * 视频通道缺省策略（docs §7.4 通道缺省策略，v2.4.3）：
+     * 缺省 = noop 占位（零配额消耗，任务秒级落 failed + 引导贴片）；
+     * 显式 VIDEO_PROVIDER=zai 才接真机异步通道（配额窗口由运维决策开启）。
+     */
+    video:
+      process.env.VIDEO_PROVIDER === "zai"
+        ? new ZaiVideoProvider()
+        : new NoopVideoProvider(),
+    voice: new ZaiVoiceProvider(),
+  };
 }
 
 export function getTextProvider(): TextProvider {
