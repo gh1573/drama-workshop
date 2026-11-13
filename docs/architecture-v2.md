@@ -993,6 +993,17 @@ src/
 **验收**：tsc/eslint src/ 零错误；next build 成功；`scripts/runtime-verify-v26.cjs` 8/8 断言通过（导轨渲染/产物计数/点击导航两向/阶段卡同源计数/马甲大佬 amber 选中态/DOM 零 violet-fuchsia-purple/零 pageerror）；VLM 三轮复审题材视图 6.5→7.0 且 P0 问题清零（余下为结构权衡类建议，见遗留）；零外部通道调用（VLM 仅图片理解）。
 **遗留（v2.7 候选）**：无会话态右侧预览区与左栏密度平衡（预览区压缩/分镜缩略条填充）；成片页签预览与操作链的首屏权重重排（下载链上提）；五阶段导览卡在无会话态的「配置完成度」状态化。
 
+### v2.9.17 —— 用户视角端到端走查：过程反馈盲区清零 ✅ 已实施
+（最高优先任务实跑：以新用户/创作者心态 1728×1080 全旅程走查——落地页→试笔→过稿→开机→流水线→失败链→续拍→交付面→连续剧路径，重点消灭「点击之后一直转圈，用户不知道在干啥」。本轮上游文本通道持续 429，恰好全量验证了失败反馈链的真实成色）
+1. **保存静默失败修复（P0，store.saveProject/fetchLibrary 补 catch）**：saveProject 无 catch——网络错误/5xx 时异常直接抛穿 handleSave，「保存失败」toast 永不出现，用户只看到转圈结束毫无反馈；补 catch 置 lastError 并返回 false（toast 链已就位）；fetchLibrary 同补（多处 void 调用的未处理拒绝）；
+2. **试笔等待态两处盲区（page.tsx）**：①右列 generating 占位是三张裸 Skeleton 无任何文字——不知道在等什么、会出什么，观感像内容坏了；补语义头「编剧室推演中 + 剧本将在这里亮相」（与左栏推演面板同口径）；②推演面板（步骤轮播+秒表）在首屏视口下方，点「先试笔」后不滚动只能看到按钮转圈——面板出现即 scrollIntoView；
+3. **任务失败原因行内直读（crew-pipeline-panel）**：失败任务的错误文案只在 hover 图标 Tooltip 里，用户不悬停就不知道为什么失败、怎么恢复——终态失败直接在任务行内展开（line-clamp-2），在途任务的临时错误仍走图标提示不刷屏；
+4. **全旅程实跑验证（工具链 v17/v17b/v18/v19 入库）**：v17 新用户全旅程（试笔真实 LLM 2.2min 含 429 退避→成功出稿；502 失败→人话 toast 实测；开机→流水线 4 轮断点续拍对抗 429 风暴，心跳/重试日志/阶段卡/toast 全链正常）；v17b API 权威轮询 run 状态 + 真实用户节奏续拍；v18 连续剧路径全链 8/8（库分组→创作下一集弹窗→上集留钩→创建第 2 集→5 资产克隆→会话切换→库重分组，落地页叙事回归）；v19 单镜视频任务失败链 scratch 实弹（409 锚定护栏引导语 + noop 失败卡 + 行内文案 + 重试按钮）；
+5. **交付态五页签视觉审计（种子第 1 集）**：成片/分镜剧本/资产定妆/节奏轨道/剧组进程全部专业完整——9/10 镜就绪诚实口径、下载 CTA、连续剧卡、五阶段产物计数、剧组日志时间线、任务中心历史均在位；
+6. **举一反三排查**：全站 Skeleton 仅剩试笔占位一处（已加语义头）；全 busy 标志（generating/saving/composing/renderingAll/creatingEpisode/breakingDown/reanchoring/removing/drafting/bgmUploading/taskActionBusy）逐一核对按钮级在途反馈在位；api() 网络层人话化收口复核；
+7. **v2.9.16 实弹复验**：删共享克隆的第 2 集 → 第 1 集 5/5 定妆图可达、成片完好（共享引用保护真实生效）；
+**验收**：serial-landing 7/7 + v293 12/12 + seed-protocol 102/102 + product-surface 23/23 + delete-cascade 16/16 + ui-verify-series 8/8 + tsc src 零错误；零视频配额消耗（视频通道 noop 占位）。
+
 ### v2.9.16 —— 共享克隆删除保护 ✅ 已实施
 （主动验证实捕 P0：v2.9.15 验证链 ui-verify-series 自清理删第 2 集时，commit 里混入 5 个 asset PNG 删除——追查发现 deleteProject 磁盘级联把「克隆资产与第 1 集共享的同一 portraitUrl 文件」从磁盘一并 unlink，第 1 集 5 张定妆图全部 404。连续剧铁律「同一角色跨集同一张脸」的物理载体就是跨集共享同一文件，删任一集即摧毁全部兄弟集定妆图；v2.9.9 的「跨项目零误伤」只防了路径穿越与 BGM 约定对，未防共享引用）
 1. **共享引用保护（P0 修复，project-service.deleteProject）**：删行前在候选文件集上查询其余项目对同一路径的引用（Asset.portraitUrl / TimelineClip.mediaUrl / RenderTask.resultUrl / Project.finalVideoUrl 四表，`projectId: { not: id }` + `in: urlCandidates`），仍被引用的文件一律保留；成片被共享则海报派生帧同样保留。设计取向：误保留只产生孤儿文件（可 asset-audit gc），误删损毁兄弟集资产（不可逆）——best-effort 换安全；
