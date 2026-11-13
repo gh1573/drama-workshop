@@ -270,7 +270,21 @@ export function FinalCutPanel() {
     });
   }
 
-  if (total === 0) return null;
+  /* v2.9.14（用户视角走查 P1）：零镜头（未开机）时此前整块返回 null——
+     手动点「成片」页签会得到一片空白工作区，无指引的死胡同；
+     对齐资产库空态模式：说明成因 + 指向下一步 */
+  if (total === 0) {
+    return (
+      <section className="space-y-2 rounded-xl border border-dashed border-border/70 bg-card p-6 text-center">
+        <Film className="mx-auto h-6 w-6 text-muted-foreground/60" />
+        <p className="text-sm font-semibold">尚未开机 · 这里还没有可看成片</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          左侧「全组开机」启动剧组流水线，镜头将在「导演拆镜」阶段逐镜落位，
+          全部出片后自动合成、直接在这里播放；先看剧本可切「分镜剧本」页签。
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-4 rounded-xl border bg-card p-5">

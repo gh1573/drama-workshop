@@ -200,20 +200,29 @@ export default function Home() {
   // 已合成项目直接落「成片」页签——已完项目的终点是交付物；
   // v2.9.13 中断召回（用户视角走查 P0）：上次流水线中断的项目直接落
   // 「剧组进程」页签——中断项目的下一步是断点续拍，不是空白的成片页
+  // v2.9.14 落点补全（用户视角走查 P1：过稿未开机项目载入落在「成片」
+  // 页签，而零镜头时成片面板整块 null——右侧工作区一片空白，用户刚
+  // 过稿的剧本藏在页签后）：过稿未开机落「分镜剧本」（主交付物是过稿
+  // 剧本，AI 拆解分镜动作也在此）；拍摄中落「剧组进程」（旁观进度承诺）
   useEffect(() => {
     const unsub = useWorkbench.subscribe((s, prev) => {
       if (
-        s.session?.dbId &&
-        s.session.dbId !== prev.session?.dbId &&
-        s.session.finalVideoUrl
+        !s.session?.dbId ||
+        s.session.dbId === prev.session?.dbId
       ) {
+        return;
+      }
+      if (s.session.finalVideoUrl) {
         setTab("cut");
-      } else if (
-        s.session?.dbId &&
-        s.session.dbId !== prev.session?.dbId &&
-        s.activeRun?.status === "failed"
-      ) {
+      } else if (s.activeRun?.status === "failed") {
         setTab("pipeline");
+      } else if (s.activeRun?.status === "running") {
+        setTab("pipeline");
+      } else if (
+        s.session.beats.length > 0 &&
+        (s.session.status === "draft" || s.session.status === "beatsReady")
+      ) {
+        setTab("script");
       }
     });
     return unsub;
