@@ -1011,7 +1011,9 @@ src/
 3. **人工优先契约**：人工「断点续拍」随时插队（定时器见 running 即让位），且人工接手重置耐心（重新给满 3 轮）——自动是「没人看着时的耐心」，人来了人说了算；防旧 run 复活：点火前校验本 run 仍是项目最新 run；
 4. **多 worker 与重启善后（v2.9.18.1，实弹走查教训）**：首轮实弹暴露 Next dev 多 worker 各自求值模块——定时器活在 A 进程时 B 进程启动即扫，把在途承诺误报「因服务重启取消」，随后 A 照常点火、日志自相矛盾。修复：死承诺清扫加宽限窗（承诺时间已过 +120s 仍未兑现才判定死亡），另挂轮询热路径节流惰性清扫（每进程 60s 至多一次）兜底进程在宽限窗内死亡的场景——绝不留「答应了却不来」的死承诺，也绝不误伤在途承诺；
 5. **实弹验证（verify-auto-resume.mjs，API 权威观测）**：真实立项开机对抗 429 风暴——3 轮自动点火（45s/90s/180s 逐轮递增）全程零人工；达上限后果断停机播报原因；人工续拍接手后耐心归零实证（失败→「第 1/3 轮」重新计数→自动点火）；修复后误报取消行清零。顺带冒烟：制作包 ZIP 真实下载 34.9MB/21 项/六类交付物完整性 OK，导出 JSON 200；
-**验收**：verify-auto-resume PASS（cap-reached + 人工重置双场景）+ tsc src 零错误；serial-landing 7/7 + v293 12/12 + seed-protocol 102/102 + product-surface 23/23 + delete-cascade 16/16 + ui-verify-series 8/8 全绿保持；零视频配额消耗。
+6. **UI 层断裂修复（P0，store.startRunPolling + 面板迁移播报）**：首轮 UI 观测实捕——轮询器在 run 一失败即 stopRunPolling，服务端 45~180s 后自动点火，面板却永远停在失败态，「无需值守」在 UI 层断裂。修复：failed 且 error 仍带承诺标记时继续轮询（承诺消失/杀青才停）；面板补状态迁移 effect（用户可能在别的页签）——running→failed 弹「阶段失败——Ns 后自动续拍（第 N/3 轮）无需值守」toast，failed→running 且非人工 8s 内弹「已自动续拍，继续拍摄」（人工点击自带 toast，时间戳去重防双响）。UI 全链观测（verify-auto-resume-ui.mjs，MutationObserver 持久捕获 toast + API 权威判态 + 全程不刷新）4/4：失败 toast 承诺口径、等待窗后不刷新自动回拍摄中（DOM 同步实证）、复活 toast、两个完整周期；
+7. **徽标视觉验证（verify-auto-resume-badge.mjs 状态猎手）**：真实等待窗捕捉 5/5——amber 徽标「90s 后自动续拍（第 2/3 轮）· 无需值守」三要素（边/底/字）DOM 级确认，失败原因人话保留、人工按钮与日志播报在位；
+**验收**：verify-auto-resume PASS（cap-reached + 人工重置双场景）+ verify-auto-resume-ui 4/4 + verify-auto-resume-badge 5/5 + tsc src 零错误；serial-landing 7/7 + v293 12/12 + seed-protocol 102/102 + product-surface 23/23 + delete-cascade 16/16 + ui-verify-series 8/8 全绿保持；零视频配额消耗。
 
 ### v2.9.16 —— 共享克隆删除保护 ✅ 已实施
 （主动验证实捕 P0：v2.9.15 验证链 ui-verify-series 自清理删第 2 集时，commit 里混入 5 个 asset PNG 删除——追查发现 deleteProject 磁盘级联把「克隆资产与第 1 集共享的同一 portraitUrl 文件」从磁盘一并 unlink，第 1 集 5 张定妆图全部 404。连续剧铁律「同一角色跨集同一张脸」的物理载体就是跨集共享同一文件，删任一集即摧毁全部兄弟集定妆图；v2.9.9 的「跨项目零误伤」只防了路径穿越与 BGM 约定对，未防共享引用）
