@@ -177,7 +177,11 @@ export async function composeEpisode(projectId: string): Promise<ComposeResult> 
 
   await db.project.update({
     where: { id: projectId },
-    data: { finalVideoUrl: parsed.url },
+    // v2.9.11：交付状态闭环——此前仅回写 finalVideoUrl，status 永远停在
+    // 「制作中」，项目库/信息卡对已交付项目展示过时徽标；
+    // 补拍/改镜头（createClip/updateClip）会把状态拉回「制作中」，
+    // 重新合成后再次交付——状态随劳动成果生命周期自然流转
+    data: { finalVideoUrl: parsed.url, status: "delivered" },
   });
 
   return {

@@ -54,7 +54,8 @@ export const createDraftSchema = z.object({
 export const updateProjectSchema = z.object({
   title: z.string().min(1).max(80).optional(),
   synopsis: z.string().min(10).max(500).optional(),
-  status: z.enum(["draft", "beatsReady", "inProduction", "archived"]).optional(),
+  // v2.9.11：delivered=成片已合成（compose-service 交付时置位；补拍后回 inProduction）
+  status: z.enum(["draft", "beatsReady", "inProduction", "delivered", "archived"]).optional(),
   modelConfig: modelConfigSchema.optional(),
   /** v2.7 场次化剧本：场次数弹性 3~6（与 screenplay.ts SCENE_COUNT_* 同步） */
   storyBeats: z.array(storyBeatSchema).min(3).max(6).optional(),

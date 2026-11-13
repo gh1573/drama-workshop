@@ -123,7 +123,8 @@ async function main() {
       title: "战神逆袭 · 演示第一集",
       seriesId: series.id,
       episodeNo: 1,
-      status: "inProduction",
+      // v2.9.11：种子项目成片已合成（finalVideoUrl 已回填）——交付状态语义
+      status: "delivered",
       genreId: "shuangwen",
       genreName: "战神逆袭 · 龙王归来",
       genreBadge: "高燃打脸 · 爽感爆棚",

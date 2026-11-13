@@ -778,8 +778,15 @@ export type ClipStatus = keyof typeof CLIP_STATUS;
 
 export const PROJECT_STATUS = {
   draft: "草稿",
-  beatsReady: "分镜就绪",
+  // v2.9.11 语义修正：编剧阶段完成即置此值（此时分镜尚未拆解），
+  // 「分镜就绪」是名不副实的超前承诺——改为「剧本就绪」
+  beatsReady: "剧本就绪",
   inProduction: "制作中",
+  // v2.9.11：成片合成成功后置此值（此前仅回写 finalVideoUrl、
+  // status 永远停在「制作中」——已交付的项目永远挂着「制作中」徽标）；
+  // 补拍/改镜头后 createClip/updateClip 拉回「制作中」，重新合成后再次交付，
+  // 状态随劳动成果生命周期自然流转
+  delivered: "成片已合成",
   archived: "已归档",
 } as const;
 
