@@ -9,6 +9,9 @@
  * 3. 删项目 → 其余项目（种子）的磁盘文件一个不少（跨项目零误伤）
  * 4. DB 行级联：项目/片段/轨道全消
  * 5. 幂等：重复删除返回 404 不炸
+ * 6. v2.9.16 共享克隆保护：克隆资产跨集共享 portraitUrl（连续剧铁律
+ *    「同一角色跨集同一张脸」的物理载体）——删任一集，共享文件必须存活；
+ *    兄弟集也删除后文件才回收
  * 用法：bun scripts/verify-delete-cascade.mjs
  */
 import { PrismaClient } from "@prisma/client";
@@ -113,6 +116,54 @@ check("级联：BGM 元数据已清", !(await exists(bgmMeta)), bgmMeta);
 const missing = [];
 for (const f of seedFilesBefore) if (!(await exists(f))) missing.push(f);
 check("零误伤：种子项目定妆照一个不少", missing.length === 0, missing.join(",") || `${seedFilesBefore.length} 个全在`);
+
+// ===== 2.5 v2.9.16 共享克隆保护（连续剧跨集共享定妆图） =====
+// 夹具：两个项目各持一条 Asset 行，portraitUrl 指向同一磁盘文件
+// （模拟 createNextEpisode cloneAssets 的跨集共享——同一角色同一张脸）。
+const mkProject = (title) =>
+  api("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      genre: {
+        id: "test", name: "共享克隆单测", badge: "单测",
+        hookTactic: "t", musicMood: "t", tonePrompt: "t",
+      },
+      synopsis: `v2.9.16 共享克隆保护验收 ${title}（零配额，自动清理）`,
+      modelConfig: {
+        videoModel: "Omni 1.2 Flash", durationSeconds: 5, resolution: "720p",
+        scriptThinkingLevel: "low", enablePromptEnhance: true,
+      },
+    }),
+  }).then((r) => r.json?.data?.id ?? r.json?.id);
+
+const epA = await mkProject("集A");
+const epB = await mkProject("集B");
+check("共享夹具：两个项目已建", Boolean(epA && epB), `${epA ?? "?"} / ${epB ?? "?"}`);
+
+const sharedFile = `shared_clone_v2916_${Date.now()}.png`;
+const sharedUrl = `/assets/${sharedFile}`;
+writeFileSync(`${ASSETS}/${sharedFile}`, "fake-shared-portrait");
+const assetData = {
+  kind: "character", name: "共享角色单测",
+  lockedAppearance: "单测锁定外观", visualAnchor: "test anchor",
+  portraitUrl: sharedUrl, source: "crew",
+};
+await db.asset.create({ data: { ...assetData, projectId: epA } });
+await db.asset.create({ data: { ...assetData, projectId: epB } });
+check("共享夹具：两集 Asset 行各持同一 portraitUrl", true, sharedFile);
+
+// 删集 B → 共享文件必须存活（集 A 仍引用）
+const delB = await api(`/api/projects/${epB}`, { method: "DELETE" });
+check("共享保护：集 B 删除成功", delB.json?.ok === true, `HTTP ${delB.status}`);
+await sleep(800);
+check("共享保护：删集 B 后共享定妆图存活（集 A 零损）", await exists(sharedFile), sharedFile);
+
+// 删集 A → 最后一个引用消失，文件回收
+const delA = await api(`/api/projects/${epA}`, { method: "DELETE" });
+check("共享保护：集 A 删除成功", delA.json?.ok === true, `HTTP ${delA.status}`);
+await sleep(800);
+check("共享保护：集 A 也删除后共享文件回收（无孤儿）", !(await exists(sharedFile)), sharedFile);
 
 // ===== 3. DB 级联 + 幂等 =====
 const clipRow = await db.timelineClip.findFirst({ where: { projectId: pid } });

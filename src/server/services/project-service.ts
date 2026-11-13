@@ -317,24 +317,57 @@ export async function deleteProject(id: string): Promise<void> {
     db.renderTask.findMany({ where: { projectId: id }, select: { resultUrl: true } }),
     db.project.findUnique({ where: { id }, select: { finalVideoUrl: true } }),
   ]);
+  const urlCandidates = [
+    ...assets.map((a) => a.portraitUrl),
+    ...clips.map((c) => c.mediaUrl),
+    ...tasks.map((t) => t.resultUrl),
+    project?.finalVideoUrl ?? null,
+  ].filter((u): u is string => !!u);
   const files = new Set<string>();
-  for (const a of assets) {
-    const p = assetAbsolutePath(a.portraitUrl);
+  for (const u of urlCandidates) {
+    const p = assetAbsolutePath(u);
     if (p) files.add(p);
   }
-  for (const c of clips) {
-    const p = assetAbsolutePath(c.mediaUrl);
-    if (p) files.add(p);
+
+  // v2.9.16 共享引用保护（用户视角主动验证实捕 P0）：连续剧铁律「同一角色
+  // 跨集同一张脸」的物理载体 = 克隆资产跨集共享同一 portraitUrl 文件；
+  // 磁盘级联若不查共享引用，删除任一集会连带摧毁全部兄弟集的定妆图
+  // （实捕：ui-verify-series 自清理删第 2 集 → 第 1 集 5 张定妆图 404）。
+  // 行删除前先查其余项目对同一路径的引用，仍被引用的文件一律保留
+  // （best-effort 换取安全：误保留只产生孤儿文件，误删损毁兄弟集资产）。
+  const sharedUrls = new Set<string>();
+  const [otherAssets, otherClips, otherTasks, otherFinals] = await Promise.all([
+    db.asset.findMany({
+      where: { projectId: { not: id }, portraitUrl: { in: urlCandidates } },
+      select: { portraitUrl: true },
+    }),
+    db.timelineClip.findMany({
+      where: { projectId: { not: id }, mediaUrl: { in: urlCandidates } },
+      select: { mediaUrl: true },
+    }),
+    db.renderTask.findMany({
+      where: { projectId: { not: id }, resultUrl: { in: urlCandidates } },
+      select: { resultUrl: true },
+    }),
+    db.project.findMany({
+      where: { id: { not: id }, finalVideoUrl: { in: urlCandidates } },
+      select: { finalVideoUrl: true },
+    }),
+  ]);
+  for (const a of otherAssets) if (a.portraitUrl) sharedUrls.add(a.portraitUrl);
+  for (const c of otherClips) if (c.mediaUrl) sharedUrls.add(c.mediaUrl);
+  for (const t of otherTasks) if (t.resultUrl) sharedUrls.add(t.resultUrl);
+  for (const p of otherFinals) if (p.finalVideoUrl) sharedUrls.add(p.finalVideoUrl);
+  for (const u of sharedUrls) {
+    const p = assetAbsolutePath(u);
+    if (p) files.delete(p);
+    // 海报帧与成片一一对应派生：成片被共享则海报同样保留
+    if (p?.endsWith(".mp4")) {
+      const poster = p.replace(/\.mp4$/, "_poster.jpg");
+      files.delete(poster);
+    }
   }
-  for (const t of tasks) {
-    const p = assetAbsolutePath(t.resultUrl);
-    if (p) files.add(p);
-  }
-  const finalAbs = assetAbsolutePath(project?.finalVideoUrl);
-  if (finalAbs) {
-    files.add(finalAbs);
-    files.add(finalAbs.replace(/\.mp4$/, "_poster.jpg"));
-  }
+
   const bgmEntries = await fs.readdir(ASSETS_DIR).catch(() => [] as string[]);
   for (const f of bgmEntries) {
     if (f.startsWith(`bgm_${id}.`)) files.add(path.join(ASSETS_DIR, f));
